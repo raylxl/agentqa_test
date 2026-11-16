@@ -100,7 +100,9 @@ def flatten_config(cfg):
                 walk(v)
         elif isinstance(x, str):
             vals.add(norm(x))
-            if re.match(r'[A-Za-z]:[/\\]', x) and "{" not in x:
+            # 前缀=绝对路径形态：Windows 盘符 或 POSIX（Mac 部署）——不含占位符/空格（防误收描述句）
+            if "{" not in x and " " not in x and (
+                    re.match(r'[A-Za-z]:[/\\]', x) or x.startswith("/")):
                 prefixes.add(norm(x))
     walk(cfg)
     return vals, prefixes
