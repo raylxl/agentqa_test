@@ -170,6 +170,28 @@ echo
 read -p "按回车退出..."
 """
 
+MAC_FIRST_READ = """【Mac 同事先看这个】部署.command 双击被拦的处理（三步）
+
+如果双击 部署.command 弹出"Apple 无法验证…"——这不是文件坏了，是 macOS 对外来脚本的默认安全拦截（Gatekeeper）。
+别点"移到废纸篓"！按下面任一法继续：
+
+方法一（最简单，推荐）：
+  1. 按 Command+空格，输入 terminal，回车（打开终端）
+  2. 输入 bash 加一个空格
+  3. 把 部署.command 这个文件拖进终端窗口（路径自动填上）
+  4. 回车 —— 部署开始
+
+方法二（想以后都能双击）：
+  双击被拦后 → 系统设置 → 隐私与安全性 → 页面底部会出现"部署.command 已被阻止" → 点"仍要打开"
+
+方法三（终端命令去掉隔离标记，一劳永逸）：
+  xattr -d com.apple.quarantine 部署.command
+  （在解压目录里执行：先 cd 到解压目录，或把文件拖到命令后面）
+
+前置要求：已装 python3（终端输入 python3 --version 能出版本号）。
+完整验证步骤见包内《真机首验清单_v1.md》macOS 专项节。
+"""
+
 
 def deploy_note(secrets_included, roots_desc, full):
     cred = ("已含 agent-secrets.json（明文账密，内网同权直接可用）" if secrets_included
@@ -294,9 +316,10 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
         z.writestr("部署说明_同事版_v2.md",
                    deploy_note(not no_secrets, "\n".join(roots_desc), full))
         z.writestr("部署.bat", DEPLOY_BAT.replace("\n", "\r\n").encode("gbk"))   # bat 必须 GBK+CRLF（LF-only 会致 cmd 解析错位——11-16 双击无反应事故根因）
-        zi = zipfile.ZipInfo("部署.command")                # Mac 适配轮：macOS 双击入口（外部属性带执行位 755）
+        zi = zipfile.ZipInfo("部署.command", date_time=time.localtime()[:6])   # Mac 双击入口（755 执行位+真实时间戳）
         zi.external_attr = 0o755 << 16
         z.writestr(zi, DEPLOY_COMMAND.encode("utf-8"))
+        z.writestr("Mac首步启动.txt", MAC_FIRST_READ.encode("utf-8"))          # Gatekeeper 拦截对策（同事最先看的件）
         checklist = AGENT_ROOT / "真机首验清单_v1.md"        # B+轮：首验清单随包（先锋同事拿包即验）
         if checklist.exists():
             z.writestr("真机首验清单_v1.md", io.open(checklist, encoding="utf-8").read())
