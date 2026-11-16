@@ -57,7 +57,7 @@ def locate():
             find_dir(Path("03_检查脚本") / "generic_layer_check.py"))  # 手艺包
 
 
-def wiring(agent, company, workbuddy=False, claude=False):
+def wiring(agent, company, workbuddy=False, claude=False, codex=False):
     """接线表：(联接位置, 物理目标, 说明)；workbuddy/claude=True 追加对应宿主技能位（2026-11-16 三层拆分 P4 / 宿主自适应）"""
     w = [(WORKSPACE / ".zcode" / "skills", agent / "skills", "流程技能运行位（ZCode 发现口）"),
          (agent / "skills" / "devops-login", company / "skills" / "devops-login", "环境技能挂入技能树"),
@@ -68,7 +68,8 @@ def wiring(agent, company, workbuddy=False, claude=False):
     if craft:
         w.append((WORKSPACE / "通用测试agent包", craft, "手艺包旧名兼容联接"))
     for flag, base, tag in ((workbuddy, Path(os.path.expanduser("~")) / ".workbuddy" / "skills", "WorkBuddy"),
-                            (claude, Path(os.path.expanduser("~")) / ".claude" / "skills", "Claude Code")):
+                            (claude, Path(os.path.expanduser("~")) / ".claude" / "skills", "Claude Code"),
+                            (codex, Path(os.path.expanduser("~")) / ".codex" / "skills", "Codex")):
         if not flag:
             continue
         for src_dir in (agent / "skills", company / "skills"):
@@ -205,7 +206,7 @@ def ensure_claude_hooks(agent):
         print("  [claude] hooks 配置已齐，无改动")
 
 
-def status(workbuddy=False, claude=False):
+def status(workbuddy=False, claude=False, codex=False):
     agent, company, craft = locate()
     print(f"workspace：{WORKSPACE}\n  agentqa_test = {AGENT_ROOT}")
     print(f"  Agent本体 = {agent}\n  公司包    = {company}\n  手艺包    = {craft}")
@@ -214,7 +215,7 @@ def status(workbuddy=False, claude=False):
         print("[RED] 三包定位不全")
         return 1
     print("── 接线 ──")
-    for link, target, note in wiring(agent, company, workbuddy, claude):
+    for link, target, note in wiring(agent, company, workbuddy, claude, codex):
         try:
             ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
         except OSError:
@@ -238,9 +239,9 @@ def status(workbuddy=False, claude=False):
     return 1 if red else 0
 
 
-def repair(workbuddy=False, claude=False):
+def repair(workbuddy=False, claude=False, codex=False):
     agent, company, _ = locate()
-    for link, target, _n in wiring(agent, company, workbuddy, claude):
+    for link, target, _n in wiring(agent, company, workbuddy, claude, codex):
         try:
             ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
         except OSError:
@@ -251,7 +252,7 @@ def repair(workbuddy=False, claude=False):
     ensure_hooks(agent)
     if claude:
         ensure_claude_hooks(agent)
-    return status(workbuddy, claude)
+    return status(workbuddy, claude, codex)
 
 
 def rename(old, new):
@@ -299,6 +300,8 @@ def main():
     ap.add_argument("--repair", action="store_true")
     ap.add_argument("--workbuddy", action="store_true",
                     help="同时接入 WorkBuddy 宿主（.workbuddy\\skills 联接全部技能；WorkBuddy 重启后生效）")
+    ap.add_argument("--codex", action="store_true",
+                    help="同时接入 Codex 宿主（.codex\skills 联接技能；无工具级 hooks→软闸档）")
     ap.add_argument("--claude", action="store_true",
                     help="同时接入 Claude Code 宿主（.claude\\skills 联接技能 + settings.json 注入五闸，运行时行为属真机首验项）")
     ap.add_argument("--rename", nargs=2, metavar=("旧名", "新名"))
@@ -306,8 +309,8 @@ def main():
     if a.rename:
         sys.exit(rename(*a.rename))
     if a.repair:
-        sys.exit(repair(a.workbuddy, a.claude))
-    sys.exit(status(a.workbuddy))
+        sys.exit(repair(a.workbuddy, a.claude, a.codex))
+    sys.exit(status(a.workbuddy, a.claude, a.codex))
 
 
 if __name__ == "__main__":
