@@ -49,7 +49,7 @@ FORMS = [
 
 
 def norm_root(s):
-    s = s.strip().replace("\\\\", "/").rstrip("/")
+    s = s.strip().replace("\\", "/").replace("\\\\", "/").rstrip("/")
     return s
 
 

@@ -138,6 +138,22 @@ def make_skip(names=(), prefixes=(), suffixes=()):
     return skip
 
 
+DEPLOY_BAT = r"""@echo off
+title 测试Agent一键部署
+echo ===== 测试 Agent 一键部署 =====
+echo 本目录 = 部署目录（装完别挪；挪了重跑本文件即可）
+where python >nul 2>nul
+if errorlevel 1 (
+  echo [错误] 未找到 Python，请先安装 Python 3.8+ 并勾选 Add to PATH。
+  pause
+  exit /b 1
+)
+python "%~dp0agentqa_test\Agent本体\tools\deploy_colleague.py" %*
+echo.
+pause
+"""
+
+
 def deploy_note(secrets_included, roots_desc, full):
     cred = ("已含 agent-secrets.json（明文账密，内网同权直接可用）" if secrets_included
             else "凭证为空值骨架（agent-secrets.json），部署后填你的账号")
@@ -260,6 +276,7 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
             print("  [凭证] 已用空值骨架替换 agent-secrets.json")
         z.writestr("部署说明_同事版_v2.md",
                    deploy_note(not no_secrets, "\n".join(roots_desc), full))
+        z.writestr("部署.bat", DEPLOY_BAT.encode("gbk"))   # 2026-11-16 B轮：一键部署入口（bat 按 GBK 存防 cmd 乱码）
         z.writestr("MANIFEST.json", json.dumps({
             "打包时间": time.strftime("%Y-%m-%d %H:%M:%S"), "模式": "internal",
             "含凭证": not no_secrets, "瘦身": not full,
