@@ -153,6 +153,21 @@ echo.
 pause
 """
 
+DEPLOY_COMMAND = """#!/bin/bash
+# 测试 Agent 一键部署（macOS）——双击本文件即跑；若系统提示无法打开：右键→打开，或终端执行 chmod +x 部署.command
+cd "$(dirname "$0")"
+echo "===== 测试 Agent 一键部署（macOS）====="
+echo "本目录 = 部署目录（装完别挪；挪了重跑本文件即可）"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "[错误] 未找到 python3——请先安装 Python 3（python.org 下载安装）后重跑"
+  read -p "按回车退出..."
+  exit 1
+fi
+python3 "agentqa_test/Agent本体/tools/deploy_colleague.py" "$@"
+echo
+read -p "按回车退出..."
+"""
+
 
 def deploy_note(secrets_included, roots_desc, full):
     cred = ("已含 agent-secrets.json（明文账密，内网同权直接可用）" if secrets_included
@@ -277,6 +292,9 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
         z.writestr("部署说明_同事版_v2.md",
                    deploy_note(not no_secrets, "\n".join(roots_desc), full))
         z.writestr("部署.bat", DEPLOY_BAT.encode("gbk"))   # 2026-11-16 B轮：一键部署入口（bat 按 GBK 存防 cmd 乱码）
+        zi = zipfile.ZipInfo("部署.command")                # Mac 适配轮：macOS 双击入口（外部属性带执行位 755）
+        zi.external_attr = 0o755 << 16
+        z.writestr(zi, DEPLOY_COMMAND.encode("utf-8"))
         checklist = AGENT_ROOT / "真机首验清单_v1.md"        # B+轮：首验清单随包（先锋同事拿包即验）
         if checklist.exists():
             z.writestr("真机首验清单_v1.md", io.open(checklist, encoding="utf-8").read())

@@ -35,6 +35,16 @@ description: 登录中通冷链"鲸天系统"测试环境（jt-ll.test.ztoeco.co
    - 未登录 → 自动切"动态码登录"表单、填账号、点登录，成功输出 `RESULT: login-success` + 截图路径
 4. **校验**（对用户报告前必做）：脚本 `RESULT` 为 success/already-logged-in 即通过；如需独立复核，用 playwright `connectOverCDP('http://127.0.0.1:9333')` 找 `jt-ll` 页签，确认正文含 **陆潇雷 / 预发环境**。
 
+**macOS 变体**（2026-11-16 Mac 适配轮；同事 Mac 部署走这条）：
+1. 前置：部署根目录跑过 `npm i playwright`（Node 18+；登录脚本 playwright 依赖三级 fallback 的裸 require 在此命中）；
+2. 启动实例（防 https 升级参数同款封装）：
+   ```bash
+   bash ~/.workbuddy/skills/jingtian-login/scripts/launch_chrome_9333_mac.sh        # 无头；加 -v 可视化
+   ```
+   （物理正本=公司包\jt_exec\launch_chrome_9333_mac.sh，上面是 WorkBuddy 挂载位路径；用户目录 `.chrome-cdp/` 建在部署根下）
+3. 登录脚本同步骤 3：`node ~/.workbuddy/skills/jingtian-login/scripts/chrome_jt_login.js`（路径引用经部署器 migrate 已换算为本机）；
+4. Mac 排查 https 升级异常：`lsof -ti:9333 | xargs kill` → 重跑启动脚本。
+
 ## 登录成功判据
 
 URL 回到 `http://jt-ll.test.ztoeco.com/welcome`，正文含 **陆潇雷**、**预发环境**，租户行显示 **冷链快运**，侧边菜单（冷链财务管理、仓链账单管理等）已渲染。

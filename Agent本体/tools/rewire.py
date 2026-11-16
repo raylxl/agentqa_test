@@ -31,9 +31,17 @@ CLI_CONFIG = USER_ZCODE / "cli" / "config.json"
 ENV_SKILLS = ["jingtian-login", "jingtian-org-switch", "jingtian-tenant-switch", "pm-center-login"]
 
 
+IS_MAC = sys.platform == "darwin"          # 2026-11-16 Mac 适配轮：Mac 无 Junction/PowerShell，用原生 symlink
+
+
 def is_junction(p):
+    if IS_MAC:
+        try:
+            return os.path.islink(p)       # Mac：符号链接即"联接"
+        except OSError:
+            return False
     try:
-        return bool(os.lstat(p).st_file_attributes & 0x400)   # FILE_ATTRIBUTE_REPARSE_POINT
+        return bool(os.lstat(p).st_file_attributes & 0x400)   # Windows：FILE_ATTRIBUTE_REPARSE_POINT
     except (OSError, AttributeError):
         return False
 
@@ -86,10 +94,16 @@ def make_junction(link, target):
     link, target = Path(link), Path(target)
     if link.exists() or is_junction(link):
         if is_junction(link):
-            os.rmdir(link)                       # 只删联接本身，不碰目标内容
+            (link.unlink() if IS_MAC and link.is_symlink() else os.rmdir(link))   # 只删联接本身，不碰目标内容
         else:
             raise RuntimeError(f"联接位已被实体目录占用，拒绝覆盖：{link}")
     link.parent.mkdir(parents=True, exist_ok=True)   # 新机器上联接位父目录可能不存在
+    if IS_MAC:
+        try:
+            os.symlink(target, link, target_is_directory=True)   # Mac 原生符号链接
+            return
+        except OSError as e:
+            raise RuntimeError(f"建符号链接失败 {link} -> {target}: {e}")
     r = subprocess.run(["powershell", "-NoProfile", "-Command",
                         f"New-Item -ItemType Junction -Path '{link}' -Target '{target}' | Out-Null"],
                        capture_output=True)

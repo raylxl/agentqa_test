@@ -32,7 +32,7 @@ except Exception:
 AGENT_ROOT = Path(__file__).resolve().parents[2]      # …\\agentqa_test
 WORKSPACE = AGENT_ROOT.parent                          # …\\（jt_chrome 所在层）
 SCAN_DIRS = [AGENT_ROOT, WORKSPACE / "jt_chrome"]
-EXTS = {".py", ".js", ".cjs", ".ps1", ".json", ".sh", ".bat"}
+EXTS = {".py", ".js", ".cjs", ".ps1", ".json", ".sh", ".bat", ".command"}
 SKIP_NAMES = {"node_modules", "__pycache__", ".git", "dist", "locks", ".playwright-cli"}
 SKIP_FILES = {"agent-secrets.json", "migrate_paths.py"}   # 凭证红线；本工具自身（防自替换破坏别名登记）
 OLD_FWD = "D:/ZCodetest"
@@ -64,8 +64,12 @@ def main():
         sys.exit(f"[RED] 新根路径异常：{new_fwd}")
     if new_fwd.lower() == OLD_FWD.lower():
         sys.exit("[RED] 新根与旧根相同（D:/ZCodetest），无需迁移")
-    repl = {"fwd": new_fwd, "dbl": new_fwd.replace("/", "\\\\"),
-            "sgl": new_fwd.replace("/", "\\")}
+    if new_fwd.startswith("/"):
+        # Mac/POSIX 新根：三种旧写法（正斜杠/双反/单反）一律换为正斜杠形态——目标系统只认这个
+        repl = {"fwd": new_fwd, "dbl": new_fwd, "sgl": new_fwd}
+    else:
+        repl = {"fwd": new_fwd, "dbl": new_fwd.replace("/", "\\\\"),
+                "sgl": new_fwd.replace("/", "\\")}
 
     # ── 收集与统计 ──
     plan = []          # (file, counts_by_form)
@@ -138,7 +142,9 @@ def main():
 
 
 def root_ok(s):
-    return len(s) > 3 and s[1] == ":" and s[2] == "/" and s[0].isalpha()
+    if s.startswith("/"):
+        return len(s) > 1                                    # POSIX 绝对路径（Mac 部署）
+    return len(s) > 3 and s[1] == ":" and s[2] == "/" and s[0].isalpha()   # Windows 盘符
 
 
 if __name__ == "__main__":

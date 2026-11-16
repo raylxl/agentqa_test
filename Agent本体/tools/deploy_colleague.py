@@ -18,6 +18,9 @@ try:
 except Exception:
     pass
 
+IS_MAC = sys.platform == "darwin"
+LAUNCHER = "部署.command" if IS_MAC else "部署.bat"
+
 HERE = Path(__file__).resolve().parent          # <根>\agentqa_test\Agent本体\tools
 ROOT = HERE.parents[2]                          # 解压根（任意盘任意目录）
 
@@ -41,7 +44,7 @@ def main():
     if not (ROOT / "agentqa_test").is_dir():
         red(f"目录结构不像同事包（{ROOT}\\agentqa_test 不存在）——请解压完整 zip 后再跑")
         sys.exit(1)
-    print(f"  [OK ] 部署根 = {ROOT}（部署器跟着目录走，装完别挪；挪了重跑本部署器即可）")
+    print(f"  [OK ] 部署根 = {ROOT}（部署器跟着目录走，装完别挪；挪了重跑 {LAUNCHER} 即可）")
     if str(ROOT).replace("/", "\\").lower() == "d:\\zcodetest" and not args.force:
         red("检测到这是发起人正本目录 D:\\ZCodetest——请换目录试验，或加 --force 确认")
         sys.exit(1)
@@ -117,7 +120,7 @@ def main():
     if real_use(home / ".codebuddy", ["skills", "config.json", "config.toml", "sessions"]):
         hosts.append(("CodeBuddy", "九成档预设（.codebuddy\\skills 技能联接——CLI 版适用；hooks 兼容性属首验实测；IDE 插件版走手艺包三步）", "codebuddy", ["--codebuddy"]))
     if not hosts:
-        red("未检测到任何宿主（ZCode / WorkBuddy / Claude Code / Codex / CodeBuddy）——装任一后重跑部署.bat，或按部署说明手动挂技能")
+        red(f"未检测到任何宿主（ZCode / WorkBuddy / Claude Code / Codex / CodeBuddy）——装任一后重跑 {LAUNCHER}，或按部署说明手动挂技能")
     else:
         print(f"    检测到 {len(hosts)} 个宿主（接入与否由你决定）：")
         for i, (name, grade, _k, _f) in enumerate(hosts, 1):
@@ -161,7 +164,7 @@ def main():
                 print("    [软闸] 所选宿主无 hooks 插槽：每轮执行/回写收尾前跑 "
                       f"python \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
         elif hosts:
-            print("    按选择未接入任何宿主——想接时重跑部署.bat 再选")
+            print(f"    按选择未接入任何宿主——想接时重跑 {LAUNCHER} 再选")
 
     # ── 6. 校验 ──
     print("── 校验 ──")
