@@ -16,14 +16,9 @@ from pathlib import Path
 IS_MAC = sys.platform == "darwin"
 
 try:
-    # 输出编码=跟随真实控制台代码页（Windows：936→GBK，UTF-8 Beta 系统 65001→UTF-8；Mac/管道→UTF-8）
-    if not IS_MAC:
-        import ctypes
-        _cp = ctypes.windll.kernel32.GetConsoleOutputCP()
-        _enc = "gbk" if _cp == 936 else "utf-8"
-    else:
-        _enc = "utf-8"
-    sys.stdout.reconfigure(encoding=_enc, errors="replace")
+    # 不要动编码：真控制台 python 走 WriteConsoleW 宽字符通道（中文自动正常显示）；
+    # 重定向/管道场景回退 locale。此前 reconfigure(gbk) 曾致真控制台乱码（GBK 字节被底层按 UTF-8 强解）——已回撤。
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
 
