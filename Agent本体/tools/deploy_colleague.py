@@ -94,16 +94,27 @@ def main():
     # ── 5. 接线（宿主自适应：检测只报菜名，接哪个由同事选——不替用户决定往他的工具里塞东西）──
     print("── 宿主检测与接线 ──")
     home = Path(os.path.expanduser("~"))
+
+    def real_use(d, signs, hollow=("diagnostics", "logs", "cache", "tmp")):
+        """真实使用判定：签名文件/目录存在；或目录里除日志诊断类空壳外还有实质内容（防卸载/组件残留误报）"""
+        if not d.is_dir():
+            return False
+        for s in signs:
+            if (d / s).exists():
+                return True
+        real = [p for p in d.iterdir() if p.name.lower() not in hollow]
+        return len(real) > 0
+
     hosts = []
-    if (home / ".zcode").is_dir():
+    if real_use(home / ".zcode", ["cli/config.json"]):
         hosts.append(("ZCode", "100%（技能自动+五道机器闸）", "zcode", []))
-    if (home / ".workbuddy").is_dir():
+    if real_use(home / ".workbuddy", ["skills", "settings.json"]):
         hosts.append(("WorkBuddy", "九成（技能联接；无 hooks 插槽→软闸=收尾跑 soft_gates_check.py）", "workbuddy", ["--workbuddy"]))
-    if (home / ".claude").is_dir():
+    if real_use(home / ".claude", ["settings.json", "projects", "sessions"]):
         hosts.append(("Claude Code", "100%目标（技能联接+五闸按其格式注册；运行时行为属真机首验项）", "claude", ["--claude"]))
-    if (home / ".codex").is_dir():
+    if real_use(home / ".codex", ["config.toml", "auth.json", "sessions"]):
         hosts.append(("Codex", "九成（.codex\\skills 原生技能目录联接；无工具级 hooks→软闸）", "codex", ["--codex"]))
-    if (home / ".codebuddy").is_dir():
+    if real_use(home / ".codebuddy", ["skills", "config.json", "config.toml", "sessions"]):
         hosts.append(("CodeBuddy", "九成档预设（.codebuddy\\skills 技能联接——CLI 版适用；hooks 兼容性属首验实测；IDE 插件版走手艺包三步）", "codebuddy", ["--codebuddy"]))
     if not hosts:
         red("未检测到任何宿主（ZCode / WorkBuddy / Claude Code / Codex / CodeBuddy）——装任一后重跑部署.bat，或按部署说明手动挂技能")
