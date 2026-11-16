@@ -102,6 +102,8 @@ def main():
         hosts.append(("Claude Code", "100%目标（技能联接+五闸按其格式注册；运行时行为属真机首验项）", ["--claude"]))
     if (home / ".codex").is_dir():
         hosts.append(("Codex", "九成（.codex\\skills 原生技能目录联接；无工具级 hooks→软闸）", ["--codex"]))
+    if (home / ".codebuddy").is_dir():
+        hosts.append(("CodeBuddy", "九成档预设（.codebuddy\\skills 技能联接——CodeBuddy Code CLI 适用；hooks 兼容性属首验实测项；IDE 插件版无插槽请走手艺包三步）", ["--codebuddy"]))
     if not hosts:
         red("未检测到任何宿主（ZCode / WorkBuddy / Claude Code）——装任一后重跑部署.bat，或按部署说明手动挂技能")
     for name, grade, flags in hosts:
@@ -117,7 +119,7 @@ def main():
             red("rewire 有红项，见上方输出（宿主未登录/目录被占常见）")
         else:
             ok("接线完成（重开对应宿主会话后生效）")
-        if any(h[0] in ("WorkBuddy", "Codex") for h in hosts) and not any(h[0] == "ZCode" for h in hosts):
+        if any(h[0] in ("WorkBuddy", "Codex", "CodeBuddy") for h in hosts) and not any(h[0] == "ZCode" for h in hosts):
             print("    [软闸] 本机无 hooks 宿主：每轮执行/回写收尾前跑 "
                   f"python \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
 
