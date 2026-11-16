@@ -13,12 +13,14 @@
 import sys, os, re, subprocess, argparse
 from pathlib import Path
 
+IS_MAC = sys.platform == "darwin"
+
 try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # Windows 控制台（bat 双击）=GBK 代码页：输出转 GBK 才不乱码；Mac/管道= UTF-8
+    sys.stdout.reconfigure(encoding=("utf-8" if IS_MAC else "gbk"), errors="replace")
 except Exception:
     pass
 
-IS_MAC = sys.platform == "darwin"
 LAUNCHER = "部署.command" if IS_MAC else "部署.bat"
 
 HERE = Path(__file__).resolve().parent          # <根>\agentqa_test\Agent本体\tools

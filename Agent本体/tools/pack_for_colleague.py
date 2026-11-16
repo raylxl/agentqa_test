@@ -139,6 +139,7 @@ def make_skip(names=(), prefixes=(), suffixes=()):
 
 
 DEPLOY_BAT = r"""@echo off
+chcp 936 >nul
 title 测试Agent一键部署
 echo ===== 测试 Agent 一键部署 =====
 echo 本目录 = 部署目录（装完别挪；挪了重跑本文件即可）
@@ -291,7 +292,7 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
             print("  [凭证] 已用空值骨架替换 agent-secrets.json")
         z.writestr("部署说明_同事版_v2.md",
                    deploy_note(not no_secrets, "\n".join(roots_desc), full))
-        z.writestr("部署.bat", DEPLOY_BAT.encode("gbk"))   # 2026-11-16 B轮：一键部署入口（bat 按 GBK 存防 cmd 乱码）
+        z.writestr("部署.bat", DEPLOY_BAT.replace("\n", "\r\n").encode("gbk"))   # bat 必须 GBK+CRLF（LF-only 会致 cmd 解析错位——11-16 双击无反应事故根因）
         zi = zipfile.ZipInfo("部署.command")                # Mac 适配轮：macOS 双击入口（外部属性带执行位 755）
         zi.external_attr = 0o755 << 16
         z.writestr(zi, DEPLOY_COMMAND.encode("utf-8"))
