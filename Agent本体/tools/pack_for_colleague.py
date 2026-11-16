@@ -140,12 +140,13 @@ def make_skip(names=(), prefixes=(), suffixes=()):
 
 DEPLOY_BAT = r"""@echo off
 chcp 936 >nul
-title 测试Agent一键部署
-echo ===== 测试 Agent 一键部署 =====
-echo 本目录 = 部署目录（装完别挪；挪了重跑本文件即可）
+title Test Agent Deploy
+echo ===== Test Agent one-click deploy =====
+echo Current folder = deploy folder. Do NOT move it after install.
+echo (If moved: re-run this file again.)
 where python >nul 2>nul
 if errorlevel 1 (
-  echo [错误] 未找到 Python，请先安装 Python 3.8+ 并勾选 Add to PATH。
+  echo [ERROR] Python not found. Install Python 3.8+ with "Add to PATH" first.
   pause
   exit /b 1
 )
