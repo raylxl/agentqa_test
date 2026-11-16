@@ -1,0 +1,265 @@
+# -*- coding: utf-8 -*-
+"""rewire.py — agentqa_test 三包接线体检与改名工具（2026-11-14 目录化重构立，同日收拢 agentqa_test）
+
+布局：workspace\\agentqa_test\\{Agent本体, 手艺包, 公司包} = 物理正本；
+ZCode 只认固定运行位（workspace\\.zcode\\skills、用户目录 skills、cli\\config.json 的 hook 路径），
+之间靠目录联接（junction）与配置路径接线。本工具管这层接线，使目录**改名后仍兼容**。
+
+用法：
+  python rewire.py --status                 体检：三包定位/接线贯通/hook 路径/公司配置路径可达
+  python rewire.py --rename 公司包 新名      改名（agentqa_test 下的子目录名）：迁目录→重建受影响联接
+                                            →改 hook 配置路径→改公司配置路径值→登记路径迁移别名→旧名留兼容联接
+  python rewire.py --repair                 按接线表重建缺失/断开的联接（不动目录），并把 hooks 四件
+                                            幂等写进 cli\config.json（新机器部署=解压后只跑这一条）
+                                            （2026-11-14 随 pack_for_colleague.py 立，补"第二实例"缺口；
+                                             2026-11-15 增第四件 memory_guard 记忆索引守卫）
+
+说明：改 cli\\config.json 属重启级配置，执行后必须重开会话才生效（硬规则 8）。
+"""
+import argparse
+import io
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+AGENT_ROOT = Path(__file__).resolve().parents[2]          # …\agentqa_test\Agent本体\tools\ 上溯两级= agentqa_test
+WORKSPACE = AGENT_ROOT.parent                              # workspace 根（联接位所在）
+USER_ZCODE = Path(os.path.expanduser("~")) / ".zcode"
+CLI_CONFIG = USER_ZCODE / "cli" / "config.json"
+ENV_SKILLS = ["jingtian-login", "jingtian-org-switch", "jingtian-tenant-switch", "pm-center-login"]
+
+
+def is_junction(p):
+    try:
+        return bool(os.lstat(p).st_file_attributes & 0x400)   # FILE_ATTRIBUTE_REPARSE_POINT
+    except (OSError, AttributeError):
+        return False
+
+
+def find_dir(marker):
+    """在 agentqa_test 下按内容特征找子目录（改名免疫）；跳过点开头与联接"""
+    for d in sorted(AGENT_ROOT.iterdir()):
+        try:
+            if d.name.startswith(".") or not d.is_dir() or is_junction(d):
+                continue
+            if (d / marker).exists():
+                return d
+        except OSError:
+            continue
+    return None
+
+
+def locate():
+    return (find_dir(Path("skills") / "usecase-orchestrator"),   # Agent本体
+            find_dir("agent-company.json"),                      # 公司包
+            find_dir(Path("03_检查脚本") / "generic_layer_check.py"))  # 手艺包
+
+
+def wiring(agent, company, workbuddy=False):
+    """接线表：(联接位置, 物理目标, 说明)；workbuddy=True 追加 WorkBuddy 宿主技能位（2026-11-16 三层拆分 P4）"""
+    w = [(WORKSPACE / ".zcode" / "skills", agent / "skills", "流程技能运行位（ZCode 发现口）"),
+         (agent / "skills" / "devops-login", company / "skills" / "devops-login", "环境技能挂入技能树"),
+         (USER_ZCODE / "cli" / "hooks", agent / "hooks", "hook 旧路径兼容联接（缓存未失效会话用；稳定后可删）")]
+    for n in ENV_SKILLS:
+        w.append((USER_ZCODE / "skills" / n, company / "skills" / n, "用户级环境技能运行位"))
+    craft = find_dir(Path("03_检查脚本") / "generic_layer_check.py")
+    if craft:
+        w.append((WORKSPACE / "通用测试agent包", craft, "手艺包旧名兼容联接"))
+    if workbuddy:
+        wb = Path(os.path.expanduser("~")) / ".workbuddy" / "skills"
+        for src_dir in (agent / "skills", company / "skills"):
+            if src_dir.is_dir():
+                for s in sorted(src_dir.iterdir()):
+                    if s.name.startswith((".", "__")) or not s.is_dir() or is_junction(s):
+                        continue
+                    w.append((wb / s.name, s, f"WorkBuddy 宿主技能位：{s.name}"))
+    return w
+
+
+def make_junction(link, target):
+    link, target = Path(link), Path(target)
+    if link.exists() or is_junction(link):
+        if is_junction(link):
+            os.rmdir(link)                       # 只删联接本身，不碰目标内容
+        else:
+            raise RuntimeError(f"联接位已被实体目录占用，拒绝覆盖：{link}")
+    link.parent.mkdir(parents=True, exist_ok=True)   # 新机器上联接位父目录可能不存在
+    r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        f"New-Item -ItemType Junction -Path '{link}' -Target '{target}' | Out-Null"],
+                       capture_output=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"建联接失败 {link} -> {target}: {r.stderr.decode('utf-8', 'replace')[:200]}")
+
+
+def hook_paths():
+    if not CLI_CONFIG.exists():
+        return []
+    cfg = json.loads(io.open(CLI_CONFIG, encoding="utf-8").read())
+    out = []
+    for arr in (cfg.get("hooks", {}).get("events", {}) or {}).values():
+        for e in arr:
+            for h in e.get("hooks", []):
+                out += [a for a in h.get("args", []) if a.lower().endswith(".py")]
+    return out
+
+
+def hook_templates(agent):
+    """hooks 五件接线表：(事件, matcher, 脚本名, 状态文案)；路径按当前本体解析，不写死。
+    第四件 memory_guard（2026-11-15 立）：MEMORY.md 写后自动体检，防多会话并发写坏记忆索引。
+    第五件 activity_trace（2026-11-16 立，计时与时间线规范§十一第二批）：全部工具调用时刻落
+    workspace\\.zcode\\agent_activity.jsonl（净耗时底账）；只挂 PostToolUse 单边=每调用一次开销。"""
+    return [("PostToolUse", "Write|Edit", "reread_reminder.py", "正本改动检查"),
+            ("PostToolUse", "Write|Edit|ApplyPatch", "paiban_ledger_reminder.py", "拍板对账提醒"),
+            ("PreToolUse", "Edit|Write|ApplyPatch", "block_master_edit.py", "正本直改拦截检查"),
+            ("PostToolUse", "Write|Edit|ApplyPatch", "memory_guard.py", "记忆索引守卫"),
+            ("PostToolUse", ".*", "activity_trace.py", "计时底账（工具时刻）")]
+
+
+def ensure_hooks(agent):
+    """把 hooks 三件幂等写进 cli\\config.json：按脚本文件名识别，缺则补、路径旧则改；写前备份。
+    （新机器部署缺口：--repair 原先只管联接，同事的 config.json 里没有 hook 条目则三道机器闸全不生效）"""
+    events = {}
+    if CLI_CONFIG.exists():
+        cfg = json.loads(io.open(CLI_CONFIG, encoding="utf-8").read())
+        events = (cfg.get("hooks", {}) or {}).get("events", {})
+    else:
+        cfg, events = {}, {}
+    changed = []
+    for event, matcher, script, msg in hook_templates(agent):
+        path = str(agent / "hooks" / script)
+        arr = events.setdefault(event, [])
+        hit = None
+        for e in arr:
+            for h in e.get("hooks", []):
+                if any(isinstance(a, str) and a.replace("\\", "/").endswith("/" + script) for a in h.get("args", [])):
+                    hit = h
+        if hit is None:
+            arr.append({"matcher": matcher, "hooks": [{"type": "process", "command": "python",
+                        "args": [path], "timeoutMs": 8000, "statusMessage": msg}]})
+            changed.append(f"补 {event} += {script}")
+        elif hit["args"][0].replace("\\", "/") != path.replace("\\", "/"):
+            hit["args"][0] = path
+            changed.append(f"改路径 {script}")
+    if changed:
+        cfg.setdefault("hooks", {})["enabled"] = True
+        cfg["hooks"]["events"] = events
+        if CLI_CONFIG.exists():
+            import time
+            bak = CLI_CONFIG.with_suffix(".json.bak_rewire_" + time.strftime("%Y%m%d_%H%M%S"))
+            io.open(bak, "wb").write(io.open(CLI_CONFIG, "rb").read())
+        else:
+            CLI_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+        io.open(CLI_CONFIG, "w", encoding="utf-8", newline="").write(
+            json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
+        for c in changed:
+            print(f"  [hook] {c}")
+        print("  ⚠ 已写 cli\\config.json（先备份）——重启级配置，须重开会话生效（硬规则 8）")
+    else:
+        print("  hooks 配置已齐，无改动")
+
+
+def status(workbuddy=False):
+    agent, company, craft = locate()
+    print(f"workspace：{WORKSPACE}\n  agentqa_test = {AGENT_ROOT}")
+    print(f"  Agent本体 = {agent}\n  公司包    = {company}\n  手艺包    = {craft}")
+    red = 0
+    if not (agent and company and craft):
+        print("[RED] 三包定位不全")
+        return 1
+    print("── 接线 ──")
+    for link, target, note in wiring(agent, company, workbuddy):
+        try:
+            ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
+        except OSError:
+            ok = False
+        red += 0 if ok else 1
+        print(f"  [{'OK ' if ok else 'RED'}] {link}  →  {target}   （{note}）")
+    print("── hook 配置路径 ──")
+    for a in hook_paths():
+        ok = Path(a).exists()
+        red += 0 if ok else 1
+        print(f"  [{'OK ' if ok else 'RED'}] {a}")
+    print("── 公司配置路径可达 ──")
+    cfg = json.loads(io.open(company / "agent-company.json", encoding="utf-8").read())
+    alias = {k.replace("\\", "/"): v.replace("\\", "/") for k, v in (cfg.get("路径迁移别名", {}) or {}).items()}
+    for k, v in cfg.get("paths", {}).items():
+        if isinstance(v, str) and len(v) > 2 and v[1] == ":":
+            ok = Path(v).exists() or v.replace("\\", "/") in alias
+            red += 0 if ok else 1
+            print(f"  [{'OK ' if ok else 'RED'}] paths.{k} = {v}")
+    print(f"结论：{'全绿' if red == 0 else f'红 {red} 项'}")
+    return 1 if red else 0
+
+
+def repair(workbuddy=False):
+    agent, company, _ = locate()
+    for link, target, _n in wiring(agent, company, workbuddy):
+        try:
+            ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
+        except OSError:
+            ok = False
+        if not ok:
+            make_junction(link, target)
+            print(f"  [修] {link} → {target}")
+    ensure_hooks(agent)
+    return status(workbuddy)
+
+
+def rename(old, new):
+    src, dst = AGENT_ROOT / old, AGENT_ROOT / new
+    if not src.is_dir() or is_junction(src):
+        print(f"[RED] 不是 {AGENT_ROOT} 下的实体目录：{src}")
+        return 1
+    if dst.exists():
+        print(f"[RED] 目标名已存在：{dst}")
+        return 1
+    old_s, new_s = str(src).replace("\\", "/"), str(dst).replace("\\", "/")
+    agent0, company0, _ = locate()
+    for link, target, _n in wiring(agent0, company0):
+        if is_junction(link) and str(target).replace("\\", "/").startswith(old_s):
+            os.rmdir(link)
+    os.rename(src, dst)
+    agent, company, _ = locate()
+    cp = company / "agent-company.json"
+    text = io.open(cp, encoding="utf-8").read().replace(old_s, new_s)
+    cfg = json.loads(text)
+    cfg.setdefault("路径迁移别名", {})[old_s] = new_s
+    io.open(cp, "w", encoding="utf-8", newline="").write(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
+    if CLI_CONFIG.exists():
+        raw = io.open(CLI_CONFIG, encoding="utf-8").read()
+        o_esc, n_esc = str(src).replace("\\", "\\\\"), str(dst).replace("\\", "\\\\")
+        if o_esc in raw:
+            io.open(CLI_CONFIG, "w", encoding="utf-8", newline="").write(raw.replace(o_esc, n_esc))
+            print("  ⚠ 已改 cli\\config.json 的 hook 路径 —— 需重开会话生效")
+    for link, target, _n in wiring(agent, company):
+        try:
+            ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
+        except OSError:
+            ok = False
+        if not ok:
+            make_junction(link, target)
+    make_junction(src, dst)
+    print(f"  已改名 {old} → {new}；旧名保留为兼容联接；别名已登记")
+    print("  后续人工清扫（可选，旧路径经兼容联接仍可达）：技能/记忆/文档里的旧名文字引用")
+    return status()
+
+
+def main():
+    ap = argparse.ArgumentParser(description="agentqa_test 三包接线体检与改名")
+    ap.add_argument("--status", action="store_true")
+    ap.add_argument("--repair", action="store_true")
+    ap.add_argument("--workbuddy", action="store_true",
+                    help="同时接入 WorkBuddy 宿主（.workbuddy\\skills 联接全部技能；WorkBuddy 重启后生效）")
+    ap.add_argument("--rename", nargs=2, metavar=("旧名", "新名"))
+    a = ap.parse_args()
+    if a.rename:
+        sys.exit(rename(*a.rename))
+    if a.repair:
+        sys.exit(repair(a.workbuddy))
+    sys.exit(status(a.workbuddy))
+
+
+if __name__ == "__main__":
+    main()

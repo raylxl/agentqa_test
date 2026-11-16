@@ -1,0 +1,70 @@
+{
+ "skills/usecase-generator/SKILL.md": [
+  "D:/ZCodetest/.zcode/skills/usecase-pipeline/",
+  "D:/ZCodetest/用例设计标准_我的定稿/",
+  "D:/ZCodetest/需求用例库/需求文档/财务需求{年}_{族}_{菜单}"
+ ],
+ "skills/usecase-executor/SKILL.md": [
+  "D:/ZCodetest/jt_chrome/pitfall_scan.py",
+  "D:/ZCodetest/jt_chrome/pw_layered/",
+  "D:/ZCodetest/jt_chrome/pw_layered/ledger.jsonl——凡目标",
+  "D:/ZCodetest/jt_chrome/report_sync.py",
+  "D:/ZCodetest/jt_chrome/writeback_check.py",
+  "D:/ZCodetest/jt_chrome/writeback_pending.jsonl",
+  "D:/ZCodetest/jt_chrome/执行坑库_v1.md"
+ ],
+ "skills/usecase-feedback-loop/SKILL.md": [
+  "D:/ZCodetest/用例设计标准_我的定稿/执行反馈闭环标准_v1.md"
+ ],
+ "skills/usecase-history-cleanup/SKILL.md": [
+  "D:/ZCodetest/.zcode/skills/usecase-history-cleanup/scripts/archive_history.py",
+  "D:/ZCodetest/需求用例库/用例文件"
+ ],
+ "skills/usecase-orchestrator/SKILL.md": [
+  "D:/ZCodetest/需求流水线台账_v1.md"
+ ],
+ "skills/usecase-qc/SKILL.md": [
+  "D:/ZCodetest/jt_chrome/writeback_check.py"
+ ],
+ "skills/usecase-pipeline/scripts/assemble.py": [
+  "FIN-2026-CLOUD-CUSTOMER-SETTLEMENT-11.30",
+  "FIN-2026-CLOUD-DELIVERY-PRICE-11.30",
+  "FIN-2026-CLOUD-GENERIC-BILLING-11.30",
+  "FIN-2026-CLOUD-PLATFORM-PRICE-11.30",
+  "FIN-2026-CLOUD-QUOTE-11.30",
+  "FIN-2026-CLOUD-STORAGE-BILL-11.30",
+  "FIN-2026-CLOUD-WAREHOUSE-PRICE-11.30",
+  "云仓账单分章",
+  "仓内作业价格分章",
+  "存储账单分章",
+  "客户特定结算规则配置分章",
+  "对客报价分章",
+  "平台价格分章",
+  "通用计费规则调整分章",
+  "配送价格分章"
+ ],
+ "skills/usecase-pipeline/scripts/governance_manifest.py": [
+  "FIN-2026-CLOUD-CUSTOMER-SETTLEMENT-11.30",
+  "FIN-2026-CLOUD-DELIVERY-PRICE-11.30",
+  "FIN-2026-CLOUD-GENERIC-BILLING-11.30",
+  "FIN-2026-CLOUD-PLATFORM-PRICE-11.30",
+  "FIN-2026-CLOUD-QUOTE-11.30",
+  "FIN-2026-CLOUD-STORAGE-BILL-11.30",
+  "FIN-2026-CLOUD-WAREHOUSE-PRICE-11.30"
+ ],
+ "skills/usecase-generator/scripts/assemble_universal.py": [
+  "D:/ZCodetest/.zcode/skills/usecase-generator/scripts",
+  "D:/ZCodetest/需求用例库/用例文件/{菜单}分章",
+  "D:/ZCodetest/需求用例库/用例文件/财务需求{年}_{族}_{菜单}_{版本}_测试用例_v2.md",
+  "仓内作业价格分章",
+  "存储账单分章",
+  "客户特定结算规则配置分章",
+  "对客报价分章",
+  "平台价格分章",
+  "通用计费规则调整分章",
+  "配送价格分章"
+ ],
+ "skills/usecase-history-cleanup/scripts/archive_history.py": [
+  "D:/ZCodetest/需求用例库/用例文件"
+ ]
+}

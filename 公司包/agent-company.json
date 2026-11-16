@@ -1,0 +1,177 @@
+{
+  "_说明": "公司适配层配置（家底，永不出门，不含任何账密）。通用技能从这里解析公司路径/命名/正本/环境/域词/白名单；无此文件=技能自动降级纯通用模式并提示配置。修改本文件须按硬规则8向用户宣告。（2026-11-14 目录化重构：三包收拢于 workspace\\agentqa_test\\，本文件物理位=agentqa_test\\公司包\\；流程脚本按文件名逐级定位，目录改名不影响）",
+  "paths": {
+    "需求文档": "D:/ZCodetest/需求用例库/需求文档",
+    "用例文件": "D:/ZCodetest/需求用例库/用例文件",
+    "标准体系": "D:/ZCodetest/用例设计标准_我的定稿",
+    "jt_chrome": "D:/ZCodetest/jt_chrome",
+    "pipeline_assets": "D:/ZCodetest/agentqa_test/Agent本体/skills/usecase-pipeline",
+    "ai_test": "D:/ZCodetest/AiTest",
+    "手艺包": "D:/ZCodetest/agentqa_test/手艺包",
+    "需求流水线台账": "D:/ZCodetest/需求流水线台账_v1.md",
+    "技能根": "D:/ZCodetest/agentqa_test/Agent本体/skills",
+    "Agent本体": "D:/ZCodetest/agentqa_test/Agent本体",
+    "公司包": "D:/ZCodetest/agentqa_test/公司包",
+    "凭证文件": "D:/ZCodetest/agentqa_test/公司包/agent-secrets.json",
+    "执行工具": "D:/ZCodetest/jt_chrome",
+    "接口执行根": "D:/ZCodetest/jt_chrome/pw_layered"
+  },
+  "naming": {
+    "需求文档模式": "财务需求{年}_{族}_{菜单} {版本}_v{N}.md",
+    "理解说明模式": "财务需求{年}_{族}_{菜单} {需求版本}_需求理解说明_v{N}.md",
+    "域标准模式": "{菜单}_用例编写标准_v{N}.md",
+    "分章目录模式": "{菜单}分章",
+    "报告模式": "财务需求{年}_{模块}_{菜单}_{批次}_测试报告_v{N}.md",
+    "交付版本惯例": "同族日期版本（如 11.30）",
+    "编号体系": "N/M/F（沿用各族既有体系，新域可用 N/Q/F）"
+  },
+  "standards": {
+    "L0_角色": "测试角色定位标准_v1.md",
+    "L1_通用": "通用用例设计标准_v1.md",
+    "L5_门禁": "门禁验收标准_v1.md",
+    "L5_治理": "测试策略与风险治理标准_v1.md",
+    "L5_交付": "交付物规范_v1.md",
+    "L6_闭环": "执行反馈闭环标准_v1.md",
+    "L6_操作细则": "执行操作细则_v1.md",
+    "L6_判定": "测试执行结果判定标准_v1.md",
+    "L6_质疑": "执行质疑标准_v1.md",
+    "L6_缺陷模板": "缺陷模板与提单接入规范_v1.md",
+    "索引": "00_标准体系索引.md",
+    "执行坑库": "执行坑库_v1.md",
+    "通用正本统称": "用例设计标准_我的定稿（独立定稿）",
+    "L6_执行期参考": "执行期参考_鲸天AI自动化测试-用例编写标准.md"
+  },
+  "环境": {
+    "被测系统": "鲸天（详见 jingtian-login 技能，域名/账密不入本文件）",
+    "chrome端口": {
+      "用户交互主实例": 9333,
+      "辅助": 9334,
+      "无头AI执行": 9335,
+      "runner独占": "9336+"
+    },
+    "租户体系": "8 租户，切换=jingtian-tenant-switch 技能",
+    "登录技能": "jingtian-login",
+    "浏览器通道": "由公司环境适配器提供",
+    "租户切换方式": "由登录/租户适配器提供",
+    "接口": {
+      "_说明": "接口通道执行（细则§十六，2026-11-15 立；Playwright request 与 UI 通道同 runner 同账本）；工具四件套=paths.接口执行根（lib/api_channel.js·netcap_daemon.js·depose_api.js·pw_runner.js --channel ui|api|all）",
+      "接口网关": "http://gateway-ll.test.ztoeco.com",
+      "token获取方式": "bootstrapSession 独占实例借取（登录→切租户→读 localStorage token→APIRequestContext，业务全程无页面）；账密=凭证文件 jt_login 字段，禁入本文件"
+    }
+  },
+  "execution_adapters": {
+    "_细则": "公司运行细则正本=公司包\\执行环境适配细则.md（分层执行模式/坑库注入/开工收尾双闸原文）；executor 通用契约经 execution_adapters 引用",
+    "pitfall_scan": { "path": "{paths.执行工具}/pitfall_scan.py", "required": false },
+    "report_sync": { "path": "{paths.执行工具}/report_sync.py", "required": false },
+    "writeback_check": { "path": "{paths.执行工具}/writeback_check.py", "required": false },
+    "metrics_summary": { "path": "{paths.执行工具}/metrics_summary.py", "required": false },
+    "环境细则": { "path": "{paths.公司包}/执行环境适配细则.md", "required": false }
+  },
+  "integrations": {
+    "knowledge_base": {
+      "enabled": true,
+      "provider": "由用户级配置提供",
+      "tools": ["由用户级配置提供"],
+      "config_ref": "用户级 MCP 配置",
+      "required": false,
+      "data_classification": "公司内部"
+    },
+    "defect_platform": {
+      "enabled": false,
+      "provider": "未接入（模板正本=standards.L6_缺陷模板；接入时任写一个适配器即可：一站式devops/PM中心/其他缺陷平台，随时可换）",
+      "adapter_dir": "{paths.公司包}/adapters",
+      "contract": "缺陷模板与提单接入规范 §二（create/update/query/字段映射表四能力，装不下的字段拼描述区禁丢弃）",
+      "required": false,
+      "data_classification": "公司内部"
+    }
+  },
+  "hook_policy": {
+    "master_edit": {
+      "enabled": true,
+      "whitelist_names": ["全流程场景用例"],
+      "case_pattern": "_测试用例_v\\d+\\.md$"
+    },
+    "report_reminder": {
+      "enabled": true,
+      "report_pattern": "_测试报告_v\\d+\\.md$",
+      "cross_ledger_reminder": true
+    }
+  },
+  "archive_policy": {
+    "archive_dirname": "历史版本",
+    "ledger_name": "归档说明.md",
+    "name_patterns": ["WB", "旧档", ".draft"],
+    "keep_patterns": ["执行记录", "分章"],
+    "backup_patterns": ["备份"],
+    "debug_patterns": ["工具调试"],
+    "version_regex": "^(?P<family>.+)_v(?P<ver>\\d+(?:\\.\\d+)?)(?P<ext>\\.[A-Za-z0-9]+)$",
+    "dry_run_default": true
+  },
+  "域词": {
+    "业务域": "物流冷链计费（云仓/快运两租户群）",
+    "造数前缀": {
+      "订单": "DO{章码}",
+      "运单": "WD{章码}",
+      "客户": "TEST{章码}"
+    },
+    "分诊完整档判据": [
+      "资损",
+      "计费",
+      "跨租户",
+      "账单结算",
+      "核心流程",
+      "合规安全",
+      "跨菜单链路"
+    ],
+    "造数三态": [
+      "已失效",
+      "生效中",
+      "未生效"
+    ]
+  },
+  "白名单": {
+    "历史豁免需求ID": [
+      "FIN-2026-CLOUD-BILL-11.30",
+      "FIN-2026-CLOUD-STORAGE-BILL-11.30",
+      "FIN-2026-CLOUD-CUSTOMER-SETTLEMENT-11.30",
+      "FIN-2026-CLOUD-QUOTE-11.30",
+      "FIN-2026-CLOUD-PLATFORM-PRICE-11.30",
+      "FIN-2026-CLOUD-GENERIC-BILLING-11.30",
+      "FIN-2026-CLOUD-DELIVERY-PRICE-11.30",
+      "FIN-2026-CLOUD-WAREHOUSE-PRICE-11.30"
+    ],
+    "历史分章目录": [
+      "云仓账单分章",
+      "仓内作业价格分章",
+      "存储账单分章",
+      "客户特定结算规则配置分章",
+      "对客报价分章",
+      "平台价格分章",
+      "通用计费规则调整分章",
+      "配送价格分章"
+    ],
+    "归档默认根": "D:/ZCodetest/需求用例库/用例文件"
+  },
+  "分发": {
+    "机检词表": "D:/ZCodetest/agentqa_test/公司包/company_wordlist.json",
+    "禁发清单": [
+      "AiTest/04_实战执行记录",
+      "memories/",
+      "环境登录技能（jingtian-*/devops-login/pm-center-login）",
+      "jt_chrome/（公司层执行脚本资产，含内网地址与操作正本）",
+      "公司包/（整包永不出门：agent-secrets.json 凭证唯一落点 + agent-company.json + 环境登录技能）"
+    ]
+  },
+  "路径迁移别名_说明": "目录搬迁/改名登记（旧→新）。param_check 按此把快照旧值换算成新值再判；改名工具 rewire.py 自动追加。旧路径多数仍由兼容联接（junction）保持可达。",
+  "路径迁移别名": {
+    "D:/ZCodetest/.zcode/skills": "D:/ZCodetest/agentqa_test/Agent本体/skills",
+    "D:/ZCodetest/.zcode/agent-company.json": "D:/ZCodetest/agentqa_test/公司包/agent-company.json",
+    "D:/ZCodetest/.zcode/agent-secrets.json": "D:/ZCodetest/agentqa_test/公司包/agent-secrets.json",
+    "D:/ZCodetest/.zcode/company_wordlist.json": "D:/ZCodetest/agentqa_test/公司包/company_wordlist.json",
+    "D:/ZCodetest/通用测试agent包": "D:/ZCodetest/agentqa_test/手艺包",
+    "D:/ZCodetest/手艺包": "D:/ZCodetest/agentqa_test/手艺包",
+    "D:/ZCodetest/Agent本体": "D:/ZCodetest/agentqa_test/Agent本体",
+    "D:/ZCodetest/公司包": "D:/ZCodetest/agentqa_test/公司包",
+    "C:/Users/wangzhijun/.zcode/cli/hooks": "D:/ZCodetest/agentqa_test/Agent本体/hooks"
+  }
+}

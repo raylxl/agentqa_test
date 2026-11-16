@@ -1,0 +1,11 @@
+# ═══ 凭证红线：永不入任何远端（文件存放位置标准§七）═══
+公司包/agent-secrets.json
+
+# 运行痕迹与产物
+dist/
+_git归档/
+__pycache__/
+*.pyc
+*.log
+.playwright-cli/
+locks/

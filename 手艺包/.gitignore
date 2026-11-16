@@ -1,0 +1,6 @@
+.gitignore: 防误提交公司内容
+company_wordlist.json
+*.local
+.env*
+__pycache__/
+*.pyc
