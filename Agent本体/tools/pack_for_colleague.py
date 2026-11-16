@@ -277,6 +277,9 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
         z.writestr("部署说明_同事版_v2.md",
                    deploy_note(not no_secrets, "\n".join(roots_desc), full))
         z.writestr("部署.bat", DEPLOY_BAT.encode("gbk"))   # 2026-11-16 B轮：一键部署入口（bat 按 GBK 存防 cmd 乱码）
+        checklist = AGENT_ROOT / "真机首验清单_v1.md"        # B+轮：首验清单随包（先锋同事拿包即验）
+        if checklist.exists():
+            z.writestr("真机首验清单_v1.md", io.open(checklist, encoding="utf-8").read())
         z.writestr("MANIFEST.json", json.dumps({
             "打包时间": time.strftime("%Y-%m-%d %H:%M:%S"), "模式": "internal",
             "含凭证": not no_secrets, "瘦身": not full,
