@@ -90,19 +90,34 @@ def main():
             n += 1
     ok(f"说明文档路径本地化：{n} 件（部署说明/入口/README 等指向本目录）")
 
-    # ── 5. 接线（重建联接+写 hooks；写 C 盘配置属重启级——同事装了 ZCode 才跑）──
-    print("── 接线 ──")
+    # ── 5. 接线（宿主自适应：检测装了什么就接什么，同事不用选）──
+    print("── 宿主检测与接线 ──")
+    home = Path(os.path.expanduser("~"))
+    hosts = []
+    if (home / ".zcode").is_dir():
+        hosts.append(("ZCode", "100%（技能自动+五道机器闸）", []))
+    if (home / ".workbuddy").is_dir():
+        hosts.append(("WorkBuddy", "九成（技能联接；无 hooks 插槽→软闸=收尾跑 soft_gates_check.py）", ["--workbuddy"]))
+    if (home / ".claude").is_dir():
+        hosts.append(("Claude Code", "100%目标（技能联接+五闸按其格式注册；运行时行为属真机首验项）", ["--claude"]))
+    if not hosts:
+        red("未检测到任何宿主（ZCode / WorkBuddy / Claude Code）——装任一后重跑部署.bat，或按部署说明手动挂技能")
+    for name, grade, flags in hosts:
+        print(f"    检测到 {name} → {grade}")
     if args.skip_rewire:
-        ok("按参数跳过 rewire --repair（试验模式；正式部署不要跳过）")
-    else:
+        ok(f"按参数跳过接线（试验模式；正式部署将接入：{'/'.join(h[0] for h in hosts) or '无宿主'}）")
+    elif hosts:
         rw = HERE / "rewire.py"
-        r = subprocess.run([sys.executable, str(rw), "--repair"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
-        print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-6:]))
+        cmd = [sys.executable, str(rw), "--repair"] + [f for h in hosts for f in h[2]]
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-8:]))
         if r.returncode != 0:
-            red("rewire --repair 有红项，见上方输出（常见：ZCode 未装/未登录）")
+            red("rewire 有红项，见上方输出（宿主未登录/目录被占常见）")
         else:
-            ok("联接与 hooks 配置完成（重开 ZCode 会话后生效）")
+            ok("接线完成（重开对应宿主会话后生效）")
+        if any(h[0] == "WorkBuddy" for h in hosts) and not any(h[0] == "ZCode" for h in hosts):
+            print("    [软闸] 本机无 hooks 宿主：每轮执行/回写收尾前跑 "
+                  f"python \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
 
     # ── 6. 校验 ──
     print("── 校验 ──")

@@ -57,8 +57,8 @@ def locate():
             find_dir(Path("03_检查脚本") / "generic_layer_check.py"))  # 手艺包
 
 
-def wiring(agent, company, workbuddy=False):
-    """接线表：(联接位置, 物理目标, 说明)；workbuddy=True 追加 WorkBuddy 宿主技能位（2026-11-16 三层拆分 P4）"""
+def wiring(agent, company, workbuddy=False, claude=False):
+    """接线表：(联接位置, 物理目标, 说明)；workbuddy/claude=True 追加对应宿主技能位（2026-11-16 三层拆分 P4 / 宿主自适应）"""
     w = [(WORKSPACE / ".zcode" / "skills", agent / "skills", "流程技能运行位（ZCode 发现口）"),
          (agent / "skills" / "devops-login", company / "skills" / "devops-login", "环境技能挂入技能树"),
          (USER_ZCODE / "cli" / "hooks", agent / "hooks", "hook 旧路径兼容联接（缓存未失效会话用；稳定后可删）")]
@@ -67,14 +67,16 @@ def wiring(agent, company, workbuddy=False):
     craft = find_dir(Path("03_检查脚本") / "generic_layer_check.py")
     if craft:
         w.append((WORKSPACE / "通用测试agent包", craft, "手艺包旧名兼容联接"))
-    if workbuddy:
-        wb = Path(os.path.expanduser("~")) / ".workbuddy" / "skills"
+    for flag, base, tag in ((workbuddy, Path(os.path.expanduser("~")) / ".workbuddy" / "skills", "WorkBuddy"),
+                            (claude, Path(os.path.expanduser("~")) / ".claude" / "skills", "Claude Code")):
+        if not flag:
+            continue
         for src_dir in (agent / "skills", company / "skills"):
             if src_dir.is_dir():
                 for s in sorted(src_dir.iterdir()):
                     if s.name.startswith((".", "__")) or not s.is_dir() or is_junction(s):
                         continue
-                    w.append((wb / s.name, s, f"WorkBuddy 宿主技能位：{s.name}"))
+                    w.append((base / s.name, s, f"{tag} 宿主技能位：{s.name}"))
     return w
 
 
@@ -160,7 +162,50 @@ def ensure_hooks(agent):
         print("  hooks 配置已齐，无改动")
 
 
-def status(workbuddy=False):
+CLAUDE_SETTINGS = Path(os.path.expanduser("~")) / ".claude" / "settings.json"
+
+
+def ensure_claude_hooks(agent):
+    """Claude Code 档：把 hooks 五件按 Claude settings.json 格式幂等写入（备份先行）。
+    格式已对齐官方（PreToolUse/PostToolUse + matcher 正则 + command）；脚本 stdin 协议与 ZCode 同构度高，
+    但**运行时行为属真机首验项**（2026-11-16 立档，部署验证报告边界节）。"""
+    if not CLAUDE_SETTINGS.parent.is_dir():
+        print("  [claude] 未装 Claude Code（~/.claude 不存在），跳过")
+        return
+    cfg = {}
+    if CLAUDE_SETTINGS.exists():
+        cfg = json.loads(io.open(CLAUDE_SETTINGS, encoding="utf-8").read())
+    hooks = cfg.setdefault("hooks", {})
+    changed = []
+    for event, matcher, script, msg in hook_templates(agent):
+        cmd = f'python "{agent / "hooks" / script}"'
+        arr = hooks.setdefault(event, [])
+        hit = None
+        for e in arr:
+            for h in e.get("hooks", []):
+                if script in str(h.get("command", "")):
+                    hit = h
+        m = matcher.replace("ApplyPatch", "") .strip("|")     # Claude 无 ApplyPatch 工具名，正则里去掉
+        if hit is None:
+            arr.append({"matcher": m, "hooks": [{"type": "command", "command": cmd}]})
+            changed.append(f"补 {event} += {script}")
+        elif hit["command"] != cmd:
+            hit["command"] = cmd
+            changed.append(f"改路径 {script}")
+    if changed:
+        import time
+        bak = CLAUDE_SETTINGS.with_suffix(".json.bak_rewire_" + time.strftime("%Y%m%d_%H%M%S"))
+        io.open(bak, "wb").write(io.open(CLAUDE_SETTINGS, "rb").read()) if CLAUDE_SETTINGS.exists() else None
+        io.open(CLAUDE_SETTINGS, "w", encoding="utf-8", newline="").write(
+            json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
+        for c in changed:
+            print(f"  [claude-hook] {c}")
+        print("  ⚠ 已写 ~/.claude/settings.json（先备份）——重启级配置；运行时行为属真机首验项")
+    else:
+        print("  [claude] hooks 配置已齐，无改动")
+
+
+def status(workbuddy=False, claude=False):
     agent, company, craft = locate()
     print(f"workspace：{WORKSPACE}\n  agentqa_test = {AGENT_ROOT}")
     print(f"  Agent本体 = {agent}\n  公司包    = {company}\n  手艺包    = {craft}")
@@ -169,7 +214,7 @@ def status(workbuddy=False):
         print("[RED] 三包定位不全")
         return 1
     print("── 接线 ──")
-    for link, target, note in wiring(agent, company, workbuddy):
+    for link, target, note in wiring(agent, company, workbuddy, claude):
         try:
             ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
         except OSError:
@@ -193,9 +238,9 @@ def status(workbuddy=False):
     return 1 if red else 0
 
 
-def repair(workbuddy=False):
+def repair(workbuddy=False, claude=False):
     agent, company, _ = locate()
-    for link, target, _n in wiring(agent, company, workbuddy):
+    for link, target, _n in wiring(agent, company, workbuddy, claude):
         try:
             ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
         except OSError:
@@ -204,7 +249,9 @@ def repair(workbuddy=False):
             make_junction(link, target)
             print(f"  [修] {link} → {target}")
     ensure_hooks(agent)
-    return status(workbuddy)
+    if claude:
+        ensure_claude_hooks(agent)
+    return status(workbuddy, claude)
 
 
 def rename(old, new):
@@ -252,12 +299,14 @@ def main():
     ap.add_argument("--repair", action="store_true")
     ap.add_argument("--workbuddy", action="store_true",
                     help="同时接入 WorkBuddy 宿主（.workbuddy\\skills 联接全部技能；WorkBuddy 重启后生效）")
+    ap.add_argument("--claude", action="store_true",
+                    help="同时接入 Claude Code 宿主（.claude\\skills 联接技能 + settings.json 注入五闸，运行时行为属真机首验项）")
     ap.add_argument("--rename", nargs=2, metavar=("旧名", "新名"))
     a = ap.parse_args()
     if a.rename:
         sys.exit(rename(*a.rename))
     if a.repair:
-        sys.exit(repair(a.workbuddy))
+        sys.exit(repair(a.workbuddy, a.claude))
     sys.exit(status(a.workbuddy))
 
 
