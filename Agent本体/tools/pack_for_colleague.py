@@ -3,7 +3,7 @@
 
 两种模式升级为三种（发谁用哪种）：
   --mode internal   公司内同事·复刻完整能力：agentqa_test 三包 + 外部正本资产
-                    （标准体系 / 需求文档库 / 用例文件〔默认瘦身〕/ jt_chrome〔默认瘦身〕/ 流水线台账 / AiTest〔默认瘦身〕）
+                    （标准体系 / jt_chrome〔默认瘦身〕——2026-11-16 裁剪：需求用例库/台账/AiTest 等工作数据不随包）
                     → dist\测试agent_内部完整包[_无凭证].zip（固定名；包内含 部署说明_同事版 + MANIFEST）
   --mode company    公司层包（2026-11-16 三层拆分 v2.0）：公开层+公司层+域层起步模板，
                     **不含域层资产**（用例库/台账/标准正本/jt_chrome 域工件）——同事按《域层起步指引》自建
@@ -11,7 +11,7 @@
   --mode external   外部/别家公司·只要方法论：手艺包整包，先过发版机检 generic_layer_check
                     （红=禁止出包）→ dist\手艺包_发版件.zip（固定名）
   --no-secrets      仅 internal：不带走 agent-secrets.json 明文凭证，替换为同结构空值骨架（同事自己填）
-  --full            仅 internal：连执行记录 / AiTest\\03_实测与调研 等大体积历史件一起带（默认不带）
+  --full            仅 internal：jt_chrome 连日志/截图/无头profile 等运行产物一起带（默认瘦身不带）
   --dry-run         只列收集清单与体积，不出包
 
 典型用法：
@@ -141,10 +141,11 @@ def make_skip(names=(), prefixes=(), suffixes=()):
 def deploy_note(secrets_included, roots_desc, full):
     cred = ("已含 agent-secrets.json（明文账密，内网同权直接可用）" if secrets_included
             else "凭证为空值骨架（agent-secrets.json），部署后填你的账号")
-    extra = "" if full else "（默认瘦身：不带 用例文件\\执行记录、AiTest\\03_实测与调研、jt_chrome 日志/截图/无头profile）"
+    extra = "" if full else "（默认瘦身：jt_chrome 不带日志/截图/无头profile）"
     return f"""# 测试 Agent 同事部署说明（内部完整包）
 
-> 本包 = 发起人测试 Agent 的完整复刻件：agentqa_test 三包 + 标准体系正本 + 需求/用例库 + 执行工具 + 流水线台账{extra}
+> 本包 = 发起人测试 Agent 的完整复刻件：agentqa_test 三包 + 标准体系正本 + 执行工具与坑库{extra}
+> 不含发起人的工作数据（需求用例库/流水线台账/AiTest 汇报调研）——同事用自己的需求与数据跑（2026-11-16 定）
 > 凭证状态：{cred}
 
 ## 部署五步（约 10 分钟）
@@ -169,7 +170,7 @@ def deploy_note(secrets_included, roots_desc, full):
 1. `python D:\\ZCodetest\\agentqa_test\\Agent本体\\tools\\rewire.py --status` → 结论：全绿
 2. `python D:\\ZCodetest\\agentqa_test\\公司包\\param_check.py --check` → 48 值 PASS（同路径部署时）
 3. 冒烟：会话里说"登录鲸天"→ jingtian-login 技能应起 Chrome 9333 并自动登录
-4. 冒烟：丢任一需求文档说"熟悉下这个需求"→ requirement-qa-loop 应走五段式提问
+4. 冒烟：把包内 `agentqa_test\\公司包\\验证素材\\示例需求_公告管理_v1.md`（或你手头任一需求文档）丢进会话说"熟悉下这个需求"→ requirement-qa-loop 应走五段式提问
 
 ## 红线三条
 
@@ -199,31 +200,22 @@ def deploy_note(secrets_included, roots_desc, full):
 
 def pack_internal(cfg, company_dir, no_secrets, full, dry):
     paths = cfg["paths"]
-    p_std, p_doc, p_uc, p_jt = (Path(paths["标准体系"]), Path(paths["需求文档"]),
-                                Path(paths["用例文件"]), Path(paths["执行工具"]))
-    p_ledger, p_aitest = Path(paths["需求流水线台账"]), Path(paths["ai_test"])
+    p_std, p_jt = Path(paths["标准体系"]), Path(paths["执行工具"])
     p_entry = AGENT_ROOT.parent / "00_Agent入口.md"          # 第一入口（2026-11-16 起随包）
-    for p in (AGENT_ROOT, p_std, p_doc, p_uc, p_jt, p_ledger, p_entry):
+    for p in (AGENT_ROOT, p_std, p_jt, p_entry):
         if not p.exists():
             sys.exit(f"[RED] 打包源不存在：{p}")
 
     jt_skip = None if full else make_skip(JT_EXCLUDE_NAMES, JT_EXCLUDE_PREFIX, JT_EXCLUDE_SUFFIX)
-    uc_skip = None if full else make_skip({"执行记录"})
-    ai_skip = None if full else (lambda p, isd: isd and p.name.startswith("03_"))
 
+    # 2026-11-16 用户拍板裁剪：参考数据/工作状态不给同事——需求用例库、流水线台账、AiTest 移出 internal 包；
+    # 保留运行必需（标准体系+jt_chrome 工具坑库规范）+三包+入口。
     plan = [                                   # (源, 包内前缀, 排除规则, 说明)
         (AGENT_ROOT, "agentqa_test", None, "三包本体（本体+手艺包+公司包）"),
         (p_std, p_std.name, None, "标准体系正本 L0~L7"),
-        (p_doc, f"需求用例库/{p_doc.name}", None, "需求文档库（考古源）"),
-        (p_uc, f"需求用例库/{p_uc.name}", uc_skip, "用例文件正本" + ("（瘦身：无执行记录）" if not full else "")),
         (p_jt, p_jt.name, jt_skip, "执行工具与坑库" + ("（瘦身：无日志/截图/无头profile）" if not full else "")),
-        (p_ledger, p_ledger.name, None, "流水线总台账"),
         (p_entry, p_entry.name, None, "第一入口（agent 全景导航）"),
     ]
-    if p_aitest.exists():
-        plan.append((p_aitest, p_aitest.name, ai_skip, "AiTest" + ("（瘦身：无 03_实测与调研）" if not full else "")))
-    else:
-        print("  [WARN] AiTest 不存在，已跳过（paths.ai_test）")
 
     all_files, junctions, roots_desc, manifest_roots = [], [], [], []
     print("── 收集清单 ──")
@@ -436,7 +428,7 @@ def main():
     ap = argparse.ArgumentParser(description="一键打包（internal=内网完整复刻 / company=公司层包〔域层自建〕 / external=外发方法论）")
     ap.add_argument("--mode", choices=["internal", "company", "external"], required=True)
     ap.add_argument("--no-secrets", action="store_true", help="internal：凭证文件换空值骨架")
-    ap.add_argument("--full", action="store_true", help="internal：连执行记录/调研件等大体积历史件一起带")
+    ap.add_argument("--full", action="store_true", help="internal：jt_chrome 连运行产物一起带（默认瘦身）")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     cfg, company_dir = load_company_cfg()
