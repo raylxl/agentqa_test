@@ -16,8 +16,14 @@ from pathlib import Path
 IS_MAC = sys.platform == "darwin"
 
 try:
-    # Windows 控制台（bat 双击）=GBK 代码页：输出转 GBK 才不乱码；Mac/管道= UTF-8
-    sys.stdout.reconfigure(encoding=("utf-8" if IS_MAC else "gbk"), errors="replace")
+    # 输出编码=跟随真实控制台代码页（Windows：936→GBK，UTF-8 Beta 系统 65001→UTF-8；Mac/管道→UTF-8）
+    if not IS_MAC:
+        import ctypes
+        _cp = ctypes.windll.kernel32.GetConsoleOutputCP()
+        _enc = "gbk" if _cp == 936 else "utf-8"
+    else:
+        _enc = "utf-8"
+    sys.stdout.reconfigure(encoding=_enc, errors="replace")
 except Exception:
     pass
 
