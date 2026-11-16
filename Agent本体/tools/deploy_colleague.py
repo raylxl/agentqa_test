@@ -10,7 +10,7 @@
 
 步骤：定位根 → 防呆 → 占位骨架 → 路径换算(migrate_paths) → 文档通用化 → 接线(rewire --repair) → 校验(param_check) → 汇总
 """
-import sys, os, subprocess, argparse
+import sys, os, re, subprocess, argparse
 from pathlib import Path
 
 try:
@@ -29,6 +29,7 @@ def red(msg): print(f"  [红 ] {msg}")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-rewire", action="store_true", help="跳过接线（本机双环境试验用）")
+    ap.add_argument("--host", help="非交互指定接入宿主（逗号分隔：zcode,workbuddy,claude,codex,codebuddy）")
     ap.add_argument("--force", action="store_true", help="允许在 D:\\ZCodetest 正本目录执行")
     args = ap.parse_args()
 
@@ -90,38 +91,66 @@ def main():
             n += 1
     ok(f"说明文档路径本地化：{n} 件（部署说明/入口/README 等指向本目录）")
 
-    # ── 5. 接线（宿主自适应：检测装了什么就接什么，同事不用选）──
+    # ── 5. 接线（宿主自适应：检测只报菜名，接哪个由同事选——不替用户决定往他的工具里塞东西）──
     print("── 宿主检测与接线 ──")
     home = Path(os.path.expanduser("~"))
     hosts = []
     if (home / ".zcode").is_dir():
-        hosts.append(("ZCode", "100%（技能自动+五道机器闸）", []))
+        hosts.append(("ZCode", "100%（技能自动+五道机器闸）", "zcode", []))
     if (home / ".workbuddy").is_dir():
-        hosts.append(("WorkBuddy", "九成（技能联接；无 hooks 插槽→软闸=收尾跑 soft_gates_check.py）", ["--workbuddy"]))
+        hosts.append(("WorkBuddy", "九成（技能联接；无 hooks 插槽→软闸=收尾跑 soft_gates_check.py）", "workbuddy", ["--workbuddy"]))
     if (home / ".claude").is_dir():
-        hosts.append(("Claude Code", "100%目标（技能联接+五闸按其格式注册；运行时行为属真机首验项）", ["--claude"]))
+        hosts.append(("Claude Code", "100%目标（技能联接+五闸按其格式注册；运行时行为属真机首验项）", "claude", ["--claude"]))
     if (home / ".codex").is_dir():
-        hosts.append(("Codex", "九成（.codex\\skills 原生技能目录联接；无工具级 hooks→软闸）", ["--codex"]))
+        hosts.append(("Codex", "九成（.codex\\skills 原生技能目录联接；无工具级 hooks→软闸）", "codex", ["--codex"]))
     if (home / ".codebuddy").is_dir():
-        hosts.append(("CodeBuddy", "九成档预设（.codebuddy\\skills 技能联接——CodeBuddy Code CLI 适用；hooks 兼容性属首验实测项；IDE 插件版无插槽请走手艺包三步）", ["--codebuddy"]))
+        hosts.append(("CodeBuddy", "九成档预设（.codebuddy\\skills 技能联接——CLI 版适用；hooks 兼容性属首验实测；IDE 插件版走手艺包三步）", "codebuddy", ["--codebuddy"]))
     if not hosts:
-        red("未检测到任何宿主（ZCode / WorkBuddy / Claude Code）——装任一后重跑部署.bat，或按部署说明手动挂技能")
-    for name, grade, flags in hosts:
-        print(f"    检测到 {name} → {grade}")
-    if args.skip_rewire:
-        ok(f"按参数跳过接线（试验模式；正式部署将接入：{'/'.join(h[0] for h in hosts) or '无宿主'}）")
-    elif hosts:
-        rw = HERE / "rewire.py"
-        cmd = [sys.executable, str(rw), "--repair"] + [f for h in hosts for f in h[2]]
-        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-8:]))
-        if r.returncode != 0:
-            red("rewire 有红项，见上方输出（宿主未登录/目录被占常见）")
-        else:
-            ok("接线完成（重开对应宿主会话后生效）")
-        if any(h[0] in ("WorkBuddy", "Codex", "CodeBuddy") for h in hosts) and not any(h[0] == "ZCode" for h in hosts):
-            print("    [软闸] 本机无 hooks 宿主：每轮执行/回写收尾前跑 "
-                  f"python \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
+        red("未检测到任何宿主（ZCode / WorkBuddy / Claude Code / Codex / CodeBuddy）——装任一后重跑部署.bat，或按部署说明手动挂技能")
+    else:
+        print(f"    检测到 {len(hosts)} 个宿主（接入与否由你决定）：")
+        for i, (name, grade, _k, _f) in enumerate(hosts, 1):
+            print(f"      [{i}] {name} —— {grade}")
+        chosen = []
+        if args.host:                                     # 脚本化：--host zcode,codex
+            keys = {x.strip().lower() for x in args.host.split(",")}
+            chosen = [h for h in hosts if h[2] in keys]
+            miss = keys - {h[2] for h in chosen}
+            if miss:
+                red(f"--host 指定的 {miss} 未检测到，忽略")
+        elif args.skip_rewire:
+            pass
+        elif sys.stdin is not None and sys.stdin.isatty():
+            tip = "回车=只接 [1]（推荐档）" if len(hosts) > 1 else "回车=接入"
+            ans = input(f"    接哪个？输入编号（可多选如 1,3；a=全部；0=都不接；{tip}）：").strip().lower()
+            if ans in ("", "1"):
+                chosen = hosts[:1]
+            elif ans == "a":
+                chosen = hosts
+            elif ans == "0":
+                chosen = []
+            else:
+                idx = {int(x) - 1 for x in re.findall(r"\d+", ans)}
+                chosen = [hosts[i] for i in idx if 0 <= i < len(hosts)]
+        else:                                             # 非交互且未指定 → 克制默认：只接最高档
+            chosen = hosts[:1]
+            print("    [非交互模式] 默认只接推荐档；如需自选，重跑加 --host zcode,codex,…")
+        if args.skip_rewire:
+            ok(f"按参数跳过接线（试验模式；将可选：{'/'.join(h[0] for h in hosts) or '无宿主'}）")
+        elif chosen:
+            rw = HERE / "rewire.py"
+            cmd = [sys.executable, str(rw), "--repair"] + [f for h in chosen for f in h[3]]
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-8:]))
+            if r.returncode != 0:
+                red("rewire 有红项，见上方输出（宿主未登录/目录被占常见）")
+            else:
+                ok(f"接线完成：{'、'.join(h[0] for h in chosen)}（重开对应宿主会话后生效）")
+            if any(h[2] in ("workbuddy", "codex", "codebuddy") for h in chosen) and not any(h[2] == "zcode" for h in chosen):
+                print("    [软闸] 所选宿主无 hooks 插槽：每轮执行/回写收尾前跑 "
+                      f"python \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
+        elif hosts:
+            print("    按选择未接入任何宿主——想接时重跑部署.bat 再选")
 
     # ── 6. 校验 ──
     print("── 校验 ──")
