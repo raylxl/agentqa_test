@@ -70,9 +70,14 @@
   "integrations": {
     "knowledge_base": {
       "enabled": true,
-      "provider": "由用户级配置提供",
-      "tools": ["由用户级配置提供"],
-      "config_ref": "用户级 MCP 配置",
+      "provider": "weknora 公司层直连适配器（2026-11-17 用户拍板'开发知识库挂公司层'，不走用户级 MCP 挂载）",
+      "adapter": "{paths.公司包}/tools/wk_kb.py",
+      "url": "http://10.204.11.251:8082/mcp",
+      "kb_id": "e994ba38-b460-43e3-893b-565734008853",
+      "kb_name": "ztocc-knowledge-docs（公司开发库~270篇；另两个为测试库无检索索引）",
+      "tools": ["search <关键词> [n]（=hybrid_search 按文档汇总）", "chunks <knowledge_id>（=list_chunks）", "raw <tool> <json>（诊断）"],
+      "credentials_ref": "agent-secrets.json weknora.token（可缺省裸调）",
+      "usage_points": "逆向考古第2源（orchestrator⓪'）／答疑预扒（qa-loop）／接口用例字段与断言正确值佐证（generator+细则§十六）／新模块接入配置（executor阶段〇1）／分流②开发实证（feedback-loop）／缺陷单规则依据",
       "required": false,
       "data_classification": "公司内部"
     },
