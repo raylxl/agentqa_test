@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-"""report_sync.py — 执行账本 → 测试报告自动汇总/校验脚本（交付物规范 v1.16 §20.2/§20.3 落地工具）
+"""report_sync.py — 执行账本 → 测试报告自动汇总/校验脚本（交付物规范 v1.17 §20.2/§20.3/§20.10 落地工具）
 用法: python report_sync.py <账本.json> <报告.md> [轮次名]
 自动生成/校验：1.2 四态数字、模块表、环比辅助（按账本 ts 日期分桶）；结构校验（三段式四关键节+轮次块12字段）。
+硬校验：①文件时间戳 ②收尾声明行 ④回写台账 ⑤批次行配对（细则§十五） ⑥失败用例专项报告存在性+逐条对账（交付物§20.10，2026-11-17 立）。
+复测行（细则§十七）：同 TC id 末次覆盖=终态对账不双计；retest 标记条目额外披露 PASS(复测)/挂起待复验数。
 每轮测试收尾必跑本脚本（usecase-executor §6.9 收尾工序）；数字不一致或结构缺节均禁止收尾。
 """
 import json, sys, io, re, os, datetime
@@ -27,6 +29,12 @@ for k in list(seen.keys()):
 if merged: print(f'（归并复验证据条 {len(merged)} 条不计数: {", ".join(sorted(merged))}）')
 tot = Counter(x['status'] for x in seen.values())
 N = len(seen)
+
+# 复测行披露（细则§十七，2026-11-17 立：同 id 末次覆盖；retest 标记条目单列，不计新四态）
+_rt_pass = [x for x in seen.values() if x.get('retest') and x.get('status') == 'PASS']
+_rt_pend = [x for x in seen.values() if x.get('retest') and x.get('status') == 'SUSPEND']
+if _rt_pass or _rt_pend:
+    print(f'（复测轮披露：PASS(复测) {len(_rt_pass)} 条／挂起·待复验 {len(_rt_pend)} 条——判定标准§5.1，两轮证据见失败用例报告）')
 
 # 账本最新落账日期（用于收尾声明校验）
 max_ts = max((x.get('ts') or '') for x in seen.values()) if seen else ''
@@ -232,14 +240,48 @@ else:
         print(f'  ✓ {len(starts)} 对批次行全配对（endKind normal {len(ends)-_n_other}/其他 {_n_other}）；'
               f'生效前历史轮组 {sum(1 for d in item_dt.values() if d < RULE_TS)}（无批次行=合规，报告标"未计时"）')
 
+# ===== 硬校验⑥：失败用例专项报告（交付物 §20.10，2026-11-17 立）=====
+# 生效时刻后收尾的轮次且账本含终态 FAIL → 失败用例报告必须存在（报告路径中缀替换派生），
+# 且账本每个终态 FAIL 的 TC 编号须在报告中有对应卡片；无 FAIL／生效前历史轮＝豁免（历史不补录）。
+print('\n=== 失败用例报告校验（硬⑥ · 交付物§20.10）===')
+fr_ok = True
+RULE6_TS = '2026-11-17 20:00'   # 硬⑥生效时刻（本节落码时点，北京时间）
+_norm_max = (max_ts or '')[:16].replace('T', ' ')
+if not tot['FAIL']:
+    print('  ✓ 本轮无终态 FAIL——失败用例报告不适用（无失败条不出，§20.10 第2条）')
+elif _norm_max < RULE6_TS:
+    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE6_TS}）→ 豁免不追溯（历史不补录）')
+elif '_测试报告_' not in os.path.basename(report):
+    print('  ⚠ 报告命名不含「_测试报告_」中缀，失败报告路径不可派生 → 软跳过（人工核对§20.10）')
+    fr_ok = True
+else:
+    fr_path = report.replace('_测试报告_', '_失败用例报告_')
+    if not os.path.exists(fr_path):
+        fr_ok = False
+        print(f'  ✗ 缺失败用例报告：{os.path.basename(fr_path)}（本轮终态 FAIL {tot["FAIL"]} 条，§20.10 要求生成，禁收尾）')
+    else:
+        fr_md = io.open(fr_path, encoding='utf-8').read()
+        _missing = []
+        for x in seen.values():
+            if x['status'] != 'FAIL':
+                continue
+            if not re.search(re.escape(str(x['id'])) + r'(?!\d)', fr_md):   # TC 编号完整词匹配，防前缀误中
+                _missing.append(str(x['id']))
+        if _missing:
+            fr_ok = False
+            shown = ', '.join(_missing[:5]) + ('…' if len(_missing) > 5 else '')
+            print(f'  ✗ 失败用例报告缺 {len(_missing)}/{tot["FAIL"]} 个终态 FAIL 条目卡片：{shown}')
+        else:
+            print(f'  ✓ {os.path.basename(fr_path)} 存在，账本终态 FAIL {tot["FAIL"]} 条逐条对上（§20.10）')
+
 print(f'''
 === 判定 ===
-数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"}
+数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"} ／ 失败报告 {"✓ 对上/不适用" if fr_ok else "✗ 缺失/缺卡片，禁收尾"}
 
 === 收尾三件事检查（usecase-executor §6.9；开工第 0 步=先跑本脚本验上轮）===
 1. 账本落定 ✓（{N} 条）
-2. 报告三段式更新 → 1.1~1.4 总进度（每轮必更）＋新增轮次块 12 字段（只增）＋头部「最后收尾」声明行＋附A 余项清单（每轮必更）→ 更新后重跑本脚本须全绿
+2. 报告三段式更新 → 1.1~1.4 总进度（每轮必更）＋新增轮次块 12 字段（只增）＋头部「最后收尾」声明行＋附A 余项清单（每轮必更）＋失败用例专项报告（有 FAIL 时，§20.10）→ 更新后重跑本脚本须全绿
 3. memory 更新（关键拍板/新教训）
 ''')
-if not (ok_all and struct_ok and close_ok and batch_ok): sys.exit(1)
+if not (ok_all and struct_ok and close_ok and batch_ok and fr_ok): sys.exit(1)
 if wb_pending_n: sys.exit(1)
