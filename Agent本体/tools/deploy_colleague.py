@@ -172,6 +172,29 @@ def main():
         elif hosts:
             print(f"    按选择未接入任何宿主——想接时重跑 {LAUNCHER} 再选")
 
+    # ── 5.5 依赖自装（Mac 首验 R4：playwright/pymysql 缺失自动化——只装库不装浏览器，执行链连本机 Chrome 用）──
+    print("── 依赖自装 ──")
+    import shutil as _sh
+    if _sh.which("npm"):
+        if not (ROOT / "node_modules" / "playwright").is_dir():
+            r = subprocess.run(["npm", "i", "playwright", "--no-fund", "--no-audit", "--loglevel=error"],
+                               cwd=str(ROOT), capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=300)
+            ok("playwright 库已装（连接用，不下载浏览器——执行链连你本机的 Chrome）" if r.returncode == 0
+               else "playwright 安装失败（网络？）——不影响部署，需要执行侧时在部署根手动 npm i playwright")
+        else:
+            ok("playwright 库已在位")
+    else:
+        print("  [提示] 未检测到 npm（Node.js）——执行侧需要时先装 Node 18+ 再 npm i playwright")
+    import importlib.util as _iu
+    for mod, pip_name in (("pymysql", "pymysql"), ("openpyxl", "openpyxl")):
+        if _iu.find_spec(mod) is None:
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", pip_name],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+            ok(f"{pip_name} 已装" if r.returncode == 0 else f"{pip_name} 安装失败——需要 DB/xlsx 功能时手动 pip install {pip_name}")
+        else:
+            ok(f"{pip_name} 已在位")
+
     # ── 6. 校验 ──
     print("── 校验 ──")
     pc = ROOT / "agentqa_test" / "公司包" / "param_check.py"
