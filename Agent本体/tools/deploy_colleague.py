@@ -10,7 +10,7 @@
 
 步骤：定位根 → 防呆 → 占位骨架 → 路径换算(migrate_paths) → 文档通用化 → 接线(rewire --repair) → 校验(param_check) → 汇总
 """
-import sys, os, re, subprocess, argparse
+import sys, os, re, json, shutil, subprocess, argparse
 from pathlib import Path
 
 IS_MAC = sys.platform == "darwin"
@@ -30,6 +30,71 @@ ROOT = HERE.parents[2]                          # 解压根（任意盘任意目
 
 def ok(msg):  print(f"  [OK ] {msg}")
 def red(msg): print(f"  [红 ] {msg}")
+
+REG = Path(os.path.expanduser("~")) / ".testagent_deploy.json"     # 安装登记（升级模式的记忆）
+USER_ZONES = {"需求用例库", "AiTest", ".chrome-cdp", "需求流水线台账_v1.md"}   # 用户数据区：升级永不触碰
+
+
+def read_reg():
+    try:
+        return json.loads(REG.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def write_reg(root: Path):
+    import time as _t
+    ver = {}
+    m = root / "MANIFEST.json"
+    if m.exists():
+        try:
+            ver = json.loads(m.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    REG.write_text(json.dumps({
+        "root": str(root), "打包时间": ver.get("打包时间", ""),
+        "条目": (ver.get("合计") or {}).get("文件数", ""),
+        "登记时间": _t.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def upgrade(new_root: Path, old_root: Path):
+    """升级=只覆盖程序件；用户数据区（他的需求库/台账/登录态）一个字节不碰——软件更新不碰用户内容。"""
+    print(f"── 升级：{old_root} ← 本包（程序件覆盖，用户数据不动）──")
+    om, nm = old_root / "MANIFEST.json", new_root / "MANIFEST.json"
+    if om.exists() and nm.exists():
+        try:
+            o, n = json.loads(om.read_text(encoding="utf-8")), json.loads(nm.read_text(encoding="utf-8"))
+            print(f"    版本：{o.get('打包时间', '?')} / {o.get('合计', {}).get('文件数', '?')}条  →  "
+                  f"{n.get('打包时间', '?')} / {n.get('合计', {}).get('文件数', '?')}条")
+        except Exception:
+            pass
+    n_top = 0
+    for item in sorted(new_root.iterdir()):
+        if item.name in USER_ZONES or item.name.startswith(("_migrate_backup", ".chrome-cdp")):
+            print(f"    [保留·用户数据] {item.name}")
+            continue
+        if item.name in (".git", "__pycache__", "node_modules", "dist"):
+            continue
+        dst = old_root / item.name
+        if item.is_dir():
+            shutil.copytree(item, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(item, dst)
+        n_top += 1
+    ok(f"程序件已覆盖（顶层 {n_top} 项）")
+    mp = new_root / "agentqa_test" / "Agent本体" / "tools" / "migrate_paths.py"   # 新文件未换算 → 按旧根重跑（幂等）
+    r = subprocess.run([sys.executable, str(mp), str(old_root).replace("\\", "/"), "--apply"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("路径已按旧根换算" if r.returncode == 0 else "换算异常——把上方输出发发起人")
+    pc = old_root / "agentqa_test" / "公司包" / "param_check.py"
+    r = subprocess.run([sys.executable, str(pc), "--check"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-2:]))
+    ok("param_check PASS" if r.returncode == 0 else "param_check 未过——回传输出")
+    write_reg(old_root)
+    print("=" * 56)
+    print(f"升级完成：{old_root}")
+    print("用户数据（需求库/台账/登录态）原样保留；宿主接线不变；重开宿主会话即用新版。")
 
 
 def main():
@@ -51,6 +116,24 @@ def main():
     if str(ROOT).replace("/", "\\").lower() == "d:\\zcodetest" and not args.force:
         red("检测到这是发起人正本目录 D:\\ZCodetest——请换目录试验，或加 --force 确认")
         sys.exit(1)
+
+    # ── 1.5 升级检测（2026-11-17：更新只动程序，用户数据永不触碰）──
+    reg = read_reg()
+    if reg and Path(reg["root"]).is_dir() and Path(reg["root"]) != ROOT:
+        old = Path(reg["root"])
+        print(f"  [检测] 本机已有部署：{old}（{reg.get('打包时间', '')} / {reg.get('条目', '')}条）")
+        a = ""
+        if sys.stdin is not None and sys.stdin.isatty():
+            try:
+                a = input("    回车=升级到旧位置（推荐：程序更新，你的数据/登录态不动）；输入 n=改为全新安装到本目录：").strip().lower()
+            except EOFError:
+                pass
+        else:
+            print("    [非交互] 默认升级到旧位置")
+        if a != "n":
+            upgrade(ROOT, old)
+            sys.exit(0)
+        print("    → 按选择：全新安装到本目录")
 
     # ── 2. 占位骨架（裁剪掉的域数据目录补占位，param_check 要求路径可达；幂等）──
     print("── 占位骨架 ──")
@@ -218,6 +301,8 @@ def main():
             ok("agent-secrets.json 已含凭证（红线：仅公司内使用，永不再外发）")
 
     print("=" * 56)
+    write_reg(ROOT)
+    ok(f"安装登记已写入 {REG.name}（以后升级自动找到这里，你的数据不动）")
     print("部署完成。下一步：重开 ZCode 会话 → 跑 rewire --status 四道验证 →")
     print('会话说"登录鲸天"冒烟 → 丢一份需求文档说"熟悉下这个需求"冒烟。')
     print("=" * 56)
