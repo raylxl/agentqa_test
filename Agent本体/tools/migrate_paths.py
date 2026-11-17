@@ -34,7 +34,8 @@ WORKSPACE = AGENT_ROOT.parent                          # …\\（jt_chrome 所�
 SCAN_DIRS = [AGENT_ROOT, WORKSPACE / "jt_chrome"]
 EXTS = {".py", ".js", ".cjs", ".ps1", ".json", ".sh", ".bat", ".command"}
 SKIP_NAMES = {"node_modules", "__pycache__", ".git", "dist", "locks", ".playwright-cli"}
-SKIP_FILES = {"agent-secrets.json", "migrate_paths.py"}   # 凭证红线；本工具自身（防自替换破坏别名登记）
+SKIP_FILES = {"agent-secrets.json", "migrate_paths.py",   # 凭证红线；本工具自身（防自替换破坏别名登记）
+              "deploy_colleague.py"}                       # 部署器自身（内嵌 D:\ZCodetest 替换源串，被换即自我破坏——Mac 首验 R2 实锤）
 OLD_FWD = "D:/ZCodetest"
 
 # 三种字节形态（正/双反/单反）× 盘符大小写两种，替换后同形保留

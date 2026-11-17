@@ -14,7 +14,8 @@ if curl -s --max-time 2 http://127.0.0.1:9333/json/version >/dev/null; then echo
 ARGS=(--remote-debugging-port=9333
   "--user-data-dir=$ROOT/.chrome-cdp"
   --no-first-run --no-default-browser-check --ignore-certificate-errors
-  --disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstModeV2ForEngagedSites)
+  --disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstModeV2ForEngagedSites
+  --no-sandbox --disable-gpu-sandbox --disable-dev-shm-usage --disable-software-rasterizer)
 if [ "$1" = "-v" ]; then
   ARGS+=(--start-maximized)
 else

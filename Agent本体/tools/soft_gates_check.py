@@ -64,7 +64,10 @@ def main():
                            text=True, encoding="utf-8", errors="replace")
         tail = [x for x in (r.stdout or "").splitlines() if x.strip()][-3:]
         print("\n".join("  " + x for x in tail))
-        if r.returncode != 0:
+        out = r.stdout or ""
+        if "未找到" in out and "MEMORY" in out:
+            print("  [提示] 本机无 ZCode 记忆目录（WorkBuddy/Codex 等宿主档常态）——记忆体检跳过，不算红")
+        elif r.returncode != 0:
             red += 1
     else:
         print("  [提示] 未找到 memory_health_check.py，跳过")

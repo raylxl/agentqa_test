@@ -91,7 +91,10 @@ def main():
             s = md.read_text(encoding="utf-8")
         except Exception:
             continue
-        s2 = s.replace("D:\\ZCodetest", root_win).replace("D:/ZCodetest", root_fwd)
+        if IS_MAC:   # Mac 上目标路径只认正斜杠——两种源写法都换正斜杠形态（R2：反斜杠源串换出 \Users\... 是坏路径）
+            s2 = s.replace("D:\\ZCodetest", root_fwd).replace("D:/ZCodetest", root_fwd)
+        else:
+            s2 = s.replace("D:\\ZCodetest", root_win).replace("D:/ZCodetest", root_fwd)
         if s2 != s:
             md.write_text(s2, encoding="utf-8")
             n += 1
