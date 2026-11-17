@@ -199,7 +199,7 @@ def deploy_note(secrets_included, roots_desc, full):
     extra = "" if full else "（默认瘦身：jt_chrome 不带日志/截图/无头profile）"
     return f"""# 测试 Agent 同事部署说明（内部完整包）
 
-> 本包 = 发起人测试 Agent 的完整复刻件：agentqa_test 三包 + 标准体系正本 + 执行工具与坑库{extra}
+> 本包 = 发起人测试 Agent 的完整复刻件：agentqa_test 三包 + 标准体系正本 + 执行工具与坑库 + XMind交付工具链{extra}
 > 不含发起人的工作数据（需求用例库/流水线台账/AiTest 汇报调研）——同事用自己的需求与数据跑（2026-11-16 定）
 > 凭证状态：{cred}
 
@@ -257,6 +257,7 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
     paths = cfg["paths"]
     p_std, p_jt = Path(paths["标准体系"]), Path(paths["执行工具"])
     p_entry = AGENT_ROOT.parent / "00_Agent入口.md"          # 第一入口（2026-11-16 起随包）
+    p_xmind = AGENT_ROOT.parent / "MD转XMind生成工具集"        # 交付工具链（2026-11-17 加包：出 XMind/xlsx 交付物）
     for p in (AGENT_ROOT, p_std, p_jt, p_entry):
         if not p.exists():
             sys.exit(f"[RED] 打包源不存在：{p}")
@@ -271,6 +272,10 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
         (p_jt, p_jt.name, jt_skip, "执行工具与坑库" + ("（瘦身：无日志/截图/无头profile）" if not full else "")),
         (p_entry, p_entry.name, None, "第一入口（agent 全景导航）"),
     ]
+    if p_xmind.is_dir():
+        plan.append((p_xmind, p_xmind.name, None, "MD转XMind交付工具链（07_新标准工具链=现行：出 XMind/xlsx 交付物）"))
+    else:
+        print("  [WARN] MD转XMind生成工具集 不存在，未随包（paths 同级目录）")
 
     all_files, junctions, roots_desc, manifest_roots = [], [], [], []
     print("── 收集清单 ──")
