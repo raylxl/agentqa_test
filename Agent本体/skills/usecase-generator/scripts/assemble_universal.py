@@ -330,9 +330,28 @@ def run(cfg):
     # ========== 阶段二：组装 ==========
     if not cfg.SECTION_SORT:
         parts = ['\n'.join(file_lines[fn]).rstrip() for fn in cfg.FILES]
-        blines = '\n\n---\n\n'.join(parts).split('\n')
+        blines = '\n'.join(parts).split('\n')
         blines, ch_stats = _fill_counts(blines)
         body = '\n'.join(blines)
+        # 章序连续性机检（G50/门禁§16，2026-11-17：原样拼接路径同样校验——节号连续+章穿插回现）
+        _last_sec = {}
+        _ch_seq = []
+        for l in blines:
+            m = re.match(r'^### (\d+)\.(\d+)\s', l)
+            if not m:
+                continue
+            _ch_seq.append((m.group(1), m.group(2), int(m.group(1)), int(m.group(2))))
+        _seen_ch, _cur_ch = set(), None
+        for _ch, _sec_s, _chi, _seci in _ch_seq:
+            prev = _last_sec.get(_chi)
+            if prev is not None and _seci != prev + 1:
+                report["structure"].append('[结构] 章内节号不连续: %d.%d 之后出现 %s.%s' % (_chi, prev, _ch, _sec_s))
+            _last_sec[_chi] = _seci
+            if _ch not in _seen_ch:
+                _seen_ch.add(_ch); _cur_ch = _ch
+            elif _ch != _cur_ch:
+                report["structure"].append('[结构] 章节穿插回现: 章 %s 节 %s.%s 在章 %s 之后回现——疑章头位移/剪切连带损伤' % (_ch, _ch, _sec_s, _cur_ch))
+                _cur_ch = _ch
     else:
         # ---- 小节全局重排模式 ----
         sections = []; ledgers = []
@@ -367,6 +386,29 @@ def run(cfg):
             if s['sid'] in seen_sid:
                 report["structure"].append('[结构] 小节号重复 %s（%s）' % (s['sid'], s['src']))
             seen_sid.add(s['sid'])
+
+        # 章序连续性机检（G50/门禁§16，2026-11-17 立；2026-11-17 DK-R5 修：分章按 TC 族切→同章节跨文件分布，文件收集序查连续必误报——改为全收集后按 (ch,sec) 排序再查真断号）
+        _ch_seq = []
+        for s in sections:
+            m = re.match(r'^(\d+)\.(\d+)$', s['sid'])
+            if not m:
+                continue
+            _ch_seq.append((int(m.group(1)), int(m.group(2)), s['sid'], s['src']))
+        _ch_seq.sort(key=lambda x: (x[0], x[1]))
+        _last_sec = {}
+        for ch, sec, sid, src in _ch_seq:
+            prev = _last_sec.get(ch)
+            if prev is not None and sec != prev + 1:
+                report["structure"].append('[结构] 章内节号不连续: %d.%d 之后出现 %s（%s）' % (ch, prev, sid, src))
+            _last_sec[ch] = sec
+        _ch_seq = [(str(c), sid, src) for c, _n, sid, src in _ch_seq]
+        _seen_ch, _cur_ch = set(), None
+        for ch, sid, src in _ch_seq:
+            if ch not in _seen_ch:
+                _seen_ch.add(ch); _cur_ch = ch
+            elif ch != _cur_ch:
+                report["structure"].append('[结构] 章节穿插回现: 章 %s（%s）在章 %s 之后回现——疑章头位移/剪切连带损伤（%s）' % (ch, sid, _cur_ch, src))
+                _cur_ch = ch
         sections.sort(key=lambda s: _skey(s['sid'], report["structure"], s['src']))
         for s in sections:
             s['key'] = _skey(s['sid'], report["structure"], s['src'])
@@ -514,6 +556,16 @@ def run(cfg):
               {k: v for k, v in collide.items() if len(v) > 1})
     if not ok:
         print('!! 组装存在门禁违例，拒绝写入正式输出')
+        print(f"重号: {report['dups'] or '无'}")
+        print(f"断号: {report['gaps'] or '无'}")
+        print(f"五列表/源引用缺失: {len(report['bad_blocks'])} 处")
+        for x in (report['bad_blocks'] or [])[:6]: print('  -', str(x)[:110])
+        print(f"正文/标题拍板编号污染: {len(report['pollution'])} 处")
+        for x in (report['pollution'] or [])[:6]: print('  -', str(x)[:110])
+        print(f"结构问题: {len(report['structure'])} 处")
+        for x in (report['structure'] or [])[:6]: print('  -', str(x)[:110])
+        for k, v in collide.items():
+            if len(v) > 1: print(f"撞号: {k} -> {v[:4]}")
         sys.exit(1)
     if manifest_path:
         gov_script = os.path.join(os.path.dirname(__file__), 'governance_manifest.py')
