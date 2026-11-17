@@ -86,10 +86,10 @@
       "provider": "公司财务开发代码库（git.dev.ztoeco.com GitLab；SSH 免密=本机 ~/.ssh/id_rsa 已登记 GitLab 账号，2026-11-17 实测认证与仓库访问全通）",
       "base_url": "git@git.dev.ztoeco.com:ztocc/finance-product",
       "clone_root": "D:/caiwu",
-      "repos": "25 仓=finance-product 全组（2026-11-17 补齐 5 缺口+20 仓拉新完毕，共约 1GB）；另有 w* 4 仓在 ztoce/ 组（wbill/wdata/wquote/wsett-web，用户既有，保留未动）",
-      "update_cmd": "各仓 git fetch -q origin && git pull --ff-only -q；工作区脏/不可快进自动跳过禁覆盖（未跟踪文件如造数脚本属用户资产不动）；缺口仓补克隆用 --depth 1",
+      "repos": "29 仓=finance-product 25＋ztoce/ 组 w* 4（2026-11-17 终态：全部 fetch+切最新活跃分支+ff-only 拉新完毕，共约 1GB；24 仓走默认 master/main，5 仓〔bill/basic/export/finance/invoice〕默认分支为封存线 DataTool/PROD 已改切最新 release 分支）",
+      "update_cmd": "各仓 git fetch --all --prune -q && git pull --ff-only -q；工作区脏/不可快进自动跳过禁覆盖（未跟踪文件如造数脚本属用户资产不动）；缺口仓补克隆用 --depth 1",
       "usage_points": "源码实证（feedback-loop 分流②/RB-026 源码比对）/表结构 DO 直读（@TableName ↔ information_schema 互证，首证=t_pbs_bill_head 族）/接口契约直读（Controller/Feign）/考古第 2 源增强",
-      "notes": "本地分支可能停在历史 feature 分支（如 bill=feature-phecda-260714V1）——看最新实现用 git show origin/<活跃分支>:<path> 或 git log origin/*，禁擅自切分支动用户工作区；全程只读禁 push",
+      "notes": "5 仓默认分支=封存线（DataTool/PROD），已统一切最新 release 系分支（bill=release-exfix-261031 等）；查其他分支用 git show origin/<分支>:<path> 不落工作区；全程只读禁 push",
       "required": false,
       "data_classification": "公司内部"
     },
