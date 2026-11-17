@@ -28,9 +28,11 @@ node scripts/zlog_query.js ztocc-phecda-quote-wbms-mq 1794923846 3
 
 | 场景 | 关键字 | 说明 |
 | --- | --- | --- |
-| 查某单 | 订单号/运单号/**完整流水号** | ⚠纯数字短词会模糊命中爆炸（1794923846→2.6万条）；完整 wbmsEventConsumerId（含字母前缀）最准 |
+| 查某单 | 订单号/运单号/流水号均可 | 精确匹配（1794923846 实测 18 命中=与手查一致） |
 | 查任务/调度 | 代码日志字面量 | grep 仓内 `log.info/error` 挑特征词（如 `quoteSettlementBatchJob`） |
 | 查报错 | ERROR 类日志特征词 | sample 里 ERROR+堆栈可直接当缺陷证据引用 |
+
+**⚠查询有效性铁律（2026-11-17 双盲验证）**：填词必须 `input`+`change` **双事件**（change 才把词写进查询模型，缺 change=提交空条件→total 显示的是全量日志数的假命中）；**自动化查询上线/改版后必做"不存在词对照"**（查 `zlog_probe_zzz_notexist123` 应 total=0，非 0=条件没生效）。
 
 ## 环境与时间
 
@@ -51,6 +53,30 @@ node scripts/zlog_query.js ztocc-phecda-quote-wbms-mq 1794923846 3
 | total=0 但应有日志 | 关键字换完整流水号；天数拉长；确认环境是测试 |
 | total 异常巨大 | 纯数字/短词模糊命中，换更长关键字 |
 | timeBar 为空 | 时间设置失败（弹层时序），重跑；结果仍可用但范围=默认 |
+
+## 失败用例自动取证（执行体系集成，2026-11-17 立）
+
+**触发**：用例 FAIL（断言失败/落账超时/可疑 BLOCKED）→ 失败钩子立即取证（日志时效优先，勿等收尾）。
+
+```bash
+# 单号来自失败上下文（A2 六字段本就收集单号）；应用链默认计费域双应用，可按册覆盖
+node scripts/zlog_evidence.js <单号> --tag <用例号> --outdir <本轮证据目录> [--apps ...] [--days 1]
+# 输出：stdout 汇总 JSON + zlog_<单号>.md（报告可 include 的失败卡片第七块）
+```
+
+**三挂点**（取/现/用分层）：
+
+| 层 | 位置 | 接线 |
+| --- | --- | --- |
+| 取（引擎层） | pw_layered 失败落账处 | 调 `zlog_evidence.js`，产物落证据目录（与截图/接口json同级），账本失败行记 `zlog_evidence` 指针 |
+| 现（报告层） | executor 工序5 §20.10 失败卡片 | 六字段后渲染**第七块"ZBASE 日志证据"**（可选块：有则 include MD 片段，登录态失效标"未取"不红、不阻塞 report_sync 硬⑥） |
+| 用（闭环层） | feedback-loop 定性 / 缺陷提单 | 证据已在卡片：定性 SYS/DEF 直接引用；缺陷模板"判定过程留痕"字段引用 ERROR 行 |
+
+**降级链**：9338 登录态失效→先跑 zbase-login（宝盒须通知用户）→仍失败则子块标"未取（原因）"；单应用查询失败不中断其余应用。
+
+**应用链配置建议**：计费域默认 `ztocc-phecda-quote-wbms-mq,phecda-waccount-service`；对客册侧重 customer 消费链（mq 同应用）；存储/仓内册按落账应用换 `ztocc-phecda-data-wbms-mq` 或 waccount；跨册统一配在执行轮 spec。
+
+**关键字纪律**：完整流水号（`wbmsEventConsumerId` 形态，含字母前缀）> 订单号 > 纯数字短词（模糊命中爆炸，禁用于取证）。
 
 ## 红线
 

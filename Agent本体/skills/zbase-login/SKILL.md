@@ -65,7 +65,7 @@ node "<本技能>/scripts/zbase_login.js"
 | 时间 | 默认 Last 15 minutes；改法=时间弹层 Relative 数字+单位（原生 select 可 JS 设值+change） |
 | 环境 | URL env 参数：`pro*`=生产 / `fat*`=测试；应用列表页"搜索信息"框=**搜应用名**，不是日志关键字 |
 
-**铁律：必须在 ZBASE 内嵌 iframe 态下操作**——顶层直接打开 zlog URL 时"搜索"按钮哑火（不发任何查询请求，performance 里可证）。合成 `btn.click()` 在**内嵌态**下有效（2026-11-17 实测 1,952 次命中）。
+**铁律：必须在 ZBASE 内嵌 iframe 态下操作**——顶层直接打开 zlog URL 时"搜索"按钮哑火（不发任何查询请求，performance 里可证）；填词须 `input`+`change` 双事件（change 才把词写进查询模型，缺 change=提交空条件假命中，2026-11-17 双盲验证），双事件后合成 `btn.click()` 有效。
 
 **自动化通道**（跨域 iframe 主文档 JS 够不着，须 CDP 进 OOPIF session）：
 ```bash

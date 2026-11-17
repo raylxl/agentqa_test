@@ -39,10 +39,11 @@ const QUERY_EXPR = `
     const tb2=[...document.querySelectorAll('*')].find(e=>e.offsetParent&&e.children.length===0&&/^(Last|~)/.test((e.innerText||'').trim()));
     timeBar=tb2?(tb2.innerText||'').trim().slice(0,30):'';
   }catch(e){timeBar='ERR:'+e.message.slice(0,60)}
-  // ② 填关键字
+  // ② 填关键字（input+change 双事件——change 才把词写进查询模型，2026-11-17 监听用户操作实证；缺 change=提交空条件全量假查）
   const i=[...document.querySelectorAll('input')].find(e=>e.offsetParent&&e.placeholder==='搜索...');
   if(!i)return JSON.stringify({err:'NO_SEARCH_INPUT'});
   set(i,${JSON.stringify(kwArg)});i.dispatchEvent(new Event('input',{bubbles:true}));
+  i.dispatchEvent(new Event('change',{bubbles:true}));
   await new Promise(r=>setTimeout(r,400));
   // ③ 点搜索
   const btn=[...document.querySelectorAll('button')].find(b=>b.offsetParent&&(b.innerText||'').trim()==='搜索');
