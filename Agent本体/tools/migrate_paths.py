@@ -38,6 +38,17 @@ SKIP_FILES = {"agent-secrets.json", "migrate_paths.py",   # 凭证红线；本�
               "deploy_colleague.py"}                       # 部署器自身（内嵌 D:\ZCodetest 替换源串，被换即自我破坏——Mac 首验 R2 实锤）
 OLD_FWD = "D:/ZCodetest"
 
+# ── 包内布局 v2（2026-11-17 用户拍板"解压后=agentqa_test+说明件"）──
+# 工作区正本形态 → 同事包内形态：三资产从部署根收进三包（标准体系/执行工具→公司包；工具链→手艺包05）
+# 仅作用于同事部署包（migrate 只在包解压根跑，工作区正本不经此路径）。
+LAYOUT_MAP = [
+    ("MD转XMind生成工具集/07_新标准工具链", "agentqa_test/手艺包/05_交付工具链/07_新标准工具链"),
+    ("MD转XMind生成工具集\\07_新标准工具链", "agentqa_test/手艺包/05_交付工具链/07_新标准工具链"),
+    ("用例设计标准_我的定稿", "agentqa_test/公司包/标准体系"),
+    ("jt_chrome", "agentqa_test/公司包/执行工具"),
+]
+_ROOT_FORMS = ["D:/ZCodetest", "D:\\ZCodetest", "D:\\\\ZCodetest", "d:/ZCodetest", "d:\\ZCodetest", "d:\\\\ZCodetest"]
+
 # 三种字节形态（正/双反/单反）× 盘符大小写两种，替换后同形保留
 FORMS = [
     ("D:/ZCodetest", "{fwd}"),
@@ -117,6 +128,12 @@ def main():
 
     for p, _ in plan:
         raw = p.read_text(encoding="utf-8", errors="surrogateescape")
+        # ① 布局映射（长前缀优先）：旧根+旧子路径（三写法）→ 旧根占位+新子路径（归一正斜杠根，②步再整体换新根）
+        for old_sub, new_sub in LAYOUT_MAP:
+            for rf in _ROOT_FORMS:
+                raw = raw.replace(rf + "/" + old_sub, "D:/ZCodetest/" + new_sub)
+                raw = raw.replace(rf + "\\" + old_sub.replace("/", "\\"), "D:/ZCodetest/" + new_sub)
+        # ② 根替换（同形保留）
         for form, tpl in FORMS:
             raw = raw.replace(form, tpl.format(**repl))
         p.write_text(raw, encoding="utf-8", errors="surrogateescape")
@@ -131,9 +148,12 @@ def main():
     if cfg_path:
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
         alias = cfg.setdefault("路径迁移别名", {})
+        # 布局映射别名先登记（param_check 首命中即换算：长键必须排在根键之前）
+        for old_sub, new_sub in LAYOUT_MAP:
+            alias[f"D:/ZCodetest/{old_sub}"] = f"{new_fwd}/{new_sub}"
         alias[OLD_FWD] = new_fwd
         cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"迁移别名已登记：{OLD_FWD} → {new_fwd}（{cfg_path.name}）")
+        print(f"迁移别名已登记：根+布局映射{len(LAYOUT_MAP)}条（{cfg_path.name}）")
     else:
         print("[WARN] 未定位到 agent-company.json，别名未登记（机检可能红，请手工补）")
 

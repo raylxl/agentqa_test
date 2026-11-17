@@ -82,6 +82,14 @@ def upgrade(new_root: Path, old_root: Path):
             shutil.copy2(item, dst)
         n_top += 1
     ok(f"程序件已覆盖（顶层 {n_top} 项）")
+    # 布局 v2 迁移：旧布局把三资产放部署根——升级后改名为备份，不删（防同事在旧目录里有运行产物）
+    import time as _t2
+    for legacy in ("jt_chrome", "用例设计标准_我的定稿", "MD转XMind生成工具集"):
+        lp = old_root / legacy
+        if lp.exists():
+            bak = old_root / f"{legacy}_旧布局备份_{_t2.strftime('%Y%m%d_%H%M%S')}"
+            lp.rename(bak)
+            print(f"    [布局迁移] {legacy} → {bak.name}（新版已收进 agentqa_test 内；旧件保留可查删）")
     mp = new_root / "agentqa_test" / "Agent本体" / "tools" / "migrate_paths.py"   # 新文件未换算 → 按旧根重跑（幂等）
     r = subprocess.run([sys.executable, str(mp), str(old_root).replace("\\", "/"), "--apply"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")

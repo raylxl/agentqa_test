@@ -11,6 +11,7 @@
 | ② 提示词与模板 | `02_提示词与模板/` | 测试点生成/自查/用例生成提示词三件；BRIEF 模板；答疑与呈报五段式模板；测试报告三段式模板；**公司层接入方法（凭证/数据库——方法在包、值在公司层）**；缺陷单模板与提单接入（平台无关字段模板+适配器四能力契约——接哪个缺陷平台随时可换） | 任何 LLM / 任何 AI 编码助手 |
 | ③ 检查脚本 | `03_检查脚本/` | generic_layer_check.py 通用层机检（绝对路径/内网IP/凭证/邮箱＋词表命中＋`--include-gitmeta`）+ 词表示例 + publish_standards.py 发布视图生成器 | 任何 agent / CI |
 | ④ 技能包 | `04_技能包/` | **十技能通用副本**（qa-loop/challenger/external-compare/feedback-loop/generator/pipeline/history-cleanup/executor/qc/orchestrator）+ agent-company 配置模板 + INSTALL | ZCode 用户（可选） |
+| ⑤ 交付工具链 | `05_交付工具链/` | MD→XMind/xlsx 交付物生成三件套+验证比对（07_新标准工具链=现行；2026-11-17 随包，示例中性化过机检） | 任何 agent / CI |
 
 ## 快速上手（三层任选）
 
@@ -35,3 +36,4 @@
 | v2.0 | 2026-11-16 | 公网开源就绪：①标准全集 11 件（+9 份发布视图，publish_standards.py 自动生成+机检全绿）；②十技能通用副本齐（+generator/pipeline/history-cleanup/executor/qc/orchestrator，小节对账零差异）；③机检增强（邮箱规则/--include-gitmeta/自测 7 类）；④git 历史重置为干净单提交 |
 | v2.0.2 | 2026-11-16 | ②新增第七件模板：缺陷单模板与提单接入_通用版（平台无关缺陷单字段模板+查重键+生命周期+适配器 create/update/query/字段映射四能力契约+落单工序八步，自内部正本脱敏抽离，全包机检 hits=0） |
 | v2.0.3 | 2026-11-17 | ②08号模板升 v1.1 与内部正本同步：判定四闸门（用例/环境/数据/规则+判定过程留痕）+AI五红线+规则依据必填+影响面守恒校验 |
+| v2.0.4 | 2026-11-17 | **包内布局 v2**（用户拍板"解压后=agentqa_test+说明件"）：手艺包新增 ⑤交付工具链（07 现行层迁入+示例中性化，机检 hits=0）；同事包内标准体系/执行工具收进 agentqa_test/公司包/，包根只剩 agentqa_test+部署说明件（migrate 布局映射配套） |
