@@ -9,7 +9,7 @@
  */
 const GW = 'http://gateway-ll.test.ztoeco.com';
 const DASH = 'http://jt-ll.test.ztoeco.com/dashboard';
-const DISPLAY = process.env.JT_DISPLAY || '陆潇雷';
+const DISPLAY = process.env.JT_DISPLAY || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function findJtPage(browser) {
@@ -27,7 +27,7 @@ async function readState(page) {
       url: location.href,
       tenant: (selected || active) ? ((selected || active).innerText || '').trim() : (items[0] ? items[0].innerText.trim() : null),
       via: selected ? 'selected-icon' : (active ? 'active-tab' : 'first-tab'),
-      loggedIn: (document.body.innerText || '').includes(display),
+      loggedIn: (document.body.innerText || '').includes('预发环境') && (!display || (document.body.innerText || '').includes(display)),
     };
   }, DISPLAY).catch(() => null);
 }
@@ -93,7 +93,7 @@ module.exports = { ensureTenant, readState, findJtPage, LIST_FN, SWITCH_FN };
 
 if (require.main === module) {
   const path = require('path');
-  const { chromium } = require(path.join('D:', 'ZCodetest', 'ai-test-bench', 'node_modules', 'playwright'));
+  const { chromium } = require('playwright');
   const i = process.argv.indexOf('--port');
   const port = i >= 0 ? parseInt(process.argv[i + 1], 10) : 9333;
   const args = process.argv.slice(2);

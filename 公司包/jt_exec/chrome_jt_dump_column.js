@@ -7,9 +7,8 @@
 const path = require('path');
 const fs = require('fs');
 let chromium;
-for (const p of ['playwright', path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright')]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 const COLUMN = process.argv[2];
 const OUT = process.argv[3] || ('column_' + (COLUMN || '') + '_tree.json');
 if (!COLUMN) { console.error('用法: node chrome_jt_dump_column.js <一级栏目名> [输出文件名]'); process.exit(2); }

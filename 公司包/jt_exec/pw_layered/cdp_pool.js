@@ -6,13 +6,32 @@
  *   node cdp_pool.js --ensure-exec   # 拿执行端口：优先已活的执行段端口(9334+)，没有则在第一个空闲端口新开无头实例
  *
  * 约定：9333=交互主实例（有头，对话/探索用，不抢）；9334~9338=执行段；
- *       新实例 profile=D:\ZCodetest\.chrome-cdp-<port>（独立目录，登录态各自持久化）
+ *       新实例 profile=<部署根>/.chrome-cdp-<port>（独立目录，登录态各自持久化）
  * 启动参数与 launch_chrome_9333.ps1 一致（防 https 升级三参数为红线，缺了 SSO 链路断）
  */
 const { spawn } = require('child_process');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+function findChrome() {
+  const cands = process.platform === 'darwin'
+    ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', path.join(os.homedir(), 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')]
+    : [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', path.join(process.env.LOCALAPPDATA || '', 'Google/Chrome/Application/chrome.exe')];
+  const hit = cands.find(p => p && fs.existsSync(p));
+  if (!hit) throw new Error('未找到 Google Chrome（可设置 CHROME_PATH）');
+  return hit;
+}
+function findDeployRoot() {
+  let d=__dirname;
+  while (true) {
+    if (path.basename(d)==='agentqa_test') return path.dirname(d);
+    const up=path.dirname(d); if (up===d) return path.dirname(__dirname); d=up;
+  }
+}
+const CHROME = findChrome();
+const DEPLOY_ROOT = findDeployRoot();
 const PORTS = [9333, 9334, 9335, 9336, 9337, 9338];
 // 自动选择顺序：9335=执行专用实例（历史拍板）→ 9336+ 空闲新开；
 // 9334=遗留执行实例、占用方可能不明，仅 --port 9334 显式指定才用（拍板#2：不抢被占用的）
@@ -41,7 +60,7 @@ function probe(port) {
 function launch(port) {
   const args = [
     `--remote-debugging-port=${port}`,
-    `--user-data-dir=D:\\ZCodetest\\.chrome-cdp-${port}`,
+    `--user-data-dir=${path.join(DEPLOY_ROOT, '.chrome-cdp-' + port)}`,
     '--no-first-run', '--no-default-browser-check', '--ignore-certificate-errors',
     '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstModeV2ForEngagedSites',
     '--headless=new', '--disable-gpu', '--window-size=1920,1080',
@@ -72,10 +91,8 @@ async function ensureExecPort(verbose) {
 }
 
 // ── 独占调度（2026-11-09 多会话撞车教训：两个会话同用 9335——同实例共用 localStorage token，任一会话切租户，全实例页面同变）──
-const fs = require('fs');
-const path = require('path');
-// 锁与 jt_chrome/browser_pool.js 同目录同格式（{port,purpose,ts,pid}，60 分钟过期）——两套调度器互认
-const LOCK_DIR = 'D:/ZCodetest/jt_chrome/locks';
+// 锁目录随部署内核走；升级保护该目录，不随程序覆盖。
+const LOCK_DIR = path.join(__dirname, 'locks');
 const LOCK_TTL_MIN = 60;
 function readLock(port) {
   const f = `${LOCK_DIR}/${port}.lock`;
@@ -95,7 +112,7 @@ function removeLock(port) { try { fs.unlinkSync(`${LOCK_DIR}/${port}.lock`); } c
 // 占用检测：任一页签停在业务路由（#/…）即视为有人在用——browser_pool 只看第一个页签，曾把别人正在用的 9335 判为空闲
 async function busyPages(port) {
   try {
-    const { chromium } = require(path.join('D:', 'ZCodetest', 'ai-test-bench', 'node_modules', 'playwright'));
+    const { chromium } = require('playwright');
     const b = await chromium.connectOverCDP('http://127.0.0.1:' + port, { timeout: 5000 });
     const urls = [];
     for (const c of b.contexts()) for (const pg of c.pages()) { try { urls.push(pg.url()); } catch (_) {} }

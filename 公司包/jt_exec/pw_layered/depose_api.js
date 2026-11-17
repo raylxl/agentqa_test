@@ -175,7 +175,7 @@ ${subst.map(s => ` *      ${s.numeric ? '${=唯一.' + s.field + '}' : '${唯一
  *   ③ exports 链内传递：跨步骤依赖（上游响应字段→下游入参）按标准 §2 显式映射补 exports；
  *   ④ 转正：正式编号 API-{域}-{序号} + 入总用例库接口用例/，迁出 _pending/。
  */
-const { makeApiSpec, runSteps, uniq } = (() => { try { return require('../lib/api_channel'); } catch (_) { return require('../../lib/api_channel'); } })(); // _pending/ 与转正位两处通用
+const { makeApiSpec, runSteps, uniq } = require('./lib/api_channel');
 
 const META = {
   id: '${id}', title: '${g} 接口沉淀草稿', tenant: '待补', draft: true, // 基准确认拍板后置 false 并迁出 _pending

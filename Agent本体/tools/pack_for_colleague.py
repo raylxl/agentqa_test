@@ -1,29 +1,22 @@
 # -*- coding: utf-8 -*-
-"""pack_for_colleague.py — 一键打包"发给同事"的分发包（2026-11-14 立，触发=第二实例出现）
+"""pack_for_colleague.py — 同事安全包/外发方法论包生成器。
 
-两种模式升级为三种（发谁用哪种）：
-  --mode internal   公司内同事·复刻完整能力：agentqa_test 三包 + 外部正本资产
-                    （标准体系 / jt_chrome〔默认瘦身〕——2026-11-16 裁剪：需求用例库/台账/AiTest 等工作数据不随包）
-                    → dist\测试agent_内部完整包[_无凭证].zip（固定名；包内含 部署说明_同事版 + MANIFEST）
-  --mode company    公司层包（2026-11-16 三层拆分 v2.0）：公开层+公司层+域层起步模板，
-                    **不含域层资产**（用例库/台账/标准正本/jt_chrome 域工件）——同事按《域层起步指引》自建
-                    → dist\测试agent_公司层包.zip（固定名）
-  --mode external   外部/别家公司·只要方法论：手艺包整包，先过发版机检 generic_layer_check
-                    （红=禁止出包）→ dist\手艺包_发版件.zip（固定名）
-  --no-secrets      仅 internal：不带走 agent-secrets.json 明文凭证，替换为同结构空值骨架（同事自己填）
-  --full            仅 internal：jt_chrome 连日志/截图/无头profile 等运行产物一起带（默认瘦身不带）
-  --dry-run         只列收集清单与体积，不出包
+模式：
+  --mode internal   生成唯一可发的公司内同事安全包：三包方法/标准/技能/精简执行内核，凭证空骨架，
+                    不含需求库、台账、执行结果、抓包、截图、个人数据或明文凭证；写后安全门禁红即删包。
+                    产物：dist/测试agent_同事安全包.zip（兼容别名：测试agent_内部完整包_无凭证.zip）
+  --mode external   只发通用方法论手艺包，先过 generic_layer_check。
+  --mode company    已禁用（历史模式容易缺配置/误导部署）；需要公司内同事使用请用 internal 安全包。
+  --dry-run         只列清单，不出包。
 
-典型用法：
-  python pack_for_colleague.py --mode internal               # 内网同事，凭证随包（内网同权）
-  python pack_for_colleague.py --mode internal --no-secrets  # 凭证留骨架
-  python pack_for_colleague.py --mode external               # 外发方法论
-同事侧部署只需一条命令：rewire.py --repair（详见包内 部署说明_同事版_v2.md）。
+同事：解压到任意目录，Windows 双击 部署.bat，macOS 运行 部署.command。
 """
 import argparse
+import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -129,6 +122,29 @@ def secrets_skeleton(src):
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
 
 
+def secret_replacements(src):
+    """分发视图替换：仅替换账号/口令/主机/显示名/token/session；不碰 database/port/note 等结构词。"""
+    data=json.loads(io.open(src,encoding="utf-8").read())
+    out={}; sensitive={"user","pass","password","host","display","token","session","sessionid"}
+    for group,fields in data.items():
+        if not isinstance(fields,dict) or group.startswith("_"): continue
+        for key,val in fields.items():
+            if key.lower() in sensitive and isinstance(val,str) and val:
+                out[val]=f"<LOCAL_{group.upper()}_{key.upper()}>"
+    return sorted(out.items(),key=lambda x:len(x[0]),reverse=True)
+
+
+def sanitize_distribution_bytes(arc, data, replacements):
+    """仅对文本件生成分发视图；工作区正本不改。"""
+    if Path(arc).suffix.lower() not in {".py",".js",".cjs",".mjs",".json",".md",".txt",".ps1",".sh",".yaml",".yml",".toml"}:
+        return data
+    try:s=data.decode("utf-8")
+    except UnicodeDecodeError:return data
+    for old,new in replacements:
+        s=s.replace(old,new)
+    return s.encode("utf-8")
+
+
 def make_skip(names=(), prefixes=(), suffixes=()):
     names = set(names)
 
@@ -139,7 +155,7 @@ def make_skip(names=(), prefixes=(), suffixes=()):
 
 
 DEPLOY_BAT = r"""@echo off
-chcp 936 >nul
+chcp 65001 >nul
 title Test Agent Deploy
 echo ===== Test Agent one-click deploy =====
 echo Current folder = deploy folder. Do NOT move it after install.
@@ -150,7 +166,14 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-python "%~dp0agentqa_test\Agent本体\tools\deploy_colleague.py" %*
+set "AGENT_CORE="
+for /d %%D in ("%~dp0agentqa_test\Agent*") do if exist "%%D\tools\deploy_colleague.py" set "AGENT_CORE=%%D"
+if not defined AGENT_CORE (
+  echo [ERROR] Agent core not found under agentqa_test.
+  pause
+  exit /b 1
+)
+python "%AGENT_CORE%\tools\deploy_colleague.py" %*
 echo.
 pause
 """
@@ -194,81 +217,85 @@ MAC_FIRST_READ = """【Mac 同事先看这个】部署.command 双击被拦的�
 
 
 def deploy_note(secrets_included, roots_desc, full):
-    cred = ("已含 agent-secrets.json（明文账密，内网同权直接可用）" if secrets_included
-            else "凭证为空值骨架（agent-secrets.json），部署后填你的账号")
-    extra = "" if full else "（默认瘦身：jt_chrome 不带日志/截图/无头profile）"
-    return f"""# 测试 Agent 同事部署说明（内部完整包）
+    return f"""# 测试 Agent 同事部署说明（安全包）
 
-> 本包 = 发起人测试 Agent 的完整复刻件：agentqa_test 一个目录全包（三包本体；公司包内含标准体系与执行工具；手艺包含交付工具链）{extra}
-> 不含发起人的工作数据（需求用例库/流水线台账/AiTest 汇报调研）——同事用自己的需求与数据跑（2026-11-16 定）
-> 凭证状态：{cred}
+> 本包只含 Agent 方法、标准、技能、精简执行内核与部署工具；不含发起人的需求库、台账、截图、抓包、执行结果、个人数据或明文凭证。
+> `agent-secrets.json` 为全空骨架：部署后在**本机**填写自己的账号/口令/显示名，禁止把填过的文件再转发。
 
-## 部署五步（约 10 分钟）
+## 首次安装（两步）
 
-1. 装 ZCode 客户端并登录（与发起人同款客户端）；电脑需 Python 3.8+ 且在 PATH。
-   Python 第三方库仅 2 个：`pip install pymysql openpyxl`（DB 连通 / xlsx 载体生成用，不装则对应脚本挂）。
-   脚本回归/接口通道层（`jt_chrome\\pw_layered`）另需 **Node.js 18+**；Playwright 库三级 fallback 解析
-   （裸 require → ai-test-bench → WorkBuddy），同事机最简装法＝在 `D:\\ZCodetest\\` 下执行 `npm i playwright`。
-2. 把 zip 整包解压到 `D:\\` 根 → 得到 `D:\\ZCodetest\\…`。**仅支持同路径部署**：jt_chrome 数百个执行脚本内嵌
-   `D:\\ZCodetest` 绝对路径，换盘/换路径会大面积断。确需换路径：解压后先跑
-   `python agentqa_test\\Agent本体\\tools\\migrate_paths.py <新根路径>`（默认 dry-run 预览，确认后加 `--apply`
-   落改）——它会把公司配置 paths 与代码内路径全量换算并登记迁移别名；跑完再 `rewire.py --repair`
-   重建联接，`param_check.py --check` 应回到全绿。
-3. 打开 ZCode，workspace 选 `D:\\ZCodetest`。
-4. 接线（一条命令 = 重建全部联接 + 幂等写入 hook 配置）：
-   `python D:\\ZCodetest\\agentqa_test\\Agent本体\\tools\\rewire.py --repair`
-   （首次执行会自动备份并写 `C:\\Users\\你\\.zcode\\cli\\config.json` 的 hooks 段——属重启级配置）
-5. **重开 ZCode 会话**（hook 与配置生效）。
+1. 前置：Python 3.8+；需要执行鲸天自动化时还需 Node.js 18+ 与 Google Chrome。部署器会自动安装 playwright、pymysql、openpyxl；失败会明确提示。
+2. 解压到任意自选目录：Windows 双击 `部署.bat`，macOS 运行 `部署.command`（Gatekeeper 处理见 `Mac首步启动.txt`）。
+   部署器会自动：补空用户数据目录、迁移路径、列出本机已装宿主供你选择、只接入你选的宿主、安装依赖、运行 `param_check` 并登记安装位置。
 
-## 验证四道（全绿 = 部署成功）
+## 宿主档位
 
-1. `python D:\\ZCodetest\\agentqa_test\\Agent本体\\tools\\rewire.py --status` → 结论：全绿
-2. `python D:\\ZCodetest\\agentqa_test\\公司包\\param_check.py --check` → 48 值 PASS（同路径部署时）
-3. 冒烟：会话里说"登录鲸天"→ jingtian-login 技能应起 Chrome 9333 并自动登录
-4. 冒烟：把包内 `agentqa_test\\公司包\\验证素材\\示例需求_公告管理_v1.md`（或你手头任一需求文档）丢进会话说"熟悉下这个需求"→ requirement-qa-loop 应走五段式提问
+- ZCode：技能+五道机器闸（已在发起人机验证）。
+- WorkBuddy / Codex：技能接入+软闸检查；无工具级 hooks。
+- Claude Code / CodeBuddy：仅为试验档；技能接线已实现，但 hooks/CLI 兼容性未完成真机验收，不得宣称 100%。
 
-## 红线三条
+## 升级
 
-- `agent-secrets.json` = 明文凭证唯一落点：仅限公司内，永不再外发/截图/贴聊天。
-- 改 `agent-company.json` 须按硬规则 8 向使用者宣告（改配置必宣告 + 重开会话）。
-- 手艺包对外发版必须先过 `generic_layer_check.py` 机检（内部互发不受此限，但公司包/环境登录技能仍禁出公司）。
+新包解压到临时目录后运行部署入口。部署器会检测旧安装位置；回车升级时只覆盖程序件，需求库、台账、Chrome 登录态、公司配置、凭证和执行结果不覆盖。升级完成后重开宿主会话。
 
-## 包内根目录
+## 验证
+
+1. `agentqa_test/公司包/param_check.py --check` → PASS。
+2. 所选宿主的 skills 目录出现技能联接；未选择的宿主不被修改。
+3. 填好 `agentqa_test/公司包/agent-secrets.json` 后，说“登录鲸天”做环境冒烟。
+4. 用包内 `agentqa_test/公司包/验证素材/示例需求_公告管理_v1.md` 说“熟悉下这个需求”，应进入五段式答疑。
+
+## 红线
+
+- 本包永远无凭证；凭证只在同事本机填写。
+- 不转发填过的凭证文件、运行结果、截图或抓包。
+- 任何部署/升级步骤出现红项，按《真机首验清单》回传，不要继续宣称完成。
+
+## 包内清单
 
 {roots_desc}
-- `00_Agent入口.md` — 第一入口（agent 全景导航，问"agent 有什么/流程"先看它）
-- `部署说明_同事版_v2.md`（本文件）、`MANIFEST.json`（逐目录文件数/体积/排除规则/联接登记）
-
-## 包外可选件（缺了不影响主干，按需自装）
-
-- **LibreOffice 渲染链**（Word/PDF 转 PDF、出图）：发起人机为便携版 `D:\\LO_portable`，未随包；需要时自装并在相关脚本中替换指路。
-- **MCP 两类未随包**（weknora 知识库 / 图片 flash 分流，属同事自己的 config.json 自管范畴）：知识库可内网直连替代，图片分析自动降级主模型直读。
-- **bsk 浏览器技能**：用户级自装件不在包内；核心执行链走 Chrome CDP 9333，不依赖它。
-
-## 常见问题
-
-- 技能提示"先建公司配置/降级通用模式" = agent-company.json 没被找到 → 检查解压路径是否 `D:\\ZCodetest\\agentqa_test\\公司包\\`
-- hook 不生效 → 确认重开过会话；`python --version` 能出 3.8+
-- `Agent本体\\skills\\devops-login` 在包里不存在是正常的（联接不进 zip，`rewire --repair` 会重建）
+- `部署.bat` / `部署.command` — 双平台入口
+- `真机首验清单_v1.md`、`MANIFEST.json` — 验收清单与逐文件 SHA-256 清单
 """
 
 
 def pack_internal(cfg, company_dir, no_secrets, full, dry):
-    paths = cfg["paths"]
-    p_std, p_jt = Path(paths["标准体系"]), Path(paths["执行工具"])
-    p_entry = AGENT_ROOT.parent / "00_Agent入口.md"          # 第一入口（2026-11-16 起随包）
-    for p in (AGENT_ROOT, p_std, p_jt, p_entry):
+    """同事完整运行包：只从 agentqa_test 三包取材。默认/强制无凭证；历史需求与执行原料场不入包。"""
+    p_entry = AGENT_ROOT.parent / "00_Agent入口.md"
+    for p in (AGENT_ROOT, p_entry):
         if not p.exists():
             sys.exit(f"[RED] 打包源不存在：{p}")
+    if not no_secrets:
+        sys.exit("[RED] 同事包禁止携带明文凭证：请加 --no-secrets（默认命令会自动启用）")
+    if full:
+        sys.exit("[RED] --full 已禁用：运行产物/抓包/截图/历史数据不得随同事包分发")
 
-    jt_skip = None if full else make_skip(JT_EXCLUDE_NAMES, JT_EXCLUDE_PREFIX, JT_EXCLUDE_SUFFIX)
+    def skip_agent(p, isd):
+        try:
+            rel = p.relative_to(AGENT_ROOT).as_posix()
+        except ValueError:
+            rel = p.name
+        if rel in {"Agent与工作区文件存放位置标准_v1.md", "ZCode测试Agent_用例生成与测试执行可行性核查问题单_v1.md"}:
+            return True
+        if rel.startswith(("_git归档/", "dist/", "公司包/tools/legacy/")):
+            return True
+        if "/__pycache__/" in "/" + rel or rel.endswith("/__pycache__"):
+            return True
+        if rel.startswith("公司包/skills/") and not isd and p.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+            return True
+        if rel.startswith("公司包/jt_exec/"):
+            tail = rel[len("公司包/jt_exec/"):]
+            parts = tail.split("/")
+            if any(x in {"locks", "run-results", "shots", "ego_shots", ".headless_profile", ".headless_r7", "netlog", "apicap"}
+                   or x.startswith(("evid_", "_r", "_rg", "_t")) for x in parts[:-1] if x):
+                return True
+            if not isd and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".xlsx", ".xlsm", ".jsonl", ".out", ".log"}:
+                return True
+        return False
 
-    # 2026-11-16 用户拍板裁剪：参考数据/工作状态不给同事——需求用例库、流水线台账、AiTest 移出 internal 包；
-    # 2026-11-17 布局 v2（用户拍板"解压后=agentqa_test+说明件"）：标准体系/执行工具收进包内公司包/，工具链走手艺包05。
-    plan = [                                   # (源, 包内前缀, 排除规则, 说明)
-        (AGENT_ROOT, "agentqa_test", None, "三包本体（本体+手艺包〔含05交付工具链〕+公司包）"),
-        (p_std, "agentqa_test/公司包/标准体系", None, "标准体系正本 L0~L7（公司资产）"),
-        (p_jt, "agentqa_test/公司包/执行工具", jt_skip, "执行工具与坑库（公司资产）" + ("（瘦身：无日志/截图/无头profile）" if not full else "")),
+    plan = [
+        (AGENT_ROOT, "agentqa_test", skip_agent,
+         "三包运行本体（Agent本体+通用手艺包+公司包；含标准体系、精简执行内核、L4域标准；不含需求库/运行结果/抓包/截图/个人数据）"),
         (p_entry, p_entry.name, None, "第一入口（agent 全景导航）"),
     ]
 
@@ -285,8 +312,7 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
         all_files += files
         junctions += junc
         roots_desc.append(f"- `{prefix}/` — {note}")
-        manifest_roots.append({"包内": prefix, "源": str(src), "文件数": len(files),
-                               "字节": size, "排除": note})
+        manifest_roots.append({"包内": prefix, "文件数": len(files), "字节": size, "说明": note})
     total = sum(os.path.getsize(f[0]) for f in all_files)
     print(f"  合计 {len(all_files)} 文件，{human(total)}")
     if junctions:
@@ -298,42 +324,80 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
         return
 
     DIST.mkdir(exist_ok=True)
-    name = f"测试agent_内部完整包{'_无凭证' if no_secrets else ''}.zip"   # 固定名（2026-11-16 用户拍板去日期：复制到别处永远覆盖同名不堆积；版本信息在 MANIFEST）
-    out = DIST / name
+    # 安全策略：同事包只产无凭证版。旧带凭证 ZIP 若存在立即删除，避免误发。
+    unsafe = DIST / "测试agent_内部完整包.zip"
+    if unsafe.exists():
+        unsafe.unlink()
+        print("  [安全] 已删除历史带凭证包：测试agent_内部完整包.zip")
+    # 唯一可发件：不再并存“完整包/无凭证包”等易混名称。
+    for old_name in ("测试agent_内部完整包.zip", "测试agent_内部完整包_无凭证.zip"):
+        (DIST / old_name).unlink(missing_ok=True)
+    out = DIST / "测试agent_同事安全包.zip"
     secrets_path = company_dir / "agent-secrets.json"
-    print(f"── 写 zip：{out} ──")
+    print(f"── 写安全 zip：{out} ──")
+    generated = {
+        "部署说明_同事版_v2.md": deploy_note(False, "\n".join(roots_desc), False).encode("utf-8"),
+        "部署.bat": DEPLOY_BAT.replace("\n", "\r\n").encode("gbk"),
+        "部署.command": DEPLOY_COMMAND.encode("utf-8"),
+        "Mac首步启动.txt": MAC_FIRST_READ.encode("utf-8"),
+    }
+    checklist = AGENT_ROOT / "真机首验清单_v1.md"
+    if checklist.exists():
+        generated["真机首验清单_v1.md"] = io.open(checklist, encoding="utf-8").read().encode("utf-8")
+    skeleton = secrets_skeleton(secrets_path).encode("utf-8")
+    replacements = secret_replacements(secrets_path)
+
+    import importlib.util
+    view_file=Path(__file__).with_name("package_views.py")
+    spec=importlib.util.spec_from_file_location("package_views", view_file)
+    views=importlib.util.module_from_spec(spec); spec.loader.exec_module(views)
+    company_config_view, standards_index_view = views.company_config_view, views.standards_index_view
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        for i, (f, arc) in enumerate(all_files, 1):
-            if no_secrets and str(f).lower() == str(secrets_path).lower():
-                continue                        # 骨架在收尾统一写入，避免真实凭证进包
+        for f, arc in all_files:
+            if str(f).lower() == str(secrets_path).lower():
+                continue
             with open_lp(f) as fh:
-                z.writestr(arc, fh.read())
-            if i % 2000 == 0:
-                print(f"    …{i}/{len(all_files)}")
-        if no_secrets:
-            z.writestr("agentqa_test/公司包/agent-secrets.json", secrets_skeleton(secrets_path))
-            print("  [凭证] 已用空值骨架替换 agent-secrets.json")
-        z.writestr("部署说明_同事版_v2.md",
-                   deploy_note(not no_secrets, "\n".join(roots_desc), full))
-        z.writestr("部署.bat", DEPLOY_BAT.replace("\n", "\r\n").encode("gbk"))   # bat 必须 GBK+CRLF（LF-only 会致 cmd 解析错位——11-16 双击无反应事故根因）
-        zi = zipfile.ZipInfo("部署.command", date_time=time.localtime()[:6])   # Mac 双击入口（755 执行位+真实时间戳）
-        zi.external_attr = 0o755 << 16
-        z.writestr(zi, DEPLOY_COMMAND.encode("utf-8"))
-        z.writestr("Mac首步启动.txt", MAC_FIRST_READ.encode("utf-8"))          # Gatekeeper 拦截对策（同事最先看的件）
-        checklist = AGENT_ROOT / "真机首验清单_v1.md"        # B+轮：首验清单随包（先锋同事拿包即验）
-        if checklist.exists():
-            z.writestr("真机首验清单_v1.md", io.open(checklist, encoding="utf-8").read())
-        z.writestr("MANIFEST.json", json.dumps({
-            "打包时间": time.strftime("%Y-%m-%d %H:%M:%S"), "模式": "internal",
-            "含凭证": not no_secrets, "瘦身": not full,
-            "生成器": str(Path(__file__)), "roots": manifest_roots,
-            "跳过的联接": dict(junctions),
-            "合计": {"文件数": len(all_files), "字节": total}}, ensure_ascii=False, indent=2))
-    bad = None
+                data=fh.read()
+            if arc == "agentqa_test/公司包/agent-company.json":
+                data=company_config_view(data)
+            elif arc == "agentqa_test/公司包/标准体系/00_标准体系索引.md":
+                data=standards_index_view(data)
+            data=sanitize_distribution_bytes(arc,data,replacements)
+            z.writestr(arc, data)
+        z.writestr("agentqa_test/公司包/agent-secrets.json", skeleton)
+        for name, data in generated.items():
+            if name == "部署.command":
+                zi = zipfile.ZipInfo(name, date_time=time.localtime()[:6])
+                zi.create_system = 3                         # Unix 条目，macOS 解压器才会恢复执行位
+                zi.external_attr = 0o100755 << 16           # regular file + 0755
+                z.writestr(zi, data)
+            else:
+                z.writestr(name, data)
+
+    # 写后门禁：先审不含 MANIFEST 的成品；红即删包。
+    audit_script = AGENT_ROOT / "Agent本体" / "tools" / "package_audit.py"
+    r = subprocess.run([sys.executable, str(audit_script), str(out), str(secrets_path)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        print(r.stdout[-4000:]); out.unlink(missing_ok=True)
+        sys.exit("[RED] 最终 ZIP 安全门禁未过，产物已删除")
+
+    # 从最终 ZIP 反向生成逐文件 SHA-256 清单，然后写入 MANIFEST。
     with zipfile.ZipFile(out) as z:
-        bad = z.testzip()
-        n = len(z.namelist())
-    print(f"完成：{out.name}  {human(out.stat().st_size)}  校验 {'OK（CRC全过）' if not bad else '[RED] 损坏:' + str(bad)}  条目 {n}")
+        final_files=[]
+        for info in z.infolist():
+            b=z.read(info.filename)
+            final_files.append({"path":info.filename,"bytes":len(b),"sha256":hashlib.sha256(b).hexdigest()})
+    manifest={
+        "打包时间":time.strftime("%Y-%m-%d %H:%M:%S"), "模式":"internal-safe", "含凭证":False,
+        "生成器":str(Path(__file__)), "roots":manifest_roots, "跳过的联接":dict(junctions),
+        "合计":{"文件数":len(final_files),"字节":sum(x["bytes"] for x in final_files)}, "files":sorted(final_files,key=lambda x:x["path"])}
+    with zipfile.ZipFile(out, "a", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        z.writestr("MANIFEST.json", json.dumps(manifest,ensure_ascii=False,indent=2))
+    with zipfile.ZipFile(out) as z:
+        bad,n=z.testzip(),len(z.namelist())
+    if bad:
+        out.unlink(missing_ok=True); sys.exit(f"[RED] ZIP CRC 损坏：{bad}")
+    print(f"完成：{out.name}  {human(out.stat().st_size)}  CRC全过  条目 {n}  写后安全门禁全绿")
 
 
 def deploy_note_company():
@@ -490,15 +554,15 @@ def pack_external(cfg, company_dir, dry):
 def main():
     ap = argparse.ArgumentParser(description="一键打包（internal=内网完整复刻 / company=公司层包〔域层自建〕 / external=外发方法论）")
     ap.add_argument("--mode", choices=["internal", "company", "external"], required=True)
-    ap.add_argument("--no-secrets", action="store_true", help="internal：凭证文件换空值骨架")
-    ap.add_argument("--full", action="store_true", help="internal：jt_chrome 连运行产物一起带（默认瘦身）")
+    ap.add_argument("--no-secrets", action="store_true", help="兼容参数；internal 始终无凭证（默认即安全）")
+    ap.add_argument("--full", action="store_true", help="已禁用：运行产物/历史数据不允许随同事包")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     cfg, company_dir = load_company_cfg()
     if a.mode == "internal":
-        pack_internal(cfg, company_dir, a.no_secrets, a.full, a.dry_run)
+        pack_internal(cfg, company_dir, True, a.full, a.dry_run)  # internal 永远安全无凭证
     elif a.mode == "company":
-        pack_company(cfg, company_dir, a.dry_run)
+        sys.exit("[RED] company 历史模式已禁用；公司内同事请用 --mode internal 安全包")
     else:
         pack_external(cfg, company_dir, a.dry_run)
 

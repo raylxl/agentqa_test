@@ -3,7 +3,7 @@
  *
  * 流程（2026-10-27 实测）：
  *   1. 复用页签：找 SSO/鲸天页签，没有则新开并访问 http://jt-ll.test.ztoeco.com/welcome
- *   2. 已登录（正文含 陆潇雷/预发环境）→ 直接返回 already-logged-in
+ *   2. 已登录（正文含凭证 display/预发环境）→ 直接返回 already-logged-in
  *   3. SSO 页若为扫码模式（0 输入框）→ 点 a.login-switch-link（"动态码登录"）切表单
  *   4. 填 input[name=username]=账号、input[name=password]=动态码（兼容静态密码）
  *   5. 点 button.login-btn（"登录"），等跳回鲸天并校验登录态
@@ -17,16 +17,11 @@
 const path = require('path');
 
 let chromium;
-for (const p of [
-  'playwright',
-  path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright'),
-]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
-if (!chromium) { console.error('找不到 playwright 库（可 cd d:\\WorkBuddy-projects\\testcase && npm install playwright）'); process.exit(1); }
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 
 const JT_WELCOME = 'http://jt-ll.test.ztoeco.com/welcome';
-// 账号可参数化：登录操作对所有人一致，仅账密/显示名不同；缺省为 luxiaolei99（陆潇雷）
+// 登录操作对所有人一致；账号/口令/显示名均从环境变量或 agent-secrets.json 的 jt_login 读取
 // 凭证文件定位（2026-11-14 目录化重构·改名免疫）：环境变量 → 自身逐级上溯，每级查本目录及其一级子目录内的 agent-secrets.json
 function _secretsPath(envName) {
   const fs = require('fs'), path = require('path');
@@ -58,8 +53,9 @@ try {
 const ACCOUNT = process.env.JT_ACCOUNT || _jt.user;
 const SECRET = process.env.JT_SECRET || _jt.pass;
 if (!ACCOUNT || !SECRET) { console.error('未取到账密：检查公司层凭证文件 agent-secrets.json 的 jt_login 字段（或 JT_ACCOUNT/JT_SECRET 环境变量）'); process.exit(1); }
-const DISPLAY = process.env.JT_DISPLAY || '陆潇雷';
-const LOGGED_IN_RE = new RegExp(DISPLAY + '|预发环境');
+const DISPLAY = process.env.JT_DISPLAY || _jt.display || '';
+const LOGGED_IN_RE = new RegExp([DISPLAY, '预发环境'].filter(Boolean).join('|'));
+function loggedInText(t) { return t.includes('预发环境') && (!DISPLAY || t.includes(DISPLAY)); }
 const SHOT_OK = path.join(__dirname, 'login_success.png');
 const SHOT_ERR = path.join(__dirname, 'login_error.png');
 
@@ -88,7 +84,7 @@ async function safeEval(page, fn, fallback = null) {
   // 已在鲸天内页则直接校验
   if (page.url().includes('jt-ll.test.ztoeco.com')) {
     const t = await safeEval(page, () => document.body.innerText, '') || '';
-    if (LOGGED_IN_RE.test(t)) { console.log('RESULT: already-logged-in'); await page.screenshot({ path: SHOT_OK }); await browser.close(); return; }
+    if (loggedInText(t)) { console.log('RESULT: already-logged-in'); await page.screenshot({ path: SHOT_OK }); await browser.close(); return; }
   }
 
   // 2. 若不在 SSO 页（如卡在鲸天），重新触发
@@ -147,7 +143,7 @@ async function safeEval(page, fn, fallback = null) {
     if (i % 5 === 0) console.log(`[wait ${(i + 1) * 2}s]`, u.slice(0, 90));
     if (u.includes('jt-ll.test.ztoeco.com')) {
       const t = await safeEval(page, () => document.body.innerText, '') || '';
-      if (new RegExp(DISPLAY + '|预发环境|冷链快运').test(t)) {
+      if (loggedInText(t)) {
         console.log('[ok] 登录成功 URL =', u.slice(0, 90));
         await page.screenshot({ path: SHOT_OK });
         console.log('RESULT: login-success');

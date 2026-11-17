@@ -32,7 +32,7 @@ description: 鲸天系统（jt-ll.test.ztoeco.com）内切换租户、查当前�
 
 ## 标准流程
 
-本技能脚本目录（下称 `$SKILL`）：`C:\Users\wangzhijun\.zcode\skills\jingtian-tenant-switch\scripts`
+本技能脚本目录（下称 `$SKILL`）：当前宿主加载本技能时的 `scripts/` 子目录（部署器按所选宿主接线，禁止写死用户名或宿主目录）
 
 1. **前提**：Chrome 9333 在跑且鲸天已登录（`curl -s --max-time 3 http://127.0.0.1:9333/json/version` 通；不通先跑 jingtian-login 技能）。
 2. **按需执行**（幂等，支持租户ID或名称）：
@@ -42,11 +42,11 @@ description: 鲸天系统（jt-ll.test.ztoeco.com）内切换租户、查当前�
    node "$SKILL/chrome_jt_tenant.js" switch 43            # 切智冷仓链（按ID）
    node "$SKILL/chrome_jt_tenant.js" switch 财务中台      # 按名称也行
    ```
-3. **校验**（对用户报告前必做）：`RESULT: switch-success / already-on-target` 即通过；脚本内部已核对 `.tenant-item` 选中态（selected-icon 或 active 页签）= 目标租户 且 正文含 陆潇雷。
+3. **校验**（对用户报告前必做）：`RESULT: switch-success / already-on-target` 即通过；脚本内部核对 `.tenant-item` 选中态=目标租户，且正文含凭证 `jt_login.display` 或预发环境标识。
 
 ## 成功判据
 
-URL 在 `http://jt-ll.test.ztoeco.com/dashboard`；`.tenant-item` 带 `.selected-icon`（下拉内租户）或 `.tenant-item.active`（直接显示租户）= 目标租户名；正文含 **陆潇雷**；顶级菜单数符合该租户签名（冷链快运 32 / 智冷仓链 28 / 冷链智运 36 / 财务中台 4 / 网络货运 8 / 项目管理 1 / 物料商城·客户服务平台 0）。
+URL 在 `http://jt-ll.test.ztoeco.com/dashboard`；`.tenant-item` 带 `.selected-icon` 或 `.tenant-item.active`=目标租户名；正文含凭证 `jt_login.display` 或预发环境标识；菜单签名仅作辅助，以 `list/current` 实时结果为准。
 
 ## 故障排查
 
@@ -60,9 +60,8 @@ URL 在 `http://jt-ll.test.ztoeco.com/dashboard`；`.tenant-item` 带 `.selected
 
 ## 红线
 
-- **多账号**：切租户操作**人人一致，仅登录人不同**。**登录人正源=项目管理系统「鲸天执行账号」配置**（发批选哪个执行账号，agent 就用它的鲸天账密登录，租户清单 queryOwnershipTenant 按该登录人返回）；助手侧脚本用浏览器当前登录态的 token，不关心是谁，校验显示名可用 `JT_DISPLAY=<显示名>` 环境变量覆盖（缺省按 luxiaolei99/陆潇雷 校验），换人先用 jingtian-login 登录。
+- **多账号**：切租户操作人人一致，仅登录人不同。账号/显示名正源=`agent-secrets.json` 的 `jt_login`；脚本使用当前浏览器 token，`JT_DISPLAY` 只作临时覆盖，换人先用 jingtian-login 重新登录。
 - **不要用下拉 UI 点击法**（点 `.el-dropdown-menu__item`）：2026-10-27 实测点击无弹窗、无接口调用、无跳转，纯浪费时间。
 - playwright 的 `browser.close()` 只断 CDP 连接不关浏览器，保持此用法；绝不 `taskkill /IM chrome.exe`。
 - 业务操作（切完租户后查菜单/页面）用各自技能或即时脚本，本技能只管租户身份切换；**切完后按操作规范做页签对齐**（reload 待操作 jt-ll 页签 + 核对菜单签名）再操作菜单。
-- **操作规范正本（切租户后要开菜单/测试前必读）**：`D:\ZCodetest\jt_chrome\鲸天系统操作规范_我的v1.md`
-- 详尽实测记录：`D:\ZCodetest\jt_chrome\鲸天_全租户清单与切换记录_我的v1.md`（8 租户菜单明细、截图索引）。
+- **操作规范正本（切租户后要开菜单/测试前必读）**：公司包 `jt_exec/鲸天系统操作规范_我的v1.md`；个人历史截图/实测记录不随包，租户清单以实时接口为准。

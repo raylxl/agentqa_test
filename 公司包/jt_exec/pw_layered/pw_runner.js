@@ -17,14 +17,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-/* playwright 三级 fallback（裸 require → ai-test-bench → WorkBuddy，同 lib/api_channel；2026-11-15 去硬编码，同事机可解析） */
+/* playwright 由部署器安装在部署根；不读取发起人个人目录 */
 function _loadPw() {
-  const cands = [];
-  try { cands.push(require.resolve('playwright')); } catch (_) {}
-  cands.push(path.join('D:', 'ZCodetest', 'ai-test-bench', 'node_modules', 'playwright'));
-  cands.push(path.join('D:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright'));
-  for (const p of cands) { try { return require(p); } catch (_) {} }
-  throw new Error('playwright 未找到（fallback：裸 require → ai-test-bench → WorkBuddy）');
+  try { return require('playwright'); }
+  catch (_) { throw new Error('playwright 未安装：重跑部署器，或在部署根执行 npm i playwright'); }
 }
 const { chromium } = _loadPw();
 const pool = require('./cdp_pool');

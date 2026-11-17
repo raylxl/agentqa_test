@@ -15,9 +15,8 @@
  */
 const path = require('path');
 let chromium;
-for (const p of ['playwright', path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright')]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 if (!chromium) { console.error('找不到 playwright 库'); process.exit(1); }
 
 const ALIAS = { '冷链云仓': 43, '云仓': 43, '智冷仓链': 43, '冷链快运': 1, '快运': 1, '总部': 1, '财务中台': 78, '项目管理': 81, '网络货运': 49, '冷链智运': 77, '物料商城': 46, '客户服务平台': 48 };

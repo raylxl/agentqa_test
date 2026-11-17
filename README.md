@@ -24,11 +24,12 @@
 
 ## 发给同事（一键打包，2026-11-14 立）
 
-`python D:\ZCodetest\agentqa_test\Agent本体\tools\pack_for_colleague.py --mode internal`（任意命令行整条粘贴即跑；`--no-secrets`/`--full`/`--dry-run`/`--mode external` 变体见 §8.5 速查＝AiTest\Agent全景总览_当前agent_v1.md）
+`python D:\ZCodetest\agentqa_test\Agent本体\tools\pack_for_colleague.py --mode internal`
 
-- `internal`＝公司内同事复刻完整能力：三包+外部正本资产（标准/需求用例库/jt_chrome/台账/AiTest 瘦身）→ `dist\测试agent_内部完整包_*.zip`（306MB，包内含部署说明与 MANIFEST；`--no-secrets` 凭证换空值骨架，`--full` 带执行记录等大件）；
-- `external`＝外发方法论：手艺包整包，先过 generic_layer_check 机检（红=禁出包）→ `dist\手艺包_<git哈希>_*.zip`；
-- **同事侧部署只需一条命令**：解压到 `D:\` 保持同路径 → `python …\Agent本体\tools\rewire.py --repair`（重建联接+幂等写入 hook 配置）→ 重开会话；五步详见包内《部署说明_同事版_v1.md》。
+- `internal`＝公司内同事**安全包**：三包方法/标准/技能+5份L4域标准+精简执行内核+XMind工具链；不含需求库/台账/截图/抓包/运行结果/个人数据，凭证恒为空骨架。产物唯一：`dist\测试agent_同事安全包.zip`，写后安全门禁红即删包；
+- `company` 与 `--full` 历史危险模式已禁用；
+- `external`＝外发通用方法论：手艺包整包，先过 generic_layer_check 机检（红=禁出包）→ `dist\手艺包_发版件.zip`；
+- **同事部署**：解压到任意目录，Windows 双击 `部署.bat` / macOS 运行 `部署.command`，在菜单选择要接入的宿主；依赖、路径迁移、接线和校验由部署器自动完成。
 
 手工等价步骤（无脚本时）：装 ZCode→拷 `手艺包\` 整包+按需拷 `Agent本体\skills`→建 `公司包`（agent-company.json 填公司值、agent-secrets.json 填账密、环境登录技能自建）→参照 `手艺包\04_技能包\INSTALL.md` 验证三步。
 

@@ -37,8 +37,8 @@ def main():
 
     cfg = find_config()
     if not cfg:
-        print("  [提示] 未找到 agent-company.json——三查跳过（在部署根目录跑本脚本）")
-        return 0
+        print("  [红 ] 未找到 agent-company.json——软闸未执行；请在部署根的 agentqa_test/Agent本体/tools 下运行")
+        return 1
 
     # ── ① 正本直改嗅探 ──
     print("── ① 正本直改嗅探 ──")
@@ -49,7 +49,11 @@ def main():
             m = re.match(r"(.+?)_测试用例_v", md.name)
             chap = uc_dir / (m.group(1) + "分章") if m else None
             if chap and chap.is_dir():
-                newest = max(p.stat().st_mtime for p in chap.rglob("*") if p.is_file())
+                chapter_files = [p for p in chap.rglob("*") if p.is_file()]
+                if not chapter_files:
+                    print(f"  [提示] {chap.name} 为空，暂无分章可对账")
+                    continue
+                newest = max(p.stat().st_mtime for p in chapter_files)
                 if md.stat().st_mtime > newest + 60:      # 60s 容差
                     print(f"  [警] {md.name} 比分章新——可能被直改，请重跑组装（硬闸环境本会在事前拦下）")
                     hits += 1

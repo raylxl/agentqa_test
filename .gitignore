@@ -4,6 +4,9 @@
 # 运行痕迹与产物
 dist/
 _git归档/
+公司包/tools/legacy/private-reference/
+# 运行时联接位：物理正本在公司包/skills/devops-login，部署后由 rewire 重建
+Agent本体/skills/devops-login/
 __pycache__/
 *.pyc
 *.log

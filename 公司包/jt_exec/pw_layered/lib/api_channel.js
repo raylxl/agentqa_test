@@ -17,16 +17,12 @@
 const fs = require('fs');
 const path = require('path');
 
-/* ── playwright 加载（裸 require → ai-test-bench → WorkBuddy 三级 fallback，沿用 chrome_jt_login 模式） ── */
+/* ── playwright 加载：部署器在部署根安装标准依赖，不读取发起人个人目录 ── */
 let _pw;
 function pw() {
   if (_pw) return _pw;
-  const cands = [];
-  try { cands.push(require.resolve('playwright')); } catch (_) {}
-  cands.push(path.join('D:', 'ZCodetest', 'ai-test-bench', 'node_modules', 'playwright'));
-  cands.push(path.join('D:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright'));
-  for (const p of cands) { try { _pw = require(p); return _pw; } catch (_) {} }
-  throw new Error('playwright 未找到（fallback：裸 require → ai-test-bench → WorkBuddy）');
+  try { _pw = require('playwright'); return _pw; }
+  catch (_) { throw new Error('playwright 未安装：重跑部署器自动安装，或在部署根执行 npm i playwright'); }
 }
 
 /* ── 公司配置 / 凭证（改名免疫：逐级上溯找 agent-company.json / agent-secrets.json） ── */
@@ -59,13 +55,13 @@ function cfg() {
 
 function jtCred() {
   if (process.env.JT_ACCOUNT && process.env.JT_SECRET) {
-    return { account: process.env.JT_ACCOUNT, secret: process.env.JT_SECRET, display: process.env.JT_DISPLAY || '陆潇雷', source: 'env' };
+    return { account: process.env.JT_ACCOUNT, secret: process.env.JT_SECRET, display: process.env.JT_DISPLAY || '', source: 'env' };
   }
   const f = findUp(__dirname, 'agent-secrets.json');
   if (f) {
     try {
       const j = JSON.parse(fs.readFileSync(f, 'utf8')).jt_login;
-      if (j && j.user && j.pass) return { account: j.user, secret: j.pass, display: j.display || '陆潇雷', source: f };
+      if (j && j.user && j.pass) return { account: j.user, secret: j.pass, display: j.display || '', source: f };
     } catch (_) {}
   }
   throw new Error('未取到鲸天账密：设 JT_ACCOUNT/JT_SECRET，或提供 agent-secrets.json 的 jt_login{user,pass}（api_channel）');

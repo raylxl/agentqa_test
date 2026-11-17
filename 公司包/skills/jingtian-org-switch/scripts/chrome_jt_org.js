@@ -16,14 +16,12 @@
  */
 const path = require('path');
 let chromium;
-for (const p of ['playwright', path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright')]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
-if (!chromium) { console.error('找不到 playwright 库（可 cd d:\\WorkBuddy-projects\\testcase && npm install playwright）'); process.exit(1); }
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 
 const GW = 'http://gateway-ll.test.ztoeco.com';
-// 登录人显示名可参数化（机构清单本身人员专属，list 实时拉取；此处仅登录态校验用）；缺省 luxiaolei99（陆潇雷）
-const DISPLAY = process.env.JT_DISPLAY || '陆潇雷';
+// 登录人显示名优先 JT_DISPLAY；未提供时只按鲸天页签/环境标识校验
+const DISPLAY = process.env.JT_DISPLAY || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function findJtPage(browser) {
@@ -41,7 +39,7 @@ async function readState(page) {
       tenantName: ai.tenantName || null,
       org: { id: ai.currentOrgId, name: ai.currentOrgName, code: ai.currentOrgCode, typeCode: ai.orgTypeCode },
       headerOrgText: headerOrg ? headerOrg.textContent.trim().replace(/\s+/g, ' ').slice(0, 30) : null,
-      loggedIn: (document.body.innerText || '').includes(display),
+      loggedIn: (document.body.innerText || '').includes('预发环境') && (!display || (document.body.innerText || '').includes(display)),
     };
   }, DISPLAY).catch(() => null);
 }

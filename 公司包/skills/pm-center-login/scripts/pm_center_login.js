@@ -14,13 +14,8 @@
 const path = require('path');
 
 let chromium;
-for (const p of [
-  'playwright',
-  path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright'),
-]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
-if (!chromium) { console.error('找不到 playwright 库'); process.exit(1); }
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 
 const PM_URL = 'http://project-manage.ztll-cpx.ft.ztoeco.com/';
 // 账密只存公司层私有凭证文件（2026-11-14 拍板：技能/脚本零明文账密；接入方法见手艺包 02_提示词与模板/07）

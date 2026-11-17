@@ -12,9 +12,8 @@
 const path = require('path');
 const fs = require('fs');
 let chromium;
-for (const p of ['playwright', path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright')]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 if (!chromium) { console.error('找不到 playwright 库'); process.exit(1); }
 
 const OUT_DIR = __dirname;
@@ -99,7 +98,7 @@ async function findJtPage(browser) {
         sidebarTop: side.slice(0, 30),
         sidebarAll: subs.slice(0, 60),
         menuTreeCount: menuTree ? menuTree.length : null,
-        user: (document.body.innerText || '').includes('陆潇雷')
+        user: (document.body.innerText || '').includes('预发环境')
       };
     }).catch(e => ({ err: e.message }));
     Object.assign(rec, { state });

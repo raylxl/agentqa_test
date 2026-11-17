@@ -7,13 +7,9 @@
 const { execSync, spawnSync } = require('child_process');
 const os = require('os');
 const path = require('path');
-// 2026-11-16 分发修复：playwright 改三级 fallback（原写死 WorkBuddy 绝对路径，同事机必挂）
 const { chromium } = (() => {
-  for (const m of ['playwright', 'd:/ZCodetest/ai-test-bench/node_modules/playwright',
-                   'd:/WorkBuddy-projects/testcase/node_modules/playwright']) {
-    try { return require(m); } catch (e) { /* 试下一级 */ }
-  }
-  throw new Error('playwright 三级 fallback 全失败：请在 D:/ZCodetest 下 npm i playwright 后重试');
+  try { return require('playwright'); }
+  catch (_) { throw new Error('playwright 未安装：重跑部署器自动安装，或在部署根执行 npm i playwright'); }
 })();
 const fs = require('fs');
 
@@ -23,10 +19,19 @@ const BASE = 9333, MAX = 9345;
 const EXCLUDE = new Set([9335, 9336]);
 // 判忙要扫"全部"页签：pages[0] 是新标签页、pages[1] 是他人业务页的单页签漏判（11-12 实录）
 const IDLE_URL_RE = /welcome|blank|newtab|dashboard|chrome:|about:|^no-page/;
-// 2026-11-16 分发修复：锁目录随脚本所在目录走（原写死 D:/ZCodetest）；技能位按当前用户主目录解析（原写死发起人用户名，同事机必挂）
+// 分发口径：锁目录随脚本所在目录走；技能目录按当前宿主用户目录动态发现
 const LOCK_DIR = path.join(__dirname, 'locks');
-const SKILL_SCRIPTS = path.join(os.homedir(), '.zcode', 'skills', 'jingtian-login', 'scripts');
-const LAUNCH_TPL = path.join(SKILL_SCRIPTS, 'launch_chrome_9333.ps1');
+function findSkillScripts() {
+  for (const host of ['.zcode', '.workbuddy', '.claude', '.codex', '.codebuddy']) {
+    const p = path.join(os.homedir(), host, 'skills', 'jingtian-login', 'scripts');
+    if (fs.existsSync(p)) return p;
+  }
+  const local = path.join(__dirname, '..', 'skills', 'jingtian-login', 'scripts');
+  if (fs.existsSync(local)) return local;
+  throw new Error('未找到 jingtian-login 技能脚本目录');
+}
+const SKILL_SCRIPTS = findSkillScripts();
+const LAUNCH_TPL = path.join(SKILL_SCRIPTS, process.platform === 'darwin' ? 'launch_chrome_9333_mac.sh' : 'launch_chrome_9333.ps1');
 const LOGIN_TPL = path.join(SKILL_SCRIPTS, 'chrome_jt_login.js');
 
 function alive(port) {

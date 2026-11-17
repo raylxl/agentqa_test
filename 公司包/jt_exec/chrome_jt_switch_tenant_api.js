@@ -14,9 +14,8 @@
  */
 const path = require('path');
 let chromium;
-for (const p of ['playwright', path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright')]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 if (!chromium) { console.error('找不到 playwright 库'); process.exit(1); }
 
 const TENANT_ID = parseInt(process.argv[2] || '43', 10);
@@ -75,7 +74,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         selected: selected ? (selected.innerText || '').trim() : null,
         active: active ? (active.innerText || '').trim() : null,
         headerTabs: items.slice(0, 4).map(e => (e.innerText || '').trim()),
-        user: (document.body.innerText || '').includes('陆潇雷')
+        user: (document.body.innerText || '').includes('预发环境')
       };
     }).catch(() => null);
     if (state) {

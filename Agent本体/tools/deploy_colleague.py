@@ -32,7 +32,79 @@ def ok(msg):  print(f"  [OK ] {msg}")
 def red(msg): print(f"  [红 ] {msg}")
 
 REG = Path(os.path.expanduser("~")) / ".testagent_deploy.json"     # 安装登记（升级模式的记忆）
-USER_ZONES = {"需求用例库", "AiTest", ".chrome-cdp", "需求流水线台账_v1.md"}   # 用户数据区：升级永不触碰
+USER_ZONES = {"需求用例库", "AiTest", ".chrome-cdp", "需求流水线台账_v1.md"}
+PROTECTED_COMPANY_FILES = {"agent-company.json", "agent-secrets.json", "company_wordlist.json", "publish_rules.json"}
+RUNTIME_DIRS = {"run-results", "shots", "ego_shots", "locks", ".headless_profile", ".headless_r7"}
+RUNTIME_PREFIXES = ("evid_", "_r", "_rg", "_t")
+
+
+def _protected_upgrade_path(rel: Path, dst: Path) -> bool:
+    """升级只跳过明确的用户配置/用户数据；程序件仍正常覆盖。"""
+    parts = rel.parts
+    if len(parts) >= 3 and parts[0] == "agentqa_test" and parts[1] == "公司包" and parts[2] in PROTECTED_COMPANY_FILES:
+        return dst.exists()                  # 旧值存在就保留；首次缺失可由包初始化
+    if len(parts) >= 4 and parts[:3] in (("agentqa_test", "公司包", "jt_exec"), ("agentqa_test", "公司包", "执行工具")):
+        tail = parts[3:]
+        if any(x in RUNTIME_DIRS or x.startswith(RUNTIME_PREFIXES) for x in tail):
+            return dst.exists()
+        if parts[-1].lower().endswith((".log", ".jsonl")):
+            return dst.exists()
+    return False
+
+
+def _copy_program_tree(src: Path, dst: Path, rel_root: Path) -> int:
+    """逐文件覆盖程序件，保留公司配置/凭证与执行产物；避免 copytree 回调层级判断歧义。"""
+    copied = 0
+    for base, dirs, files in os.walk(src):
+        base_p = Path(base)
+        rel_dir = base_p.relative_to(src)
+        out_dir = dst / rel_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        dirs[:] = [d for d in dirs if d not in {".git", "__pycache__", "node_modules", "dist"}]
+        for name in dirs:
+            rel = rel_root / rel_dir / name
+            target = dst / rel_dir / name
+            if _protected_upgrade_path(rel, target) and target.exists():
+                dirs.remove(name)
+                continue
+            target.mkdir(parents=True, exist_ok=True)
+        for name in files:
+            if name.endswith((".pyc", ".log")) or name == "MANIFEST.json":
+                if name == "MANIFEST.json" and rel_dir == Path("."):
+                    shutil.copy2(base_p / name, dst / name)
+                continue
+            rel = rel_root / rel_dir / name
+            target = dst / rel_dir / name
+            if _protected_upgrade_path(rel, target) and target.exists():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(base_p / name, target)
+            copied += 1
+    return copied
+
+
+def _preserve_runtime(src, dst):
+    """从旧 jt_chrome 搬用户运行产物到新执行工具目录：只补缺，不覆盖新包或用户已有同名文件。"""
+    if not src.exists():
+        return 0
+    copied = 0
+    for base, dirs, files in os.walk(src):
+        dirs[:] = [d for d in dirs if d in RUNTIME_DIRS or d.startswith(RUNTIME_PREFIXES)]
+        rel = Path(base).relative_to(src)
+        dest = dst / rel
+        dest.mkdir(parents=True, exist_ok=True)
+        for d in dirs:
+            (dest / d).mkdir(parents=True, exist_ok=True)
+        for name in files:
+            f = Path(base) / name
+            if name.lower().endswith((".log", ".jsonl")) or (name.startswith(("dk_r", "_")) and f.suffix.lower() in {".png", ".jpg"}):
+                t = dest / name
+                if not t.exists():
+                    t.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, t)
+                    copied += 1
+    return copied
+
 
 
 def read_reg():
@@ -77,28 +149,56 @@ def upgrade(new_root: Path, old_root: Path):
             continue
         dst = old_root / item.name
         if item.is_dir():
-            shutil.copytree(item, dst, dirs_exist_ok=True)
+            _copy_program_tree(item, dst, Path(item.name))
         else:
-            shutil.copy2(item, dst)
+            if item.name == "MANIFEST.json":
+                shutil.copy2(item, dst)
+            elif not dst.exists():
+                shutil.copy2(item, dst)
+            else:
+                print(f"    [保留·已有文件] {item.name}")
         n_top += 1
-    ok(f"程序件已覆盖（顶层 {n_top} 项）")
-    # 布局 v2 迁移：旧布局把三资产放部署根——升级后改名为备份，不删（防同事在旧目录里有运行产物）
+    ok(f"程序件已覆盖（顶层 {n_top} 项；公司配置/凭证与运行产物保护保留）")
+    # 布局 v2 迁移：旧布局三资产先备份，再迁用户运行产物到新位置；同名不覆盖。
     import time as _t2
-    for legacy in ("jt_chrome", "用例设计标准_我的定稿", "MD转XMind生成工具集"):
+    for legacy, new_rel in (("jt_chrome", "agentqa_test/公司包/jt_exec"),
+                            ("用例设计标准_我的定稿", "agentqa_test/公司包/标准体系"),
+                            ("MD转XMind生成工具集", "agentqa_test/手艺包/05_交付工具链")):
         lp = old_root / legacy
         if lp.exists():
+            newp = old_root / new_rel
+            newp.mkdir(parents=True, exist_ok=True)
+            if legacy == "jt_chrome":
+                copied = _preserve_runtime(lp, newp)
+                print(f"    [用户运行产物] 从旧 jt_chrome 补入 {copied} 件（同名不覆盖）")
             bak = old_root / f"{legacy}_旧布局备份_{_t2.strftime('%Y%m%d_%H%M%S')}"
-            lp.rename(bak)
-            print(f"    [布局迁移] {legacy} → {bak.name}（新版已收进 agentqa_test 内；旧件保留可查删）")
-    mp = new_root / "agentqa_test" / "Agent本体" / "tools" / "migrate_paths.py"   # 新文件未换算 → 按旧根重跑（幂等）
+            if not bak.exists():
+                lp.rename(bak)
+            print(f"    [布局迁移] {legacy} → {bak.name}（原件保留备查）")
+    # 旧配置/凭证优先保留；缺失时从新包补齐，不覆盖用户值。
+    old_company = old_root / "agentqa_test/公司包"
+    new_company = new_root / "agentqa_test/公司包"
+    for name in PROTECTED_COMPANY_FILES:
+        src, dst = new_company / name, old_company / name
+        if src.exists() and not dst.exists():
+            shutil.copy2(src, dst)
+            print(f"    [初始化] {name}（旧安装缺失，已从新包补入）")
+    mp = old_root / "agentqa_test" / "Agent本体" / "tools" / "migrate_paths.py"
     r = subprocess.run([sys.executable, str(mp), str(old_root).replace("\\", "/"), "--apply"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
-    ok("路径已按旧根换算" if r.returncode == 0 else "换算异常——把上方输出发发起人")
+    if r.returncode != 0:
+        print("\n".join("    " + x for x in (r.stdout or r.stderr or "").strip().splitlines()[-8:]))
+        red("路径换算失败——升级未完成，安装登记不更新")
+        return 1
+    ok("路径已按旧根换算")
     pc = old_root / "agentqa_test" / "公司包" / "param_check.py"
     r = subprocess.run([sys.executable, str(pc), "--check"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-2:]))
-    ok("param_check PASS" if r.returncode == 0 else "param_check 未过——回传输出")
+    if r.returncode != 0:
+        red("param_check 未过——升级未完成，安装登记不更新")
+        return 1
+    ok("param_check PASS")
     write_reg(old_root)
     print("=" * 56)
     print(f"升级完成：{old_root}")
@@ -109,6 +209,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-rewire", action="store_true", help="跳过接线（本机双环境试验用）")
     ap.add_argument("--host", help="非交互指定接入宿主（逗号分隔：zcode,workbuddy,claude,codex,codebuddy）")
+    ap.add_argument("--no-zcode", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--skip-deps", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--force", action="store_true", help="允许在 D:\\ZCodetest 正本目录执行")
     args = ap.parse_args()
 
@@ -121,9 +223,7 @@ def main():
         red(f"目录结构不像同事包（{ROOT}\\agentqa_test 不存在）——请解压完整 zip 后再跑")
         sys.exit(1)
     print(f"  [OK ] 部署根 = {ROOT}（部署器跟着目录走，装完别挪；挪了重跑 {LAUNCHER} 即可）")
-    if str(ROOT).replace("/", "\\").lower() == "d:\\zcodetest" and not args.force:
-        red("检测到这是发起人正本目录 D:\\ZCodetest——请换目录试验，或加 --force 确认")
-        sys.exit(1)
+    # 任意目录均可（含 D:\\ZCodetest）；只有当前脚本确实位于包结构中才继续。
 
     # ── 1.5 升级检测（2026-11-17：更新只动程序，用户数据永不触碰）──
     reg = read_reg()
@@ -139,8 +239,7 @@ def main():
         else:
             print("    [非交互] 默认升级到旧位置")
         if a != "n":
-            upgrade(ROOT, old)
-            sys.exit(0)
+            sys.exit(upgrade(ROOT, old) or 0)
         print("    → 按选择：全新安装到本目录")
 
     # ── 2. 占位骨架（裁剪掉的域数据目录补占位，param_check 要求路径可达；幂等）──
@@ -182,7 +281,7 @@ def main():
             s = md.read_text(encoding="utf-8")
         except Exception:
             continue
-        if IS_MAC:   # Mac 上目标路径只认正斜杠——两种源写法都换正斜杠形态（R2：反斜杠源串换出 \Users\... 是坏路径）
+        if IS_MAC:
             s2 = s.replace("D:\\ZCodetest", root_fwd).replace("D:/ZCodetest", root_fwd)
         else:
             s2 = s.replace("D:\\ZCodetest", root_win).replace("D:/ZCodetest", root_fwd)
@@ -211,13 +310,14 @@ def main():
     if real_use(home / ".workbuddy", ["skills", "settings.json"]):
         hosts.append(("WorkBuddy", "九成（技能联接；无 hooks 插槽→软闸=收尾跑 soft_gates_check.py）", "workbuddy", ["--workbuddy"]))
     if real_use(home / ".claude", ["settings.json", "projects", "sessions"]):
-        hosts.append(("Claude Code", "100%目标（技能联接+五闸按其格式注册；运行时行为属真机首验项）", "claude", ["--claude"]))
+        hosts.append(("Claude Code", "试验档（技能联接可用；hooks 输出协议待 Claude 真机复验，不承诺 100%）", "claude", ["--claude"]))
     if real_use(home / ".codex", ["config.toml", "auth.json", "sessions"]):
         hosts.append(("Codex", "九成（.codex\\skills 原生技能目录联接；无工具级 hooks→软闸）", "codex", ["--codex"]))
     if real_use(home / ".codebuddy", ["skills", "config.json", "config.toml", "sessions"]):
-        hosts.append(("CodeBuddy", "九成档预设（.codebuddy\\skills 技能联接——CLI 版适用；hooks 兼容性属首验实测；IDE 插件版走手艺包三步）", "codebuddy", ["--codebuddy"]))
-    if not hosts:
-        red(f"未检测到任何宿主（ZCode / WorkBuddy / Claude Code / Codex / CodeBuddy）——装任一后重跑 {LAUNCHER}，或按部署说明手动挂技能")
+        hosts.append(("CodeBuddy", "试验档（仅 CLI/skills 形态接线；IDE 插件版走手艺包三步，兼容性需同事真机复验）", "codebuddy", ["--codebuddy"]))
+    if not hosts and not args.skip_rewire:
+        red(f"未检测到任何宿主（ZCode / WorkBuddy / Claude Code / Codex / CodeBuddy）——安装未完成；装任一后重跑 {LAUNCHER}")
+        sys.exit(1)
     else:
         print(f"    检测到 {len(hosts)} 个宿主（接入与否由你决定）：")
         for i, (name, grade, _k, _f) in enumerate(hosts, 1):
@@ -251,40 +351,67 @@ def main():
         elif chosen:
             rw = HERE / "rewire.py"
             cmd = [sys.executable, str(rw), "--repair"] + [f for h in chosen for f in h[3]]
+            if not any(h[2] == "zcode" for h in chosen):
+                cmd.append("--no-zcode")
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-8:]))
             if r.returncode != 0:
-                red("rewire 有红项，见上方输出（宿主未登录/目录被占常见）")
+                red("rewire 有红项——安装未完成，不写安装登记")
+                sys.exit(1)
             else:
                 ok(f"接线完成：{'、'.join(h[0] for h in chosen)}（重开对应宿主会话后生效）")
-            if any(h[2] in ("workbuddy", "codex", "codebuddy") for h in chosen) and not any(h[2] == "zcode" for h in chosen):
+            if any(h[2] in ("workbuddy", "codex", "codebuddy", "claude") for h in chosen) and not any(h[2] == "zcode" for h in chosen):
                 print("    [软闸] 所选宿主无 hooks 插槽：每轮执行/回写收尾前跑 "
-                      f"python \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
-        elif hosts:
-            print(f"    按选择未接入任何宿主——想接时重跑 {LAUNCHER} 再选")
+                      f"\"{sys.executable}\" \"{HERE / 'soft_gates_check.py'}\"（正本直改嗅探/记忆体检/报告对账三查）")
+        elif hosts and not args.skip_rewire:
+            red("未选择任何宿主——安装未完成；重跑部署入口并选择至少一个宿主")
+            sys.exit(1)
 
-    # ── 5.5 依赖自装（Mac 首验 R4：playwright/pymysql 缺失自动化——只装库不装浏览器，执行链连本机 Chrome 用）──
+    # ── 5.5 依赖自装 ──
     print("── 依赖自装 ──")
-    import shutil as _sh
-    if _sh.which("npm"):
-        if not (ROOT / "node_modules" / "playwright").is_dir():
-            r = subprocess.run(["npm", "i", "playwright", "--no-fund", "--no-audit", "--loglevel=error"],
-                               cwd=str(ROOT), capture_output=True, text=True,
-                               encoding="utf-8", errors="replace", timeout=300)
-            ok("playwright 库已装（连接用，不下载浏览器——执行链连你本机的 Chrome）" if r.returncode == 0
-               else "playwright 安装失败（网络？）——不影响部署，需要执行侧时在部署根手动 npm i playwright")
+    deps_ok = True
+    if not args.skip_deps:
+        import shutil as _sh
+        npm = _sh.which("npm.cmd") if os.name == "nt" else _sh.which("npm")
+        npm = npm or _sh.which("npm")
+        if not npm:
+            red("未检测到 npm（Node.js）——执行能力缺失；先装 Node.js 18+ 后重跑部署")
+            deps_ok = False
+        elif not (ROOT / "node_modules" / "playwright").is_dir():
+            try:
+                npm_cmd = ([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", npm,
+                            "i", "playwright", "--no-fund", "--no-audit", "--loglevel=error"]
+                           if os.name == "nt" and npm.lower().endswith((".cmd", ".bat"))
+                           else [npm, "i", "playwright", "--no-fund", "--no-audit", "--loglevel=error"])
+                r = subprocess.run(npm_cmd, cwd=str(ROOT), capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=300)
+                if r.returncode == 0:
+                    ok("playwright 库已装（只连接本机 Chrome，不下载浏览器）")
+                else:
+                    red("playwright 自动安装失败——执行能力缺失；检查网络后重跑部署")
+                    deps_ok = False
+            except (OSError, subprocess.TimeoutExpired) as e:
+                red(f"playwright 自动安装未完成：{e}")
+                deps_ok = False
         else:
             ok("playwright 库已在位")
+        import importlib.util as _iu
+        for mod, pip_name in (("pymysql", "pymysql"), ("openpyxl", "openpyxl")):
+            if _iu.find_spec(mod) is None:
+                try:
+                    r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", pip_name],
+                                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+                    if r.returncode == 0: ok(f"{pip_name} 已装")
+                    else: red(f"{pip_name} 自动安装失败"); deps_ok = False
+                except (OSError, subprocess.TimeoutExpired) as e:
+                    red(f"{pip_name} 自动安装未完成：{e}"); deps_ok = False
+            else:
+                ok(f"{pip_name} 已在位")
+        if not deps_ok:
+            red("依赖未齐——安装未完成，不写安装登记")
+            sys.exit(1)
     else:
-        print("  [提示] 未检测到 npm（Node.js）——执行侧需要时先装 Node 18+ 再 npm i playwright")
-    import importlib.util as _iu
-    for mod, pip_name in (("pymysql", "pymysql"), ("openpyxl", "openpyxl")):
-        if _iu.find_spec(mod) is None:
-            r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", pip_name],
-                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
-            ok(f"{pip_name} 已装" if r.returncode == 0 else f"{pip_name} 安装失败——需要 DB/xlsx 功能时手动 pip install {pip_name}")
-        else:
-            ok(f"{pip_name} 已在位")
+        print("  [测试模式] 跳过依赖安装")
 
     # ── 6. 校验 ──
     print("── 校验 ──")
@@ -311,7 +438,7 @@ def main():
     print("=" * 56)
     write_reg(ROOT)
     ok(f"安装登记已写入 {REG.name}（以后升级自动找到这里，你的数据不动）")
-    print("部署完成。下一步：重开 ZCode 会话 → 跑 rewire --status 四道验证 →")
+    print("部署完成。下一步：重开你选择的宿主会话，再按《真机首验清单》验证。")
     print('会话说"登录鲸天"冒烟 → 丢一份需求文档说"熟悉下这个需求"冒烟。')
     print("=" * 56)
 

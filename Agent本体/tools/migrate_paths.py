@@ -31,8 +31,8 @@ except Exception:
 
 AGENT_ROOT = Path(__file__).resolve().parents[2]      # …\\agentqa_test
 WORKSPACE = AGENT_ROOT.parent                          # …\\（jt_chrome 所在层）
-SCAN_DIRS = [AGENT_ROOT, WORKSPACE / "jt_chrome"]
-EXTS = {".py", ".js", ".cjs", ".ps1", ".json", ".sh", ".bat", ".command"}
+SCAN_DIRS = [AGENT_ROOT, AGENT_ROOT / "公司包" / "jt_exec", WORKSPACE / "jt_chrome"]  # 新包内布局+旧布局兼容
+EXTS = {".py", ".js", ".cjs", ".mjs", ".ps1", ".json", ".sh", ".bat", ".command"}
 SKIP_NAMES = {"node_modules", "__pycache__", ".git", "dist", "locks", ".playwright-cli"}
 SKIP_FILES = {"agent-secrets.json", "migrate_paths.py",   # 凭证红线；本工具自身（防自替换破坏别名登记）
               "deploy_colleague.py"}                       # 部署器自身（内嵌 D:\ZCodetest 替换源串，被换即自我破坏——Mac 首验 R2 实锤）
@@ -43,9 +43,8 @@ OLD_FWD = "D:/ZCodetest"
 # 仅作用于同事部署包（migrate 只在包解压根跑，工作区正本不经此路径）。
 LAYOUT_MAP = [
     ("MD转XMind生成工具集/07_新标准工具链", "agentqa_test/手艺包/05_交付工具链/07_新标准工具链"),
-    ("MD转XMind生成工具集\\07_新标准工具链", "agentqa_test/手艺包/05_交付工具链/07_新标准工具链"),
     ("用例设计标准_我的定稿", "agentqa_test/公司包/标准体系"),
-    ("jt_chrome", "agentqa_test/公司包/执行工具"),
+    ("jt_chrome", "agentqa_test/公司包/jt_exec"),
 ]
 _ROOT_FORMS = ["D:/ZCodetest", "D:\\ZCodetest", "D:\\\\ZCodetest", "d:/ZCodetest", "d:\\ZCodetest", "d:\\\\ZCodetest"]
 
@@ -75,7 +74,8 @@ def main():
     if not root_ok(new_fwd):
         sys.exit(f"[RED] 新根路径异常：{new_fwd}")
     if new_fwd.lower() == OLD_FWD.lower():
-        sys.exit("[RED] 新根与旧根相同（D:/ZCodetest），无需迁移")
+        print("[OK] 新根与包占位根相同（D:/ZCodetest），无需路径换算")
+        return
     if new_fwd.startswith("/"):
         # Mac/POSIX 新根：三种旧写法（正斜杠/双反/单反）一律换为正斜杠形态——目标系统只认这个
         repl = {"fwd": new_fwd, "dbl": new_fwd, "sgl": new_fwd}
@@ -133,9 +133,11 @@ def main():
             for rf in _ROOT_FORMS:
                 raw = raw.replace(rf + "/" + old_sub, "D:/ZCodetest/" + new_sub)
                 raw = raw.replace(rf + "\\" + old_sub.replace("/", "\\"), "D:/ZCodetest/" + new_sub)
-        # ② 根替换（同形保留）
+        # ② 根替换；Mac/POSIX 目标把命中绝对路径所在行的反斜杠统一为正斜杠，避免 /Users/...\子路径 混合路径。
         for form, tpl in FORMS:
             raw = raw.replace(form, tpl.format(**repl))
+        if new_fwd.startswith("/"):
+            raw = "\n".join(line.replace("\\", "/") if new_fwd in line else line for line in raw.split("\n"))
         p.write_text(raw, encoding="utf-8", errors="surrogateescape")
 
     # ── 迁移别名登记（在文本换算后的 agent-company.json 上追加 old→new）──
@@ -155,11 +157,13 @@ def main():
         cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"迁移别名已登记：根+布局映射{len(LAYOUT_MAP)}条（{cfg_path.name}）")
     else:
-        print("[WARN] 未定位到 agent-company.json，别名未登记（机检可能红，请手工补）")
+        print("[RED] 未定位到 agent-company.json，别名未登记")
+        return 1
 
     print("\n完成。后续两步：")
     print("  ① python " + str(Path(__file__).with_name("rewire.py")) + " --repair")
     print("  ② python " + str(cfg_path.parent / "param_check.py") + " --check   （应全绿）")
+    return 0
 
 
 def root_ok(s):
@@ -169,4 +173,4 @@ def root_ok(s):
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)

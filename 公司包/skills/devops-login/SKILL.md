@@ -8,7 +8,7 @@ description: 访问/登录中通一站式研发平台（devops.dev.ztoeco.com）
 ## 0. 前置
 
 - Chrome 9333 CDP 实例在线（不在线先跑 jingtian-login 的 launch 脚本启动实例；本 skill 只负责平台侧）
-- 工具链：`cd D:\ZCodetest\jt_chrome && node cdp_eval.js <页签关键词> <exprFile>`；真实点击用 `node zc_steps.js <页签关键词> steps.json`（[{loc:[x,y],click:true,wait:ms}]）
+- 工具链在本技能 `scripts/`：`node "$SKILL/cdp_eval.js" <页签关键词> <exprFile>`；真实点击用 `node "$SKILL/zc_steps.js" <页签关键词> steps.json`。`$SKILL`=当前宿主加载本技能时的 scripts 子目录。
 
 ## 1. 打开平台页签（两步法，/json/new 不可靠）
 
@@ -19,11 +19,7 @@ curl -s -X PUT "http://127.0.0.1:9333/json/new"
 node cdp_eval.js about _expr_nav.txt
 ```
 
-**快速通道（2026-11-11 用户拍板·优先用）**：一站式登录态已落在 `D:/ZCodetest/.chrome-cdp-9334`（电脑登录宝盒后 OAuth 页会出"一键登录"按钮）——两步全自动：
-```bash
-powershell -File D:/ZCodetest/jt_chrome/open_devops.ps1          # ① 有头启动 9334（带登录态+允许访问本地应用）
-node D:/ZCodetest/jt_chrome/devops_auto_login.js                 # ② 自动点一键登录（90s 超时，真实鼠标点击）
-```
+**快速通道**：9334 登录态落在部署根 `.chrome-cdp-9334`。Windows：运行 `$SKILL/open_devops.ps1` 后 `node "$SKILL/devops_auto_login.js"`；Mac 尚未完成一站式宝盒客户端链路真机验收，按首验清单记录。
 成功判据=②输出 `OK`。失败才走下面 §1~§3 手动流程。
 
 常用 URL：
@@ -38,7 +34,7 @@ node D:/ZCodetest/jt_chrome/devops_auto_login.js                 # ② 自动点
 | --- | --- | --- |
 | ① 已登录直达 | 页签 title="…-一站式研发平台"，URL 回 devops 域 | 无需操作，直接抓数据 |
 | ② OAuth 自动过 | 停 connect.zto.com 几秒内自己回跳 devops | 等待即可（≤15s） |
-| ③ OAuth 停授权页（需一键登录） | title="中通快递…"，页面文本含"您已打开电脑宝盒，可选择账号一键登录"+账号卡（陆潇雷·中通云冷科技·测试部）+"一键登录"按钮 | 走 §3 |
+| ③ OAuth 停授权页（需一键登录） | title="中通快递…"，页面文本含"您已打开电脑宝盒，可选择账号一键登录"+当前登录人的宝盒账号卡+"一键登录"按钮 | 走 §3 |
 
 ## 3. 一键登录（2026-11-06 实测定稿）
 

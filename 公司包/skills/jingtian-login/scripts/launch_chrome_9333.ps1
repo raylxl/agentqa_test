@@ -3,6 +3,10 @@
 # 2026-11-09 用户拍板：默认无头（--headless=new），需要可视化时手动传 -Visual 参数
 param([switch]$Visual)
 $ErrorActionPreference = 'Stop'
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Resolve-Path (Join-Path $ScriptDir '..\..\..\..\..')
+$Chrome = @('C:\Program Files\Google\Chrome\Application\chrome.exe', (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $Chrome) { Write-Output '__FAILED__ 未找到 Google Chrome'; exit 1 }
 
 # 已在跑就直接复用（幂等）
 try {
@@ -13,7 +17,7 @@ try {
 
 $args = @(
   '--remote-debugging-port=9333',
-  '--user-data-dir=D:\ZCodetest\.chrome-cdp',
+  ('--user-data-dir=' + (Join-Path $Root '.chrome-cdp')),
   '--no-first-run',
   '--no-default-browser-check',
   '--ignore-certificate-errors',
@@ -28,7 +32,7 @@ if ($Visual) {
   $mode = 'HEADLESS'
 }
 
-Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' -ArgumentList $args
+Start-Process -FilePath $Chrome -ArgumentList $args
 Start-Sleep -Seconds 3
 
 try {

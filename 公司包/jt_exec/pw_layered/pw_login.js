@@ -6,34 +6,42 @@
  * CLI：  node pw_login.js --port 9335
  * 输出： RESULT: already-logged-in | login-success | login-timeout（超时退出码 2）
  * 模块： ensureLogin(port) → 同上三态
- * 账号： JT_ACCOUNT / JT_SECRET / JT_DISPLAY 环境变量可覆盖；缺省 luxiaolei99/陆潇雷，
- *        密码只从 agent-secrets.json（jt_login.pass，逐级上溯查找）取，缺凭证报错退出（凭证红线，姿势照抄 api_channel.js）
+ * 账号/密码/显示名：JT_ACCOUNT / JT_SECRET / JT_DISPLAY 可覆盖；缺省均读 agent-secrets.json 的 jt_login，
+ *        缺凭证报错退出（凭证红线，姿势照抄 api_channel.js）
  */
 const path = require('path');
 const fs = require('fs');
-const { chromium } = require(path.join('D:', 'ZCodetest', 'ai-test-bench', 'node_modules', 'playwright'));
+let chromium;
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('缺 playwright：在部署根执行 npm i playwright，或重跑部署器自动安装'); process.exit(1); }
 
 const JT_WELCOME = 'http://jt-ll.test.ztoeco.com/welcome';
 function findUpSecrets() {
   let d = __dirname;
   while (true) {
-    const f = path.join(d, 'agent-secrets.json');
-    if (fs.existsSync(f)) return f;
+    for (const f of [path.join(d, 'agent-secrets.json'), path.join(d, '公司包', 'agent-secrets.json')]) {
+      if (fs.existsSync(f)) return f;
+    }
     const p = path.dirname(d);
     if (p === d) return null;
     d = p;
   }
 }
-const ACCOUNT = process.env.JT_ACCOUNT || 'luxiaolei99';
-const SECRET = (() => {
-  if (process.env.JT_SECRET) return process.env.JT_SECRET;
+function readLogin() {
   const f = findUpSecrets();
-  if (f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')).jt_login.pass; } catch (e) { /* 落到报错 */ } }
-  console.error('缺凭证：设 JT_SECRET 环境变量，或放置 agent-secrets.json（jt_login.pass）——密码不入代码（凭证红线）');
+  if (!f) return {};
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')).jt_login || {}; } catch (_) { return {}; }
+}
+const LOGIN = readLogin();
+const ACCOUNT = process.env.JT_ACCOUNT || LOGIN.user;
+const SECRET = process.env.JT_SECRET || LOGIN.pass;
+const DISPLAY = process.env.JT_DISPLAY || LOGIN.display || '';
+if (!ACCOUNT || !SECRET) {
+  console.error('缺凭证：设 JT_ACCOUNT/JT_SECRET，或填写 agent-secrets.json 的 jt_login 字段');
   process.exit(1);
-})();
-const DISPLAY = process.env.JT_DISPLAY || '陆潇雷';
-const LOGGED_IN_RE = new RegExp(DISPLAY + '|预发环境');
+}
+const LOGGED_IN_RE = new RegExp([DISPLAY, '预发环境'].filter(Boolean).join('|'));
+function loggedInText(t) { return t.includes('预发环境') && (!DISPLAY || t.includes(DISPLAY)); }
 const SHOTS = path.join(__dirname, 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -61,7 +69,7 @@ async function ensureLogin(port) {
     for (let i = 0; i < 8; i++) {
       if (page.url().includes('sso.test.ztoeco.com')) break;
       const t = (await safeEval(page, () => document.body.innerText, '')) || '';
-      if (LOGGED_IN_RE.test(t)) return 'already-logged-in';
+      if (loggedInText(t)) return 'already-logged-in';
       await sleep(2000);
     }
     // ② 不在 SSO 且无登录特征：可能 token 过期但页面不自动跳 → 清 token 重新触发 SSO
@@ -75,7 +83,7 @@ async function ensureLogin(port) {
       }
       if (!page.url().includes('sso.test.ztoeco.com')) {
         const t = (await safeEval(page, () => document.body.innerText, '')) || '';
-        if (LOGGED_IN_RE.test(t)) return 'already-logged-in';
+        if (loggedInText(t)) return 'already-logged-in';
         await page.screenshot({ path: path.join(SHOTS, `login_noredir_${port}.png`) }).catch(() => {});
         return 'login-timeout';
       }
@@ -112,7 +120,7 @@ async function ensureLogin(port) {
       const u = page.url();
       if (u.includes('jt-ll.test.ztoeco.com')) {
         const t = (await safeEval(page, () => document.body.innerText, '')) || '';
-        if (new RegExp(DISPLAY + '|预发环境|冷链快运').test(t)) return 'login-success';
+        if (loggedInText(t)) return 'login-success';
       }
     }
     await page.screenshot({ path: path.join(SHOTS, `login_timeout_${port}.png`) }).catch(() => {});

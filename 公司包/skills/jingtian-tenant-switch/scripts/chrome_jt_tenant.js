@@ -12,15 +12,13 @@
  */
 const path = require('path');
 let chromium;
-for (const p of ['playwright', path.join('d:', 'WorkBuddy-projects', 'testcase', 'node_modules', 'playwright')]) {
-  try { chromium = require(p).chromium; if (chromium) break; } catch (_) {}
-}
-if (!chromium) { console.error('找不到 playwright 库（可 cd d:\\WorkBuddy-projects\\testcase && npm install playwright）'); process.exit(1); }
+try { chromium = require('playwright').chromium; }
+catch (_) { console.error('找不到 playwright：重跑部署器自动安装，或在部署根执行 npm i playwright'); process.exit(1); }
 
 const GW = 'http://gateway-ll.test.ztoeco.com';
 const DASH = 'http://jt-ll.test.ztoeco.com/dashboard';
-// 登录人显示名可参数化（切换租户操作人人一致，仅登录人不同）；缺省 luxiaolei99（陆潇雷）
-const DISPLAY = process.env.JT_DISPLAY || '陆潇雷';
+// 登录人显示名优先 JT_DISPLAY；未提供时只按鲸天页签/环境标识校验
+const DISPLAY = process.env.JT_DISPLAY || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const HEADERS = t => ({ 'Content-Type': 'application/json', 'Authorization': t, 'authtoken': t, 'PlatformCode': 'ZTOCC_PLATFORM_001', 'client-Type': 'pc' });
 const BODY = extra => JSON.stringify({ platformCode: 'ZTOCC_PLATFORM_001', ...extra });
@@ -43,7 +41,7 @@ async function readState(page) {
       tenant: (selected || active) ? ((selected || active).innerText || '').trim() : (items[0] ? items[0].innerText.trim() : null),
       via: selected ? 'selected-icon' : (active ? 'active-tab' : 'first-tab'),
       menuTopCount,
-      loggedIn: (document.body.innerText || '').includes(display)
+      loggedIn: (document.body.innerText || '').includes('预发环境') && (!display || (document.body.innerText || '').includes(display))
     };
   }, DISPLAY).catch(() => null);
 }

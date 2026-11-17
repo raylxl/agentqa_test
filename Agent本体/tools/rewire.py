@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""rewire.py — agentqa_test 三包接线体检与改名工具（2026-11-14 目录化重构立，同日收拢 agentqa_test）
+r"""rewire.py — agentqa_test 三包接线体检与改名工具（2026-11-14 目录化重构立，同日收拢 agentqa_test）
 
 布局：workspace\\agentqa_test\\{Agent本体, 手艺包, 公司包} = 物理正本；
 ZCode 只认固定运行位（workspace\\.zcode\\skills、用户目录 skills、cli\\config.json 的 hook 路径），
@@ -65,16 +65,20 @@ def locate():
             find_dir(Path("03_检查脚本") / "generic_layer_check.py"))  # 手艺包
 
 
-def wiring(agent, company, workbuddy=False, claude=False, codex=False, codebuddy=False):
-    """接线表：(联接位置, 物理目标, 说明)；workbuddy/claude=True 追加对应宿主技能位（2026-11-16 三层拆分 P4 / 宿主自适应）"""
-    w = [(WORKSPACE / ".zcode" / "skills", agent / "skills", "流程技能运行位（ZCode 发现口）"),
-         (agent / "skills" / "devops-login", company / "skills" / "devops-login", "环境技能挂入技能树"),
-         (USER_ZCODE / "cli" / "hooks", agent / "hooks", "hook 旧路径兼容联接（缓存未失效会话用；稳定后可删）")]
-    for n in ENV_SKILLS:
-        w.append((USER_ZCODE / "skills" / n, company / "skills" / n, "用户级环境技能运行位"))
-    craft = find_dir(Path("03_检查脚本") / "generic_layer_check.py")
-    if craft:
-        w.append((WORKSPACE / "通用测试agent包", craft, "手艺包旧名兼容联接"))
+def wiring(agent, company, workbuddy=False, claude=False, codex=False, codebuddy=False, zcode=True):
+    """接线表：(联接位置, 物理目标, 说明)。zcode=False 时不改 ZCode 运行位。"""
+    w = []
+    if zcode:
+        w.append((WORKSPACE / ".zcode" / "skills", agent / "skills", "流程技能运行位（ZCode 发现口）"))
+    # agent 内部技能挂载始终需要：这是物理本体内的公司环境技能联接，不是宿主选择。
+    w.append((agent / "skills" / "devops-login", company / "skills" / "devops-login", "环境技能挂入技能树"))
+    if zcode:
+        w.append((USER_ZCODE / "cli" / "hooks", agent / "hooks", "hook 旧路径兼容联接（缓存未失效会话用；稳定后可删）"))
+        for n in ENV_SKILLS:
+            w.append((USER_ZCODE / "skills" / n, company / "skills" / n, "用户级环境技能运行位"))
+        craft = find_dir(Path("03_检查脚本") / "generic_layer_check.py")
+        if craft:
+            w.append((WORKSPACE / "通用测试agent包", craft, "手艺包旧名兼容联接"))
     for flag, base, tag in ((workbuddy, Path(os.path.expanduser("~")) / ".workbuddy" / "skills", "WorkBuddy"),
                             (claude, Path(os.path.expanduser("~")) / ".claude" / "skills", "Claude Code"),
                             (codex, Path(os.path.expanduser("~")) / ".codex" / "skills", "Codex"),
@@ -104,8 +108,9 @@ def make_junction(link, target):
             return
         except OSError as e:
             raise RuntimeError(f"建符号链接失败 {link} -> {target}: {e}")
+    qlink=str(link).replace("'", "''"); qtarget=str(target).replace("'", "''")
     r = subprocess.run(["powershell", "-NoProfile", "-Command",
-                        f"New-Item -ItemType Junction -Path '{link}' -Target '{target}' | Out-Null"],
+                        f"New-Item -ItemType Junction -Path '{qlink}' -Target '{qtarget}' | Out-Null"],
                        capture_output=True)
     if r.returncode != 0:
         raise RuntimeError(f"建联接失败 {link} -> {target}: {r.stderr.decode('utf-8', 'replace')[:200]}")
@@ -154,12 +159,14 @@ def ensure_hooks(agent):
                 if any(isinstance(a, str) and a.replace("\\", "/").endswith("/" + script) for a in h.get("args", [])):
                     hit = h
         if hit is None:
-            arr.append({"matcher": matcher, "hooks": [{"type": "process", "command": "python",
+            arr.append({"matcher": matcher, "hooks": [{"type": "process", "command": sys.executable,
                         "args": [path], "timeoutMs": 8000, "statusMessage": msg}]})
             changed.append(f"补 {event} += {script}")
         elif hit["args"][0].replace("\\", "/") != path.replace("\\", "/"):
             hit["args"][0] = path
             changed.append(f"改路径 {script}")
+    if not (cfg.get("hooks") or {}).get("enabled"):
+        changed.append("启用 hooks.enabled")
     if changed:
         cfg.setdefault("hooks", {})["enabled"] = True
         cfg["hooks"]["events"] = events
@@ -194,7 +201,7 @@ def ensure_claude_hooks(agent):
     hooks = cfg.setdefault("hooks", {})
     changed = []
     for event, matcher, script, msg in hook_templates(agent):
-        cmd = f'python "{agent / "hooks" / script}"'
+        cmd = f'"{sys.executable}" "{agent / "hooks" / script}"'
         arr = hooks.setdefault(event, [])
         hit = None
         for e in arr:
@@ -221,7 +228,7 @@ def ensure_claude_hooks(agent):
         print("  [claude] hooks 配置已齐，无改动")
 
 
-def status(workbuddy=False, claude=False, codex=False, codebuddy=False):
+def status(workbuddy=False, claude=False, codex=False, codebuddy=False, zcode=True):
     agent, company, craft = locate()
     print(f"workspace：{WORKSPACE}\n  agentqa_test = {AGENT_ROOT}")
     print(f"  Agent本体 = {agent}\n  公司包    = {company}\n  手艺包    = {craft}")
@@ -230,23 +237,29 @@ def status(workbuddy=False, claude=False, codex=False, codebuddy=False):
         print("[RED] 三包定位不全")
         return 1
     print("── 接线 ──")
-    for link, target, note in wiring(agent, company, workbuddy, claude, codex, codebuddy):
+    for link, target, note in wiring(agent, company, workbuddy, claude, codex, codebuddy, zcode):
         try:
             ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
         except OSError:
             ok = False
         red += 0 if ok else 1
         print(f"  [{'OK ' if ok else 'RED'}] {link}  →  {target}   （{note}）")
-    print("── hook 配置路径 ──")
-    for a in hook_paths():
-        ok = Path(a).exists()
-        red += 0 if ok else 1
-        print(f"  [{'OK ' if ok else 'RED'}] {a}")
+    if zcode:
+        print("── ZCode hooks ──")
+        cfg = json.loads(io.open(CLI_CONFIG, encoding="utf-8").read()) if CLI_CONFIG.exists() else {}
+        enabled = bool((cfg.get("hooks") or {}).get("enabled"))
+        red += 0 if enabled else 1
+        print(f"  [{'OK ' if enabled else 'RED'}] hooks.enabled = {enabled}")
+        found = {Path(a).name: Path(a).exists() for a in hook_paths()}
+        for _event, _matcher, script, _msg in hook_templates(agent):
+            good = found.get(script, False)
+            red += 0 if good else 1
+            print(f"  [{'OK ' if good else 'RED'}] {script}")
     print("── 公司配置路径可达 ──")
     cfg = json.loads(io.open(company / "agent-company.json", encoding="utf-8").read())
     alias = {k.replace("\\", "/"): v.replace("\\", "/") for k, v in (cfg.get("路径迁移别名", {}) or {}).items()}
     for k, v in cfg.get("paths", {}).items():
-        if isinstance(v, str) and len(v) > 2 and v[1] == ":":
+        if isinstance(v, str) and (v.startswith("/") or (len(v) > 2 and v[1] == ":")):
             ok = Path(v).exists() or v.replace("\\", "/") in alias
             red += 0 if ok else 1
             print(f"  [{'OK ' if ok else 'RED'}] paths.{k} = {v}")
@@ -254,9 +267,9 @@ def status(workbuddy=False, claude=False, codex=False, codebuddy=False):
     return 1 if red else 0
 
 
-def repair(workbuddy=False, claude=False, codex=False, codebuddy=False):
+def repair(workbuddy=False, claude=False, codex=False, codebuddy=False, zcode=True):
     agent, company, _ = locate()
-    for link, target, _n in wiring(agent, company, workbuddy, claude, codex, codebuddy):
+    for link, target, _n in wiring(agent, company, workbuddy, claude, codex, codebuddy, zcode):
         try:
             ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
         except OSError:
@@ -264,10 +277,12 @@ def repair(workbuddy=False, claude=False, codex=False, codebuddy=False):
         if not ok:
             make_junction(link, target)
             print(f"  [修] {link} → {target}")
-    ensure_hooks(agent)
+    if zcode:
+        ensure_hooks(agent)
     if claude:
-        ensure_claude_hooks(agent)
-    return status(workbuddy, claude, codex, codebuddy)
+        # Claude hooks 协议尚未完成真机兼容验收；仅接技能，使用软闸，不自动改其 settings.json。
+        print("  [claude] 仅接 skills；hooks 试验档不自动注入（运行时协议待真机适配）")
+    return status(workbuddy, claude, codex, codebuddy, zcode)
 
 
 def rename(old, new):
@@ -282,7 +297,7 @@ def rename(old, new):
     agent0, company0, _ = locate()
     for link, target, _n in wiring(agent0, company0):
         if is_junction(link) and str(target).replace("\\", "/").startswith(old_s):
-            os.rmdir(link)
+            (Path(link).unlink() if IS_MAC and Path(link).is_symlink() else os.rmdir(link))
     os.rename(src, dst)
     agent, company, _ = locate()
     cp = company / "agent-company.json"
@@ -316,18 +331,21 @@ def main():
     ap.add_argument("--workbuddy", action="store_true",
                     help="同时接入 WorkBuddy 宿主（.workbuddy\\skills 联接全部技能；WorkBuddy 重启后生效）")
     ap.add_argument("--codebuddy", action="store_true",
-                    help="同时接入 CodeBuddy 宿主（.codebuddy\skills 技能联接；CLI 版适用——hooks 兼容性属首验项，IDE 插件版请走手艺包三步）")
+                    help="同时接入 CodeBuddy 宿主（.codebuddy\\skills 技能联接；CLI 版适用——hooks 兼容性属首验项，IDE 插件版请走手艺包三步）")
     ap.add_argument("--codex", action="store_true",
-                    help="同时接入 Codex 宿主（.codex\skills 联接技能；无工具级 hooks→软闸档）")
+                    help="同时接入 Codex 宿主（.codex\\skills 联接技能；无工具级 hooks→软闸档）")
     ap.add_argument("--claude", action="store_true",
                     help="同时接入 Claude Code 宿主（.claude\\skills 联接技能 + settings.json 注入五闸，运行时行为属真机首验项）")
+    ap.add_argument("--no-zcode", action="store_true",
+                    help="不改 ZCode 运行位/hooks（非 ZCode 宿主选择时使用；仅接宿主参数指定的技能位）")
     ap.add_argument("--rename", nargs=2, metavar=("旧名", "新名"))
     a = ap.parse_args()
     if a.rename:
         sys.exit(rename(*a.rename))
+    zcode = not a.no_zcode
     if a.repair:
-        sys.exit(repair(a.workbuddy, a.claude, a.codex, a.codebuddy))
-    sys.exit(status(a.workbuddy, a.claude, a.codex, a.codebuddy))
+        sys.exit(repair(a.workbuddy, a.claude, a.codex, a.codebuddy, zcode))
+    sys.exit(status(a.workbuddy, a.claude, a.codex, a.codebuddy, zcode))
 
 
 if __name__ == "__main__":
