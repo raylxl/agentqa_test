@@ -32,7 +32,7 @@ description: 用例生成（生成方）——理解说明闭环后，依 L1 经
 3. **章节指派对账表**（§9-1a）：逐功能点对账"已落位到章 X"，**无落位禁派发**。
 4. **三矩阵前置**（`../usecase-pipeline/assets/matrices.md`）：口径交叉表/操作时序对/越权路径清单，逐格指定归属章并写进该章覆盖要求。
 5. 造数隔离：业务对象前缀按 {域词.造数前缀}（降级默认 OBJ{章码}），各对象名＝前缀+章码+序号；日期窗按章错峰。
-6. **接口章前置扒卡（2026-11-17 接线，公司层 `integrations.knowledge_base`）**：BRIEF 组装时对 `API-` 接口章按接口名/服务名查开发知识库（`{paths.公司包}/tools/wk_kb.py search "<接口名/服务名>"`）——IF 卡的**入参字段枚举／L2·L3 断言语汇／易混接口辨析**作为该章 prompt 素材注入（子代理禁自行检索，KB 结论经 BRIEF 分发）；判断依据可引用卡编号（如 IF-waybill-send-bill）。无卡/库不可用→按需求文档＋流量首录走，记 BLOCKED 不阻塞。
+6. **接口章前置扒卡（2026-11-17 接线，公司层 `integrations.knowledge_base`）**：BRIEF 组装时对 `API-` 接口章按接口名/服务名查开发知识库（`{paths.公司包}/tools/wk_kb.py search "<接口名/服务名>"`）——IF 卡的**入参字段枚举／L2·L3 断言语汇／易混接口辨析**作为该章 prompt 素材注入（子代理禁自行检索，KB 结论经 BRIEF 分发）；判断依据可引用卡编号（如 IF-waybill-send-bill）。IF 卡缺失/存疑→**直读 Controller/DTO**（`integrations.dev_git`——字段/类型/必填/校验注解以代码为最终契约，引用带`仓:分支:类:行号`）；两源均无→按需求文档＋流量首录走，记 BLOCKED 不阻塞。
 
 ## 2. 分章生成（子代理并行）
 

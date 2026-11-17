@@ -38,7 +38,7 @@ description: 用例 AI 执行——按执行操作细则和治理计划执行已
 
 0. **角色自检（L0）**：按《{standards.L0_角色}》确认姿态——本轮执行结束须输出**置信度判断**。
 0.5 **读报告规范**：读《{standards.L5_交付}》§20（测试报告生成标准）——**报告命名/九节＋尾注结构/触发时机/禁忌在开工前先入脑**，禁执行完再查。
-1. **输入适配**：用例册（MD 正本或同名 xlsx）；无先例模块先补“模块接入配置”——**补配置前先扒开发知识库**（`{paths.公司包}/tools/wk_kb.py search "<菜单名>"`，公司层 `integrations.knowledge_base`，2026-11-17 接线）：菜单名→uri/服务路由（IF 卡）、接口→鉴权/请求头/分页参数、字段线索——命中即写进接入配置少走探索弯路；无卡→菜单探索实查兜底（KB＝加速器非依赖，不可用记 BLOCKED 不阻塞）。
+1. **输入适配**：用例册（MD 正本或同名 xlsx）；无先例模块先补“模块接入配置”——**补配置前先扒开发知识库**（`{paths.公司包}/tools/wk_kb.py search "<菜单名>"`，公司层 `integrations.knowledge_base`，2026-11-17 接线）：菜单名→uri/服务路由（IF 卡）、接口→鉴权/请求头/分页参数、字段线索——命中即写进接入配置少走探索弯路；无卡→**直读源码**（`integrations.dev_git`：后端接口路径/鉴权注解＋前端仓 vue 路由→组件定位字段）→ 仍无果菜单探索实查兜底（KB/源码＝加速器非依赖，不可用记 BLOCKED 不阻塞）。
 1.5 **执行前用例分流**：四桶分流（正常/已失效跳过/SYS-DEF-IMP-CHG 必执行/manual_only 跳过登记）。CHG 为需求变化载体，按反馈闭环标准登记；若当前执行批没有 CHG 条，记录“不适用”。**`API-` 前缀条走接口通道 dispatch**（2026-11-15 接口通道立，细则§十六；与 UI 条同批可混编，runner 按通道分组）。
 1.6 **治理计划对账**：新需求从治理 JSON 读取 `execution_plan.selected_set` 和 `planned_tc_ids`，按计划集/执行前排除态（`SKIP`、`manual_only`、已失效）形成 dispatch 清单；不得自行扩大/缩小计划集。正式 dispatch 前核对集合完全一致，记录实际 `dispatched_tc_ids` 与 `execution_id`；执行完成、账本与报告已生成后，在治理运行副本中登记 `ledger_ref`、`report_ref` 并校验 execution 阶段。未 dispatch 的计划项补 `NOT_EXECUTED` 或按阻断规则记 `BLOCKED`，并在报告区分计划、排除、已 dispatch、未执行。执行结果账本仍是执行事实正本，禁止把计划 JSON 伪装成执行结果。
 1.8 **批量执行器搭建**：
