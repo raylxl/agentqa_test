@@ -238,6 +238,35 @@ def deploy_note(secrets_included, roots_desc, full):
 
 新包解压到临时目录后运行部署入口。部署器会检测旧安装位置；回车升级时只覆盖程序件，需求库、台账、Chrome 登录态、公司配置、凭证和执行结果不覆盖。升级完成后重开宿主会话。
 
+## git 日常更新（免打包通道，2026-11-17 增）
+
+发起人的 GitHub 仓（`git@github.com:raylxl/agentqa_test.git`，私有）与本包内容同源；开通权限后**日常更新不用再拿新 zip**，一条 pull 加一次部署即可。
+
+前提（只做一次）：同事注册 GitHub 账号并添加自己的 SSH 公钥，发起人在仓库 Settings→Collaborators 添加其用户名。
+
+首次接入 git：
+- 已装过 zip 的：把已装的 `agentqa_test` 转成 git 仓（reset 会还原占位路径，下一步部署器自动换算回本机路径）：
+  ```bash
+  cd <部署根>\\agentqa_test
+  git init && git remote add origin git@github.com:raylxl/agentqa_test.git
+  git fetch origin && git reset --hard origin/main
+  ```
+- 新同事直接克隆（无需 zip）：
+  ```bash
+  mkdir <部署根> && cd <部署根>
+  git clone git@github.com:raylxl/agentqa_test.git
+  python agentqa_test\\Agent本体\\tools\\deploy_colleague.py
+  ```
+
+日常更新（每次）：
+```bash
+git -C <部署根>\\agentqa_test status   # ① 确认无本地改动（正常应干净）
+git -C <部署根>\\agentqa_test pull     # ② 拉最新代码
+双击 <部署根>\\部署.bat                # ③ 重跑部署器：自动换算路径→选宿主→装依赖→param_check 全绿
+```
+
+为什么安全：已填的 `agent-secrets.json` 在 .gitignore，pull 永不覆盖；需求库/台账/Chrome 登录态在 `agentqa_test/` 之外，pull 碰不到；pull 进来的新文件带占位路径，部署器第③步自动换算并经 param_check 验证，红会明说不会假成功。无 GitHub 权限/网络不通时退回上面的 zip 升级方式。
+
 ## 验证
 
 1. `agentqa_test/公司包/param_check.py --check` → PASS。
