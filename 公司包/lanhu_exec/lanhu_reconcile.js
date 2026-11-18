@@ -130,7 +130,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     const m = t.match(/^!\[.*?\]\((.+?)\)/);
     if (m) {
       const f = m[1].split('/').pop();
-      if (/^查询条件_/.test(f)) docBandImgs.push(f);
+      if (/^查询条件_|^表格全景_/.test(f)) docBandImgs.push(f);
       else if (/弹窗/.test(f)) { /* 弹窗裁剪不计画布图 */ }
       else docCanvasImgs.push(f);
     }

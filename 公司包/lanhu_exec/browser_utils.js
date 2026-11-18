@@ -631,6 +631,7 @@ async function extractLanhuContent(frame) {
     // 第3步：块级生成输出（text/table 块），供浮层精确内联使用
     const blocks = []; // {type:'text'|'table', top, bottom, lines?|mdLines?}
     const tableBands = []; // G69：查询条件带（表格前导控件区），collect 据此截图
+    const tableFulls = []; // G71：高表全景（多层表头怪物整表截图）
     const TEXT_GAP = 200; // 垂直间隙超过该值视为独立块（浮层/弹窗 mockup 与正文间的画布间隙）
 
     const pushTextRows = (startIdx, endIdx) => {
@@ -688,6 +689,14 @@ async function extractLanhuContent(frame) {
         }
       }
       if (qBand) { qBand.idx = tableBands.length; tableBands.push(qBand); }
+      // G71：高表（多层表头怪物，如填充计费公式区）附整表全景截图——文本表保留（保真），视觉另给一张（用户拍板）
+      if (tableRows[tableRows.length - 1].top + 25 - tableRows[0].top > 260) {
+        const xs2 = tableRows.flatMap(r => r.cells.map(c => c.left)).filter(x => x > 0);
+        const xr2 = tableRows.flatMap(r => r.cells.map(c => c.right)).filter(x => x > 0);
+        if (xs2.length && xr2.length) {
+          tableFulls.push({ top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, left: Math.min(...xs2), right: Math.max(...xr2) });
+        }
+      }
 
       // 收集所有列位置并聚类
       const allLefts = [];
@@ -754,7 +763,7 @@ async function extractLanhuContent(frame) {
         for (let i = 1; i < tableData.length; i++) {
           mdLines.push('| ' + tableData[i].join(' | ') + ' |');
         }
-        blocks.push({ type: 'table', top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, mdLines, bandIdx: qBand ? qBand.idx : -1 });
+        blocks.push({ type: 'table', top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, mdLines, bandIdx: qBand ? qBand.idx : -1, fullIdx: (tableFulls.length && tableFulls[tableFulls.length - 1].top === tableRows[0].top) ? tableFulls.length - 1 : -1 });
       }
 
       lastRowEnd = region.end;
@@ -837,6 +846,7 @@ async function extractLanhuContent(frame) {
       const ls = b.type === 'table' ? b.mdLines : b.lines;
       if (ls.length) {
         if (b.type === 'table' && typeof b.bandIdx === 'number' && b.bandIdx >= 0) outputParts.push('@@TBAND:' + b.bandIdx + '@@');
+        if (b.type === 'table' && typeof b.fullIdx === 'number' && b.fullIdx >= 0) outputParts.push('@@TFULL:' + b.fullIdx + '@@');
         outputParts.push(ls.join('\n'));
       }
     }
@@ -866,7 +876,7 @@ async function extractLanhuContent(frame) {
       return { md: cleanedLines.join('\n'), bands: [] };
     }
 
-    return { md: outputParts.join('\n\n'), bands: tableBands };
+    return { md: outputParts.join('\n\n'), bands: tableBands, fulls: tableFulls };
   });
 }
 

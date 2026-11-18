@@ -411,36 +411,42 @@ function acceptanceGate(A, manifest, logger) {
   const ex = await extractLanhuContent(liveFrame);
   let md = ex.md;
 
-  // G69：查询条件带截图（介质忠实：控件排用一张图表达）——必须在任何滚动前截（extract 坐标=当刻视口）
+  // G69/G71：查询条件带 + 高表全景截图（介质忠实）——必须在任何滚动前截（extract 坐标=当刻视口）
   const baseName = A.name || ('财务需求2026_' + A.menu);
   const outDir = A.outdir;
   const imgDir = path.join(outDir, baseName + '_images');
   const bandShots = [];
-  if (ex.bands && ex.bands.length) {
+  const fullShots = [];
+  let feBox = null;
+  if ((ex.bands && ex.bands.length) || (ex.fulls && ex.fulls.length)) {
     fs.mkdirSync(imgDir, { recursive: true });
     const fe = await liveFrame.frameElement().catch(() => null);
-    const feBox = fe ? await fe.boundingBox() : null;
-    if (feBox) {
-      for (let bi = 0; bi < ex.bands.length; bi++) {
-        const bd = ex.bands[bi];
-        // 先滚入视口（extract 时容器在顶，band 坐标≈绝对坐标；裁剪用当刻视口坐标换算——cropPopup 同技法）
-        await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), bd.top).catch(() => {});
-        await page.waitForTimeout(300);
-        const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-        const x = Math.max(feBox.x, feBox.x + bd.left - 8);
-        const w = Math.min(bd.right - bd.left + 16, feBox.x + feBox.width - x);
-        const y = feBox.y + (bd.top - 6 - curScroll);
-        const h = Math.max(40, bd.bottom - bd.top + 10);
-        if (w < 60 || h < 40 || y < feBox.y - 5) { bandShots.push(null); continue; }
-        const f = `查询条件_${bi + 1}.png`;
-        try {
-          await page.screenshot({ path: path.join(imgDir, f), clip: { x, y, width: w, height: h }, timeout: 20000 });
-          bandShots.push(f);
-          logger.info(`查询条件带截图 ${f}（${Math.round(w)}x${Math.round(h)}）`);
-        } catch (e) { bandShots.push(null); logger.warn('查询条件带截图失败 bi=' + bi + ': ' + e.message.split('\n')[0]); }
-      }
-      await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-    } else for (let bi = 0; bi < ex.bands.length; bi++) bandShots.push(null);
+    feBox = fe ? await fe.boundingBox() : null;
+  }
+  if (feBox) {
+    // G71：宽带用全 iframe 宽——bd.left 起点窄会裁掉左侧字段标签（对客报价"报价编码"实证）
+    const shootStrip = async (rect, file, tag) => {
+      await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), rect.top).catch(() => {});
+      await page.waitForTimeout(300);
+      const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+      const x = feBox.x + 4;
+      const w = Math.min(feBox.width - 8, 1900);
+      const y = feBox.y + (rect.top - 6 - curScroll);
+      const h = Math.min(2400, Math.max(40, rect.bottom - rect.top + 10)); // 全景高表上限2400防整屏巨图
+      if (w < 60 || h < 40 || y < feBox.y - 5) return null;
+      try {
+        await page.screenshot({ path: path.join(imgDir, file), clip: { x, y, width: w, height: h }, timeout: 25000 });
+        logger.info(`${tag} ${file}（${Math.round(w)}x${Math.round(h)}）`);
+        return file;
+      } catch (e) { logger.warn(`${tag}失败: ` + e.message.split('\n')[0]); return null; }
+    };
+    for (let bi = 0; bi < (ex.bands || []).length; bi++) {
+      bandShots.push(await shootStrip(ex.bands[bi], `查询条件_${bi + 1}.png`, '查询条件带截图'));
+    }
+    for (let fi = 0; fi < (ex.fulls || []).length; fi++) {
+      fullShots.push(await shootStrip(ex.fulls[fi], `表格全景_${fi + 1}.png`, '表格全景截图'));
+    }
+    await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   }
 
   md = cleanResidue(md);
@@ -646,10 +652,14 @@ function acceptanceGate(A, manifest, logger) {
     return ln; // 超列不裁（保真），verify 仍拦
   }).join('\n');
 
-  // G69：@@TBAND:i@@ 标记 → 查询条件带截图引用（截失败的标记行删除）
+  // G69/G71：@@TBAND/@@TFULL 标记 → 查询条件带/表格全景截图引用（截失败的标记行删除）
   finalMd = finalMd.replace(/^@@TBAND:(\d+)@@[ \t]*$/gm, (m, i) => {
     const f = bandShots[+i];
     return f ? `![查询条件_${+i + 1}](${baseName}_images/${f})` : '';
+  });
+  finalMd = finalMd.replace(/^@@TFULL:(\d+)@@[ \t]*$/gm, (m, i) => {
+    const f = fullShots[+i];
+    return f ? `![表格全景_${+i + 1}](${baseName}_images/${f})` : '';
   });
   finalMd = finalMd.replace(/\n{3,}/g, '\n\n');
 
