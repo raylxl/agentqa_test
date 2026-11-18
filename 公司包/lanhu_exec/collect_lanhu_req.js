@@ -399,14 +399,17 @@ function acceptanceGate(A, manifest, logger) {
   if (!frame) { logger.error('NO FRAME'); return exitCode = 2; }
 
   await robustClickMenu(page, A.menu, logger);
-  await scrollToBottom(frame, logger).catch(e => logger.warn('scroll warn: ' + e.message));
-  await frame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+  // 点击后重找内容帧：axure 换页可能换 iframe，旧句柄滞留会滚/读错页（G64 配套）
+  const frame2 = await findContentFrame(page, logger);
+  const liveFrame = frame2 || frame;
+  await scrollToBottom(liveFrame, logger).catch(e => logger.warn('scroll warn: ' + e.message));
+  await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   await page.waitForTimeout(500);
 
   // —— 阶段0：前置分类器（每次必跑，输出 doc-type 与预期产物清单）——
-  const cls = await frame.evaluate(classifyDoc);
+  const cls = await liveFrame.evaluate(classifyDoc);
   logger.info(`[前置分类] doc-type: scheme=${cls.scheme} 章节=${cls.sections} 真实图片=${cls.realImgs}`);
-  const detectedPopups = await frame.evaluate(detectPopupsImpl);
+  const detectedPopups = await liveFrame.evaluate(detectPopupsImpl);
   cls.popupClusters = detectedPopups.length;
   cls.popupNames = detectedPopups.map(p => p.name);
   logger.info(`[前置分类] 弹窗簇=${cls.popupClusters} 名称=[${cls.popupNames.join(', ')}]`);
@@ -418,7 +421,7 @@ function acceptanceGate(A, manifest, logger) {
   }
 
   // 1) 正文（已验证保真，含浮层最近锚点内联）
-  let md = await extractLanhuContent(frame);
+  let md = await extractLanhuContent(liveFrame);
   md = cleanResidue(md);
   logger.info('正文提取+残留清理完成（长度 ' + md.length + '）');
 
@@ -433,7 +436,7 @@ function acceptanceGate(A, manifest, logger) {
   const imgDir = path.join(outDir, baseName + '_images');
   fs.mkdirSync(imgDir, { recursive: true });
 
-  const { imgs, heads, scrollHeight } = await frame.evaluate(scanImagesAndHeadings);
+  const { imgs, heads, scrollHeight } = await liveFrame.evaluate(scanImagesAndHeadings);
   logger.info(`图片块=${imgs.length}（已过滤装饰图标 w<200||h<120） 章节标题=${heads.map(h => h.text).join(' / ')} 文档高=${scrollHeight}`);
   if (scrollHeight > 6000) logger.warn(`⚠️ 文档高 ${scrollHeight} 异常（正常≤~3500），可能异常渲染，建议先跑 reload_lanhu.js 再采集`);
 
@@ -443,7 +446,7 @@ function acceptanceGate(A, manifest, logger) {
     for (let i = 0; i < heads.length; i++) { if (top >= heads[i].top) idx = i; }
     return idx;
   };
-  const allEls = await frame.$$('img,svg');
+  const allEls = await liveFrame.$$('img,svg');
   const sectionImgs = new Map();
   const hiddenRefs = [];
   const counters = {};
@@ -455,7 +458,7 @@ function acceptanceGate(A, manifest, logger) {
     if (im.hidden) {
       hiddenN++;
       const file = `隐藏图_待定位${hiddenN}_${im.w}x${im.h}.png`;
-      const dataUrl = await frame.evaluate((idx) => {
+      const dataUrl = await liveFrame.evaluate((idx) => {
         const el = document.querySelectorAll('img,svg')[idx];
         if (!el || el.tagName !== 'IMG' || !el.src) return null;
         return fetch(el.src).then(r => r.blob()).then(b => new Promise(res => {
@@ -521,7 +524,7 @@ function acceptanceGate(A, manifest, logger) {
   }
   const doPopups = A.popups !== 'off' && (cls.popupClusters > 0 || specPopups);
   if (doPopups) {
-    const fe = await frame.frameElement().catch(() => null);
+    const fe = await liveFrame.frameElement().catch(() => null);
     const feBox = fe ? await fe.boundingBox() : null;
     if (!feBox) {
       logger.warn('无法获取 iframe 包围盒，跳过弹窗裁剪');
@@ -535,12 +538,12 @@ function acceptanceGate(A, manifest, logger) {
       }
       for (let i = 0; i < clusters.length; i++) {
         const cl = clusters[i];
-        const secIdx = sectionIndexOf(cl.top > 0 ? cl.top : (await frame.evaluate((ids) => {
+        const secIdx = sectionIndexOf(cl.top > 0 ? cl.top : (await liveFrame.evaluate((ids) => {
           const el = document.getElementById(ids[0]); return el ? Math.round(el.getBoundingClientRect().top + (window.scrollY || 0)) : 0;
         }, cl.ids)));
         const secName = secIdx < 0 ? '前置' : sectionShort(heads[secIdx].text);
         const key = secIdx < 0 ? '__pre__' : secIdx;
-        const crop = await cropPopup(frame, page, feBox, cl, imgDir, baseName, secName, (sectionImgs.get(key) || []).length + popupRefs.filter(r => r.key === key).length + 1, logger);
+        const crop = await cropPopup(liveFrame, page, feBox, cl, imgDir, baseName, secName, (sectionImgs.get(key) || []).length + popupRefs.filter(r => r.key === key).length + 1, logger);
         if (crop) {
           popupCrops++;
           popupRefs.push({ key, ref: crop.ref });

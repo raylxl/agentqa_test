@@ -448,92 +448,53 @@ function formatTableAsMarkdown(rows) {
  */
 async function scrollToBottom(frame, logger) {
   const log = logger || new Logger('browser_utils');
-  log.info('开始滚动到页面底部...');
+  log.info('开始滚动到页面底部（循环至稳定）...');
 
   try {
-    // 在frame中执行滚动
-    await frame.evaluate(async () => {
-      // 获取可滚动的容器
-      const scrollableElements = [];
-
-      // 查找所有可滚动的元素
-      const allElements = document.querySelectorAll('*');
-      allElements.forEach(el => {
-        const style = window.getComputedStyle(el);
-        const overflowY = style.overflowY;
-        if ((overflowY === 'scroll' || overflowY === 'auto') && el.scrollHeight > el.clientHeight) {
-          scrollableElements.push(el);
-        }
+    // 2026-11-18 修（G64）：11.30 原型懒加载加深，旧版"一遍滚+单次增长续滚"只见到部分高度
+    // （实测存储账单：旧法 3703px/4453字符 vs 真相 12365px/10222字符）。
+    // 新法：整轮全容器滚动，高度仍在长就再来一整轮，至多 8 轮；稳定后全容器回顶。
+    const heights = await frame.evaluate(async () => {
+      const growthLog = [];
+      const findAll = () => Array.from(document.querySelectorAll('*')).filter(el => {
+        const s = getComputedStyle(el);
+        return (s.overflowY === 'scroll' || s.overflowY === 'auto') && el.scrollHeight > el.clientHeight;
       });
-
-      // 如果没有找到可滚动元素，使用document.documentElement
-      if (scrollableElements.length === 0) {
-        scrollableElements.push(document.documentElement);
-      }
-
-      // 对每个可滚动元素滚动到底部
-      for (const el of scrollableElements) {
-        const initialScrollTop = el.scrollTop;
-        const maxScroll = el.scrollHeight - el.clientHeight;
-
-        // 逐步滚动，每次滚动300px（更小的步长确保懒加载触发）
-        const scrollStep = 300;
-        let currentScroll = initialScrollTop;
-
-        // 第一次滚动到底部
-        while (currentScroll < maxScroll) {
-          currentScroll = Math.min(currentScroll + scrollStep, maxScroll);
-          el.scrollTop = currentScroll;
-          // 等待更长时间让内容加载
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-
-        // 滚动到底部后等待一段时间让内容完全加载
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // 检查是否有新内容加载（高度可能增加了）
-        const newMaxScroll = el.scrollHeight - el.clientHeight;
-        if (newMaxScroll > maxScroll) {
-          // 有新内容加载，继续滚动
-          while (currentScroll < newMaxScroll) {
-            currentScroll = Math.min(currentScroll + scrollStep, newMaxScroll);
-            el.scrollTop = currentScroll;
-            await new Promise(resolve => setTimeout(resolve, 300));
+      const onePass = async (step, wait) => {
+        let els = findAll();
+        if (!els.length) els = [document.documentElement];
+        for (const el of els) {
+          for (let y = 0; y <= el.scrollHeight; y += step) {
+            el.scrollTop = y;
+            await new Promise(r => setTimeout(r, wait));
           }
-          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
-        // 滚动回顶部
-        el.scrollTop = 0;
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // 第二次滚动到底部（确保所有懒加载内容都被触发）
-        currentScroll = 0;
-        const finalMaxScroll = el.scrollHeight - el.clientHeight;
-        while (currentScroll < finalMaxScroll) {
-          currentScroll = Math.min(currentScroll + scrollStep, finalMaxScroll);
-          el.scrollTop = currentScroll;
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        // 最后等待一段时间让所有内容加载完成
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      };
+      let prev = document.documentElement.scrollHeight;
+      growthLog.push(prev);
+      for (let round = 0; round < 8; round++) {
+        await onePass(250, 120);
+        await new Promise(r => setTimeout(r, 900));
+        const cur = document.documentElement.scrollHeight;
+        growthLog.push(cur);
+        if (cur <= prev) break;   // 高度稳定，收工
+        prev = cur;
       }
+      // 稳定后全容器回顶（提取用 viewport 坐标，回顶=坐标最小且负值最少）
+      const els = findAll();
+      (els.length ? els : [document.documentElement]).forEach(el => { el.scrollTop = 0; });
+      window.scrollTo(0, 0);
+      await new Promise(r => setTimeout(r, 600));
+      return growthLog;
     });
-
-    log.info('滚动完成，等待内容加载...');
-    // 额外等待一段时间确保内容完全加载
-    await new Promise(resolve => setTimeout(resolve, 3000));
-  } catch (error) {
-    log.warn(`滚动过程中出错: ${error.message}`);
+    log.info('滚动完成（高度增长曲线: ' + heights.join('→') + '）');
+    return true;
+  } catch (err) {
+    log.warn('滚动警告(继续提取): ' + err.message);
+    return false;
   }
 }
 
-/**
- * 提取蓝湖需求内容
- * @param {Frame} frame - 内容frame
- * @returns {Promise<string>}
- */
 async function extractLanhuContent(frame) {
   return frame.evaluate(() => {
     const textElements = [];
