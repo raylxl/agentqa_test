@@ -580,9 +580,9 @@ function acceptanceGate(A, manifest, logger) {
   }).join('\n\n');
   let hiddenSection = '';
   if (hiddenRefs.length) {
-    hiddenSection = '\n\n## ⚠️ 隐藏浮层图片（自动定位失败，请人工确认插入位置）\n\n'
-      + '以下图片位于 axure 隐藏动态面板中（画布无坐标，无法自动归属章节），请按需求内容人工插入对应触发点附近：\n\n'
-      + hiddenRefs.join('\n\n') + '\n';
+    // G67：隐藏面板图保留引用但**不带任何人工指引注释**（R22：疑点在对话里说，禁编辑性标记落文档）；
+    // 隐藏图计数走 manifest.hiddenImgs（机器可读），需人工定位时由对话/报告呈报
+    hiddenSection = '\n\n' + hiddenRefs.join('\n\n') + '\n';
   }
   let finalMd = ['# 蓝湖需求（文本保真版）— ' + A.menu, '',
     '> 采集时间: ' + new Date().toISOString().slice(0, 10) + ' | 文本保真提取（DOM 文本）+ 全页图片扫描（相对路径 PNG）+ 弹窗坐标裁剪。', '',

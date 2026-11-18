@@ -768,7 +768,8 @@ async function extractLanhuContent(frame) {
           }
         }
         if (!anchor) {
-          candLines.unshift('> ⚠️【浮层内容块】以下内容来自画布浮层/弹窗，未能自动定位触发点，请人工核对内联位置：');
+          // G67（11-18 撤除）：不再写"⚠️【浮层内容块】"警告行——R22 采集忠实（疑点只在对话里说，禁编辑性标记落文档）。
+          // 未锚住的块保留原位（内容不丢）；多余/错位由 lanhu_reconcile 反向检查（doc→live）机器把关。
           continue;
         }
         // 在锚点行后切分锚点块并插入候选块
