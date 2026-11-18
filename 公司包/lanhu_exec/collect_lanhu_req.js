@@ -425,26 +425,57 @@ function acceptanceGate(A, manifest, logger) {
   }
   if (feBox) {
     // G71：宽带用全 iframe 宽——bd.left 起点窄会裁掉左侧字段标签（对客报价"报价编码"实证）
+    // G72：区域右缘超出视口（axure 画布横向溢出）→ 滚到右侧补第二张（_右.png）；底部加垫防截说明/按钮
     const shootStrip = async (rect, file, tag) => {
+      const files = [];
+      const vw = Math.min(feBox.width - 8, 1900);
+      const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 1080);
       await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), rect.top).catch(() => {});
       await page.waitForTimeout(300);
-      const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-      const x = feBox.x + 4;
-      const w = Math.min(feBox.width - 8, 1900);
-      const y = feBox.y + (rect.top - 6 - curScroll);
-      const h = Math.min(2400, Math.max(40, rect.bottom - rect.top + 10)); // 全景高表上限2400防整屏巨图
-      if (w < 60 || h < 40 || y < feBox.y - 5) return null;
-      try {
-        await page.screenshot({ path: path.join(imgDir, file), clip: { x, y, width: w, height: h }, timeout: 25000 });
-        logger.info(`${tag} ${file}（${Math.round(w)}x${Math.round(h)}）`);
-        return file;
-      } catch (e) { logger.warn(`${tag}失败: ` + e.message.split('\n')[0]); return null; }
+      let curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+      const h = Math.min(2400, Math.max(40, rect.bottom - rect.top + 40));
+      let y = feBox.y + (rect.top - 6 - curScroll);
+      // 高度超出视口时上移裁剪起点（保底露出区域顶部）
+      if (y + h > feBox.y + vh) y = Math.max(feBox.y, feBox.y + vh - h);
+      if (vw >= 60 && h >= 40 && y >= feBox.y - 5) {
+        try {
+          await page.screenshot({ path: path.join(imgDir, file), clip: { x: feBox.x + 4, y, width: vw, height: h }, timeout: 25000 });
+          files.push(file);
+          logger.info(`${tag} ${file}（${Math.round(vw)}x${Math.round(h)}）`);
+        } catch (e) { logger.warn(`${tag}失败: ` + e.message.split('\n')[0]); }
+      }
+      // 横向溢出补右半张
+      if (rect.right > vw - 4) {
+        const targetX = Math.max(vw - 60, rect.right - vw + 60);
+        const scrolled = await liveFrame.evaluate((tx) => {
+          const cands = [document.documentElement, document.body, ...document.querySelectorAll('*')].filter(el => el && el.scrollWidth > el.clientWidth + 4 && el.clientWidth > 400);
+          const cont = cands.sort((a, b) => (b.scrollWidth - b.clientWidth) - (a.scrollWidth - a.clientWidth))[0] || document.documentElement;
+          if (cont.scrollTo) cont.scrollTo(tx, cont.scrollTop || Math.max(0, cont.getBoundingClientRect ? 0 : 0));
+          if (cont === document.documentElement || cont === document.body) window.scrollTo(tx, window.scrollY);
+          return { sl: cont.scrollLeft || window.scrollX || 0 };
+        }, targetX).catch(() => null);
+        await page.waitForTimeout(350);
+        if (scrolled && (scrolled.sl || 0) > 30) {
+          const f2 = file.replace(/\.png$/, '_右.png');
+          curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+          const y2 = feBox.y + (rect.top - 6 - curScroll);
+          try {
+            await page.screenshot({ path: path.join(imgDir, f2), clip: { x: feBox.x + 4, y: Math.max(feBox.y, y2), width: vw, height: h }, timeout: 25000 });
+            files.push(f2);
+            logger.info(`${tag}右半 ${f2}（scrollLeft=${scrolled.sl}）`);
+          } catch (e) { logger.warn(`${tag}右半失败: ` + e.message.split('\n')[0]); }
+          await liveFrame.evaluate(() => window.scrollTo(0, curScroll)).catch(() => {});
+        }
+      }
+      return files.length ? files : null;
     };
     for (let bi = 0; bi < (ex.bands || []).length; bi++) {
-      bandShots.push(await shootStrip(ex.bands[bi], `查询条件_${bi + 1}.png`, '查询条件带截图'));
+      const r = await shootStrip(ex.bands[bi], `查询条件_${bi + 1}.png`, '查询条件带截图');
+      bandShots.push(r);
     }
     for (let fi = 0; fi < (ex.fulls || []).length; fi++) {
-      fullShots.push(await shootStrip(ex.fulls[fi], `表格全景_${fi + 1}.png`, '表格全景截图'));
+      const r = await shootStrip(ex.fulls[fi], `表格全景_${fi + 1}.png`, '表格全景截图');
+      fullShots.push(r);
     }
     await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   }
@@ -652,15 +683,14 @@ function acceptanceGate(A, manifest, logger) {
     return ln; // 超列不裁（保真），verify 仍拦
   }).join('\n');
 
-  // G69/G71：@@TBAND/@@TFULL 标记 → 查询条件带/表格全景截图引用（截失败的标记行删除）
-  finalMd = finalMd.replace(/^@@TBAND:(\d+)@@[ \t]*$/gm, (m, i) => {
-    const f = bandShots[+i];
-    return f ? `![查询条件_${+i + 1}](${baseName}_images/${f})` : '';
-  });
-  finalMd = finalMd.replace(/^@@TFULL:(\d+)@@[ \t]*$/gm, (m, i) => {
-    const f = fullShots[+i];
-    return f ? `![表格全景_${+i + 1}](${baseName}_images/${f})` : '';
-  });
+  // G69/G71/G72：@@TBAND/@@TFULL 标记 → 查询条件带/表格全景截图引用（数组=左+右多张；截失败的标记行删除）
+  const refsOf = (arr, prefix) => {
+    if (!arr) return '';
+    const list = Array.isArray(arr) ? arr : [arr];
+    return list.map((fn, k) => `![${prefix}${k ? '_右' : ''}](${baseName}_images/${fn})`).join('\n\n');
+  };
+  finalMd = finalMd.replace(/^@@TBAND:(\d+)@@[ \t]*$/gm, (m, i) => refsOf(bandShots[+i], `查询条件_${+i + 1}`));
+  finalMd = finalMd.replace(/^@@TFULL:(\d+)@@[ \t]*$/gm, (m, i) => refsOf(fullShots[+i], `表格全景_${+i + 1}`));
   finalMd = finalMd.replace(/\n{3,}/g, '\n\n');
 
   checkSqueezedTable(finalMd, logger);
