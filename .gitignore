@@ -17,3 +17,6 @@ locks/
 node_modules/
 公司包/lanhu_exec/lanhu_config.json
 公司包/lanhu_exec/.batch_progress.json
+公司包/lanhu_exec/out/
+公司包/lanhu_exec/logs/
+公司包/lanhu_exec/__pycache__/
