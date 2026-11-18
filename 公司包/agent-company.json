@@ -14,7 +14,8 @@
     "公司包": "D:/ZCodetest/agentqa_test/公司包",
     "凭证文件": "D:/ZCodetest/agentqa_test/公司包/agent-secrets.json",
     "执行工具": "D:/ZCodetest/jt_chrome",
-    "接口执行根": "D:/ZCodetest/jt_chrome/pw_layered"
+    "接口执行根": "D:/ZCodetest/jt_chrome/pw_layered",
+    "蓝湖工具": "D:/ZCodetest/agentqa_test/公司包/lanhu_exec"
   },
   "naming": {
     "需求文档模式": "财务需求{年}_{族}_{菜单} {版本}_v{N}.md",
@@ -47,7 +48,8 @@
       "用户交互主实例": 9333,
       "辅助": 9334,
       "无头AI执行": 9335,
-      "runner独占": "9336+"
+      "runner独占": "9336+",
+      "蓝湖采集": "池化租借（POOL_START=9334 起，采完关页签 release；技能=lanhu-req-extract）"
     },
     "租户体系": "8 租户，切换=jingtian-tenant-switch 技能",
     "登录技能": "jingtian-login",
@@ -61,11 +63,26 @@
   },
   "execution_adapters": {
     "_细则": "公司运行细则正本=公司包\\执行环境适配细则.md（分层执行模式/坑库注入/开工收尾双闸原文）；executor 通用契约经 execution_adapters 引用",
-    "pitfall_scan": { "path": "{paths.执行工具}/pitfall_scan.py", "required": false },
-    "report_sync": { "path": "{paths.执行工具}/report_sync.py", "required": false },
-    "writeback_check": { "path": "{paths.执行工具}/writeback_check.py", "required": false },
-    "metrics_summary": { "path": "{paths.执行工具}/metrics_summary.py", "required": false },
-    "环境细则": { "path": "{paths.公司包}/执行环境适配细则.md", "required": false }
+    "pitfall_scan": {
+      "path": "{paths.执行工具}/pitfall_scan.py",
+      "required": false
+    },
+    "report_sync": {
+      "path": "{paths.执行工具}/report_sync.py",
+      "required": false
+    },
+    "writeback_check": {
+      "path": "{paths.执行工具}/writeback_check.py",
+      "required": false
+    },
+    "metrics_summary": {
+      "path": "{paths.执行工具}/metrics_summary.py",
+      "required": false
+    },
+    "环境细则": {
+      "path": "{paths.公司包}/执行环境适配细则.md",
+      "required": false
+    }
   },
   "integrations": {
     "knowledge_base": {
@@ -75,7 +92,11 @@
       "url": "http://10.204.11.251:8082/mcp",
       "kb_id": "e994ba38-b460-43e3-893b-565734008853",
       "kb_name": "ztocc-knowledge-docs（公司开发库~270篇；另两个为测试库无检索索引）",
-      "tools": ["search <关键词> [n]（=hybrid_search 按文档汇总）", "chunks <knowledge_id>（=list_chunks）", "raw <tool> <json>（诊断）"],
+      "tools": [
+        "search <关键词> [n]（=hybrid_search 按文档汇总）",
+        "chunks <knowledge_id>（=list_chunks）",
+        "raw <tool> <json>（诊断）"
+      ],
       "credentials_ref": "agent-secrets.json weknora.token（可缺省裸调）",
       "usage_points": "逆向考古第2源（orchestrator⓪'）／答疑预扒（qa-loop）／接口用例字段与断言正确值佐证（generator+细则§十六）／新模块接入配置（executor阶段〇1）／分流②开发实证（feedback-loop）／缺陷单规则依据",
       "required": false,
@@ -105,7 +126,9 @@
   "hook_policy": {
     "master_edit": {
       "enabled": true,
-      "whitelist_names": ["全流程场景用例"],
+      "whitelist_names": [
+        "全流程场景用例"
+      ],
       "case_pattern": "_测试用例_v\\d+\\.md$"
     },
     "report_reminder": {
@@ -117,10 +140,21 @@
   "archive_policy": {
     "archive_dirname": "历史版本",
     "ledger_name": "归档说明.md",
-    "name_patterns": ["WB", "旧档", ".draft"],
-    "keep_patterns": ["执行记录", "分章"],
-    "backup_patterns": ["备份"],
-    "debug_patterns": ["工具调试"],
+    "name_patterns": [
+      "WB",
+      "旧档",
+      ".draft"
+    ],
+    "keep_patterns": [
+      "执行记录",
+      "分章"
+    ],
+    "backup_patterns": [
+      "备份"
+    ],
+    "debug_patterns": [
+      "工具调试"
+    ],
     "version_regex": "^(?P<family>.+)_v(?P<ver>\\d+(?:\\.\\d+)?)(?P<ext>\\.[A-Za-z0-9]+)$",
     "dry_run_default": true
   },

@@ -396,7 +396,8 @@ def main():
         else:
             ok("playwright 库已在位")
         import importlib.util as _iu
-        for mod, pip_name in (("pymysql", "pymysql"), ("openpyxl", "openpyxl")):
+        # pillow/PIL 供蓝湖视觉还原（assemble/convert），playwright(python) 供 lanhu_collect.py
+        for mod, pip_name in (("pymysql", "pymysql"), ("openpyxl", "openpyxl"), ("PIL", "pillow"), ("playwright", "playwright")):
             if _iu.find_spec(mod) is None:
                 try:
                     r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", pip_name],

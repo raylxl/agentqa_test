@@ -320,6 +320,11 @@ def pack_internal(cfg, company_dir, no_secrets, full, dry):
                 return True
             if not isd and p.suffix.lower() in {".png", ".jpg", ".jpeg", ".xlsx", ".xlsm", ".jsonl", ".out", ".log"}:
                 return True
+        # 蓝湖采集（lanhu_exec）：本机地址/批量进度/运行产物（out·logs·pyc）永不入包，同事自填地址
+        if rel.startswith("公司包/lanhu_exec/"):
+            tail = rel[len("公司包/lanhu_exec/"):]
+            if tail in {"lanhu_config.json", ".batch_progress.json"} or tail.split("/")[0] in {"out", "logs", "__pycache__"}:
+                return True
         return False
 
     plan = [
@@ -438,7 +443,7 @@ def deploy_note_company():
 ## 部署六步（约 15 分钟）
 
 1. 装 ZCode 客户端并登录（与发起人同款客户端）；电脑需 Python 3.8+ 且在 PATH。
-   Python 第三方库仅 2 个：`pip install pymysql openpyxl`；执行回归另需 **Node.js 18+** 与
+   Python 第三方库 4 个：`pip install pymysql openpyxl pillow playwright`（pillow/playwright 供蓝湖采集）；执行回归另需 **Node.js 18+** 与
    `D:\\<解压根>\\` 下 `npm i playwright`。
 2. 把 zip 整包解压到固定根（**仅支持同路径部署**，换路径先跑 `agentqa_test\\Agent本体\\tools\\migrate_paths.py <新根> --apply`）。
 3. 接线：`python <解压根>\\agentqa_test\\Agent本体\\tools\\rewire.py --repair`（重建联接+幂等写 hooks；也可加 `--workbuddy` 同时接入 WorkBuddy 客户端技能位）。

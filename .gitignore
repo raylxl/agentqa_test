@@ -12,3 +12,8 @@ __pycache__/
 *.log
 .playwright-cli/
 locks/
+
+# 依赖与蓝湖本机配置（地址因人而异，永不入仓/包）
+node_modules/
+公司包/lanhu_exec/lanhu_config.json
+公司包/lanhu_exec/.batch_progress.json

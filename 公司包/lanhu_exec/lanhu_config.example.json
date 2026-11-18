@@ -1,0 +1,7 @@
+{
+  "_说明": "蓝湖地址本机配置模板——复制本文件为 lanhu_config.json 并填入你的链接。蓝湖地址因人而异（产品分享给谁就是谁的），lanhu_config.json 永不入 git/不入同事包。不配置也能用：命令行 --url 参数或 LANHU_URL 环境变量优先级更高。",
+  "lanhu": {
+    "fullUrl": "在此填入你的蓝湖邀请链接，形如 https://lanhuapp.com/link/#/invite?sid=xxxx",
+    "sid": "留空即可，saveDefaultUrl/首次写入时自动提取"
+  }
+}

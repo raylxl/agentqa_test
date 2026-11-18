@@ -79,7 +79,8 @@ async function startInstance(port) {
         .replace(/9333/g, String(port)).replace(/\.chrome-cdp(?!\d)/g, `.chrome-cdp-${port}`)
     : tplRaw.replace(/9333/g, String(port)).replace(/\.chrome-cdp(?!\d)/g, `.chrome-cdp-${port}`);
   const ps1 = `${LOCK_DIR}/launch_${port}.ps1`;
-  fs.writeFileSync(ps1, tpl);
+  // 带 BOM 写入：Windows PowerShell 5.1 对无 BOM 文件按 ANSI/GBK 解码，中文注释/字符串会损坏（实测 2026-11-18）
+  fs.writeFileSync(ps1, '\ufeff' + tpl, 'utf-8');
   execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${ps1}"`, { stdio: 'pipe', timeout: 30000 });
   await new Promise(r => setTimeout(r, 3000));
   if (!alive(port)) throw new Error(`实例 ${port} 启动后端口未监听`);
