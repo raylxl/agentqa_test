@@ -215,7 +215,52 @@ async function enterPrototype(page, logger, rpName = '财务需求2026') {
   return false;
 }
 
+// ==================== 菜单导航（采集器与对账器共用——G64：验证方必须与被测同构） ====================
+
+/**
+ * 精确点击左侧树菜单（真鼠标事件链才能触发蓝湖 SPA 导航；朴素 evaluate click 不导航）
+ * @param {Page} page - 蓝湖页面
+ * @param {string} menuName - 树内真实菜单名（一字不差；问号形态由树侧自然匹配）
+ * @param {Logger} logger
+ */
+async function robustClickMenu(page, menuName, logger) {
+  const log = logger || new Logger('browser_utils');
+  await page.evaluate(() => {
+    const s = document.querySelector('.prototype-sidebar');
+    if (s) {
+      s.style.setProperty('overflow-y', 'auto', 'important');
+      s.style.setProperty('overflow', 'auto', 'important');
+    }
+  });
+  const item = await page.evaluateHandle((nm) => {
+    const els = [...document.querySelectorAll('.tree-item-wrapper,.tree-name,[class*="tree-item"]')];
+    return els.find(x => (x.textContent || '').trim() === nm)
+        || els.find(x => (x.textContent || '').trim().includes(nm)) || null;
+  }, menuName);
+  const el = item.asElement ? item.asElement() : null;
+  if (!el) { log.error('菜单未找到: ' + menuName); throw new Error('MENU_NOT_FOUND'); }
+  for (let k = 0; k < 80; k++) {
+    const box = await el.boundingBox().catch(() => null);
+    if (box && box.y >= 60 && box.y <= 680 && box.height > 0) break;
+    await page.evaluate((nm) => {
+      const s = document.querySelector('.prototype-sidebar');
+      if (!s) return;
+      const els = [...document.querySelectorAll('.tree-item-wrapper,.tree-name,[class*="tree-item"]')];
+      const e = els.find(x => (x.textContent || '').trim() === nm)
+             || els.find(x => (x.textContent || '').trim().includes(nm));
+      if (!e) return;
+      const r = e.getBoundingClientRect();
+      s.scrollTop += (r.top + r.height / 2) - 400;
+    }, menuName);
+    await page.waitForTimeout(100);
+  }
+  await el.click({ timeout: 9000 }).catch(e => { throw new Error('CLICK_FAIL: ' + e.message); });
+  log.info('已点击菜单: ' + menuName);
+  await page.waitForTimeout(1800);
+}
+
 // ==================== 重试机制 ====================
+
 
 /**
  * 带重试的函数执行
@@ -950,6 +995,7 @@ module.exports = {
   getLanhuPages,
   getOrCreateLanhuPage,
   enterPrototype,
+  robustClickMenu,
   
   // 重试
   withRetry,

@@ -35,7 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const {
   connectBrowser, findContentFrame, Logger, scrollToBottom, extractLanhuContent,
-  getLanhuPages
+  getLanhuPages, robustClickMenu
 } = require('./browser_utils.js');
 
 // 文件名安全化（菜单名含 / ？ : 等在 Windows 非法；未传 --name 时的兜底输出用）
@@ -95,41 +95,6 @@ async function getPage(browser, openedPages, logger) {
   await enterPrototype(page, logger, rpName);
   return page;
 }
-async function robustClickMenu(page, menuName, logger) {
-  await page.evaluate(() => {
-    const s = document.querySelector('.prototype-sidebar');
-    if (s) {
-      s.style.setProperty('overflow-y', 'auto', 'important');
-      s.style.setProperty('overflow', 'auto', 'important');
-    }
-  });
-  const item = await page.evaluateHandle((nm) => {
-    const els = [...document.querySelectorAll('.tree-item-wrapper,.tree-name,[class*="tree-item"]')];
-    return els.find(x => (x.textContent || '').trim() === nm)
-        || els.find(x => (x.textContent || '').trim().includes(nm)) || null;
-  }, menuName);
-  const el = item.asElement ? item.asElement() : null;
-  if (!el) { logger.error('菜单未找到: ' + menuName); throw new Error('MENU_NOT_FOUND'); }
-  for (let k = 0; k < 80; k++) {
-    const box = await el.boundingBox().catch(() => null);
-    if (box && box.y >= 60 && box.y <= 680 && box.height > 0) break;
-    await page.evaluate((nm) => {
-      const s = document.querySelector('.prototype-sidebar');
-      if (!s) return;
-      const els = [...document.querySelectorAll('.tree-item-wrapper,.tree-name,[class*="tree-item"]')];
-      const e = els.find(x => (x.textContent || '').trim() === nm)
-             || els.find(x => (x.textContent || '').trim().includes(nm));
-      if (!e) return;
-      const r = e.getBoundingClientRect();
-      s.scrollTop += (r.top + r.height / 2) - 400;
-    }, menuName);
-    await page.waitForTimeout(100);
-  }
-  await el.click({ timeout: 9000 }).catch(e => { throw new Error('CLICK_FAIL: ' + e.message); });
-  logger.info('已点击菜单: ' + menuName);
-  await page.waitForTimeout(1800);
-}
-
 // 全页图片块 + 章节标题(top)，一次 evaluate 保证坐标一致
 function scanImagesAndHeadings() {
   const doc = document;
@@ -307,12 +272,10 @@ function cleanResidue(md) {
     out.push(line);
   }
   let s = out.join('\n');
-  s = s.replace(/(\n\|[^\n]*\n(?:\|[^\n]*\n)+)/g, (block) => {
-    const header = block.split('\n').find(l => l.trim().startsWith('|')) || '';
-    const hasPolicyId = /政策ID/.test(header);
-    const isPolicyList = /政策名称/.test(header) && /创建时间/.test(header);
-    return (hasPolicyId || isPolicyList) ? '' : block;
-  });
+  // G65（2026-11-18 撤除）：曾有"政策列表整表删除"规则（表头含政策ID 或 政策名称+创建时间 → 整块删），
+  // 系当年清某文档残留的一次性规则被误当管道通用规则——无差别处决了正文真实的政策/报价列表示例表
+  //（空仓政策示例表整块丢失、货量考核第二张子表丢失实证）。按 R22 采集忠实：产品画的就是有的，
+  // 管道不做内容级删除；确需清理的历史残留走 lanhu_verify --olds 显式清单逐文档指定。
   const arr = s.split('\n');
   const res = [];
   for (let i = 0; i < arr.length; i++) {
@@ -405,6 +368,26 @@ function acceptanceGate(A, manifest, logger) {
   await scrollToBottom(liveFrame, logger).catch(e => logger.warn('scroll warn: ' + e.message));
   await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   await page.waitForTimeout(500);
+
+  // G65：axure repeater（列表）数据行异步渲染——不等到稳定就提取，未渲染行 rect=0 被零尺寸过滤丢弃
+  // （11-18 空仓政策示例表整块丢失、货量考核第二张子表数据行丢失实证）。稳定判据=可见文本节点数连续两次一致。
+  {
+    let prev = -1, stable = 0;
+    for (let i = 0; i < 25; i++) {
+      const n = await liveFrame.evaluate(() => {
+        let c = 0;
+        document.querySelectorAll('[id$="_text"]').forEach(el => {
+          const t = (el.innerText || '').trim(); if (!t) return;
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) c++;
+        });
+        return c;
+      }).catch(() => -1);
+      if (n === prev && n >= 0) { stable++; if (stable >= 2) { logger.info(`repeater 渲染稳定（可见节点=${n}）`); break; } }
+      else { stable = 0; prev = n; }
+      await page.waitForTimeout(800);
+    }
+  }
 
   // —— 阶段0：前置分类器（每次必跑，输出 doc-type 与预期产物清单）——
   const cls = await liveFrame.evaluate(classifyDoc);

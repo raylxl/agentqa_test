@@ -59,6 +59,9 @@ R1 版本对号（点错菜单全错，点击后必回读）｜R2 问号归一�
 
 ## 八、收尾（每次必做）
 
+0. **对账（第三道闸门，独立质检角色）**：`node lanhu_reconcile.js <端口> --menu "<菜单名>" --doc "<文档>"` ——
+   与采集器同构导航（共用 robustClickMenu，G64 铁律）独立重访蓝湖，逐文本节点核对文档覆盖；
+   **coverage=1.0 才算采集完成**（非零退出=对账红→修复重采再对账）。三道闸门序：collect GATE（结构）→ lanhu_verify（文件级）→ lanhu_reconcile（内容级×原页）；
 1. release 实例（pool_run 自动）+ `browser_pool.js status` 确认无残留锁；
 2. 蓝湖页签必须已关（残留页签会让实例被池判忙锁死）；
 3. 台账（{paths.需求流水线台账}）登记采集事件（带时刻）；
