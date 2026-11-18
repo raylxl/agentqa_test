@@ -2,7 +2,7 @@
 """report_sync.py — 执行账本 → 测试报告自动汇总/校验脚本（交付物规范 v1.17 §20.2/§20.3/§20.10 落地工具）
 用法: python report_sync.py <账本.json> <报告.md> [轮次名]
 自动生成/校验：1.2 四态数字、模块表、环比辅助（按账本 ts 日期分桶）；结构校验（三段式四关键节+轮次块12字段）。
-硬校验：①文件时间戳 ②收尾声明行 ④回写台账 ⑤批次行配对（细则§十五） ⑥失败用例专项报告存在性+逐条对账（交付物§20.10，2026-11-17 立）。
+硬校验：①文件时间戳 ②收尾声明行 ④回写台账 ⑤批次行配对（细则§十五） ⑥失败用例专项报告存在性+逐条对账（交付物§20.10，2026-11-17 立）⑦质疑门节存在性（执行质疑标准 v1.3，2026-11-18 立：双账本节或降级声明，生效后新轮适用）。
 复测行（细则§十七）：同 TC id 末次覆盖=终态对账不双计；retest 标记条目额外披露 PASS(复测)/挂起待复验数。
 每轮测试收尾必跑本脚本（usecase-executor §6.9 收尾工序）；数字不一致或结构缺节均禁止收尾。
 """
@@ -52,7 +52,8 @@ print(f'可测条 {can_test}（剔除失效 {tot["OBSERVE"]}+挂起 {tot["SUSPEN
 # 分模块
 ch = {}
 for tid, x in seen.items():
-    ch.setdefault(tid.split('-')[1], Counter())[x['status']] += 1
+    if tid.startswith('TC-'):
+        ch.setdefault(tid.split('-')[1], Counter())[x['status']] += 1
 print('\n=== 分模块 ===')
 for c in sorted(ch):
     d = ch[c]
@@ -274,14 +275,32 @@ else:
         else:
             print(f'  ✓ {os.path.basename(fr_path)} 存在，账本终态 FAIL {tot["FAIL"]} 条逐条对上（§20.10）')
 
+# ===== 硬校验⑦：质疑门节存在性（执行质疑标准 v1.3 · executor §6.95，2026-11-18 用户拍板"要"）=====
+# 生效时刻后收尾的轮次：报告必须含「双账本/质疑门」结论节（execution-challenger 输出），
+# 或含「质疑门降级」声明（§6.95 纯复测单条增量轮豁免口径）；两者皆无 = 没过判定质疑门 = 禁收尾。
+# 生效前历史轮豁免不追溯（老报告无此节=合规）；本查只验节存在性，节内容质量由 qc/质疑方人工补位（机检是下限）。
+print('\n=== 质疑门节校验（硬⑦ · 执行质疑标准 v1.3）===')
+gate_ok = True
+RULE7_TS = '2026-11-18 02:00'   # 硬⑦生效时刻（本节落码时点，北京时间）
+if _norm_max < RULE7_TS:
+    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE7_TS}）→ 豁免不追溯（历史不补录）')
+elif re.search(r'双账本|质疑门', md):
+    _ptr = '质疑门' in (m3.group(0) if m3 else '') or '双账本' in (m3.group(0) if m3 else '')
+    print(f'  ✓ 报告含质疑门/双账本结论节（判定口径以双账本为准，禁只报执行面原始过/败数）' + ('' if _ptr else '；建议「最后收尾」声明行附节指针'))
+elif re.search(r'质疑门降级', md):
+    print('  ✓ 含「质疑门降级」声明（§6.95 纯复测单条增量轮豁免口径）——降级轮仍须抽验+机检记录在案')
+else:
+    gate_ok = False
+    print('  ✗ 报告缺质疑门/双账本结论节，也无「质疑门降级」声明——判定质疑门未过（executor §6.95：无指针=未收官，禁收尾）')
+
 print(f'''
 === 判定 ===
-数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"} ／ 失败报告 {"✓ 对上/不适用" if fr_ok else "✗ 缺失/缺卡片，禁收尾"}
+数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"} ／ 失败报告 {"✓ 对上/不适用" if fr_ok else "✗ 缺失/缺卡片，禁收尾"} ／ 质疑门 {"✓ 在案/豁免" if gate_ok else "✗ 缺结论节，禁收尾"}
 
 === 收尾三件事检查（usecase-executor §6.9；开工第 0 步=先跑本脚本验上轮）===
 1. 账本落定 ✓（{N} 条）
-2. 报告三段式更新 → 1.1~1.4 总进度（每轮必更）＋新增轮次块 12 字段（只增）＋头部「最后收尾」声明行＋附A 余项清单（每轮必更）＋失败用例专项报告（有 FAIL 时，§20.10）→ 更新后重跑本脚本须全绿
+2. 报告三段式更新 → 1.1~1.4 总进度（每轮必更）＋新增轮次块 12 字段（只增）＋头部「最后收尾」声明行＋附A 余项清单（每轮必更）＋失败用例专项报告（有 FAIL 时，§20.10）＋质疑门/双账本结论节（生效后新轮，硬⑦）→ 更新后重跑本脚本须全绿
 3. memory 更新（关键拍板/新教训）
 ''')
-if not (ok_all and struct_ok and close_ok and batch_ok and fr_ok): sys.exit(1)
+if not (ok_all and struct_ok and close_ok and batch_ok and fr_ok and gate_ok): sys.exit(1)
 if wb_pending_n: sys.exit(1)
