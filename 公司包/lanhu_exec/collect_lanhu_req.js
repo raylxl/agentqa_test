@@ -431,17 +431,18 @@ function acceptanceGate(A, manifest, logger) {
       const vw = Math.min(feBox.width - 8, 1900);
       const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 1080);
       const regionH = Math.min(2400, Math.max(40, rect.bottom - rect.top + 40));
+      const TOP_PAD = 40; // G74：带上区域上方紧邻的说明行（计费方式行被裁实证，垫6不够）
       const overflowX = rect.right > feBox.width - 8;
       const cdpUsed = false; // 两拍为主路径
         // —— 视口内单张 / 溢出时右张 ——
         await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), rect.top).catch(() => {});
         await page.waitForTimeout(300);
         let curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-        let y = feBox.y + (rect.top - 6 - curScroll);
+        let y = feBox.y + (rect.top - TOP_PAD - curScroll);
         if (y + regionH > feBox.y + vh) y = Math.max(feBox.y, feBox.y + vh - regionH);
         if (vw >= 60 && regionH >= 40 && y >= feBox.y - 5) {
           try {
-            await page.screenshot({ path: path.join(imgDir, file), clip: { x: feBox.x + 4, y, width: vw, height: regionH }, timeout: 25000 });
+            await page.screenshot({ path: path.join(imgDir, file), clip: { x: feBox.x + 4, y, width: vw, height: regionH + TOP_PAD }, timeout: 25000 });
             files.push(file);
             logger.info(`${tag} ${file}（${Math.round(vw)}x${Math.round(regionH)}）`);
           } catch (e) { logger.warn(`${tag}失败: ` + e.message.split('\n')[0]); }
@@ -459,9 +460,9 @@ function acceptanceGate(A, manifest, logger) {
           if (scrolled && (scrolled.sl || 0) > 30) {
             const f2 = file.replace(/\.png$/, '_右.png');
             curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-            const y2 = feBox.y + (rect.top - 6 - curScroll);
+            const y2 = feBox.y + (rect.top - TOP_PAD - curScroll);
             try {
-              await page.screenshot({ path: path.join(imgDir, f2), clip: { x: feBox.x + 4, y: Math.max(feBox.y, y2), width: vw, height: regionH }, timeout: 25000 });
+              await page.screenshot({ path: path.join(imgDir, f2), clip: { x: feBox.x + 4, y: Math.max(feBox.y, y2), width: vw, height: regionH + TOP_PAD }, timeout: 25000 });
               files.push(f2);
               logger.info(`${tag}右半 ${f2}（scrollLeft=${scrolled.sl}）`);
             } catch (e) { logger.warn(`${tag}右半失败: ` + e.message.split('\n')[0]); }
