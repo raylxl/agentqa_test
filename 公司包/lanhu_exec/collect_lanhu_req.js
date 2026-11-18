@@ -408,7 +408,41 @@ function acceptanceGate(A, manifest, logger) {
   }
 
   // 1) 正文（已验证保真，含浮层最近锚点内联）
-  let md = await extractLanhuContent(liveFrame);
+  const ex = await extractLanhuContent(liveFrame);
+  let md = ex.md;
+
+  // G69：查询条件带截图（介质忠实：控件排用一张图表达）——必须在任何滚动前截（extract 坐标=当刻视口）
+  const baseName = A.name || ('财务需求2026_' + A.menu);
+  const outDir = A.outdir;
+  const imgDir = path.join(outDir, baseName + '_images');
+  const bandShots = [];
+  if (ex.bands && ex.bands.length) {
+    fs.mkdirSync(imgDir, { recursive: true });
+    const fe = await liveFrame.frameElement().catch(() => null);
+    const feBox = fe ? await fe.boundingBox() : null;
+    if (feBox) {
+      for (let bi = 0; bi < ex.bands.length; bi++) {
+        const bd = ex.bands[bi];
+        // 先滚入视口（extract 时容器在顶，band 坐标≈绝对坐标；裁剪用当刻视口坐标换算——cropPopup 同技法）
+        await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), bd.top).catch(() => {});
+        await page.waitForTimeout(300);
+        const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+        const x = Math.max(feBox.x, feBox.x + bd.left - 8);
+        const w = Math.min(bd.right - bd.left + 16, feBox.x + feBox.width - x);
+        const y = feBox.y + (bd.top - 6 - curScroll);
+        const h = Math.max(40, bd.bottom - bd.top + 10);
+        if (w < 60 || h < 40 || y < feBox.y - 5) { bandShots.push(null); continue; }
+        const f = `查询条件_${bi + 1}.png`;
+        try {
+          await page.screenshot({ path: path.join(imgDir, f), clip: { x, y, width: w, height: h }, timeout: 20000 });
+          bandShots.push(f);
+          logger.info(`查询条件带截图 ${f}（${Math.round(w)}x${Math.round(h)}）`);
+        } catch (e) { bandShots.push(null); logger.warn('查询条件带截图失败 bi=' + bi + ': ' + e.message.split('\n')[0]); }
+      }
+      await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    } else for (let bi = 0; bi < ex.bands.length; bi++) bandShots.push(null);
+  }
+
   md = cleanResidue(md);
   logger.info('正文提取+残留清理完成（长度 ' + md.length + '）');
 
@@ -418,9 +452,6 @@ function acceptanceGate(A, manifest, logger) {
   }
 
   // 2) 图片扫描 + 截图（按通用章节标题归属、语义化命名、过滤装饰图标）
-  const baseName = A.name || ('财务需求2026_' + A.menu);
-  const outDir = A.outdir;
-  const imgDir = path.join(outDir, baseName + '_images');
   fs.mkdirSync(imgDir, { recursive: true });
 
   const { imgs, heads, scrollHeight } = await liveFrame.evaluate(scanImagesAndHeadings);
@@ -605,6 +636,13 @@ function acceptanceGate(A, manifest, logger) {
     }
     return ln; // 超列不裁（保真），verify 仍拦
   }).join('\n');
+
+  // G69：@@TBAND:i@@ 标记 → 查询条件带截图引用（截失败的标记行删除）
+  finalMd = finalMd.replace(/^@@TBAND:(\d+)@@[ \t]*$/gm, (m, i) => {
+    const f = bandShots[+i];
+    return f ? `![查询条件_${+i + 1}](${baseName}_images/${f})` : '';
+  });
+  finalMd = finalMd.replace(/\n{3,}/g, '\n\n');
 
   checkSqueezedTable(finalMd, logger);
 

@@ -592,7 +592,7 @@ async function extractLanhuContent(frame) {
         currentRow = [{ text: el.text, left: el.left }];
         currentRowTop = el.top;
       } else {
-        currentRow.push({ text: el.text, left: el.left });
+        currentRow.push({ text: el.text, left: el.left, right: el.left + el.width });
       }
     });
     if (currentRow.length > 0) {
@@ -629,6 +629,7 @@ async function extractLanhuContent(frame) {
 
     // 第3步：块级生成输出（text/table 块），供浮层精确内联使用
     const blocks = []; // {type:'text'|'table', top, bottom, lines?|mdLines?}
+    const tableBands = []; // G69：查询条件带（表格前导控件区），collect 据此截图
     const TEXT_GAP = 200; // 垂直间隙超过该值视为独立块（浮层/弹窗 mockup 与正文间的画布间隙）
 
     const pushTextRows = (startIdx, endIdx) => {
@@ -659,6 +660,33 @@ async function extractLanhuContent(frame) {
 
       // 格式化表格区域
       const tableRows = rows.slice(region.start, region.end);
+      // G69：查询条件带识别——表头行之前的"前导行区"（下拉枚举/按钮排/输入框标签拼行）若含查询控件信号
+      //（查询/重置/全部/请选择/导出等），该带是控件而非文字：文本侧由 junk 过滤清掉，视觉侧由 collect 截一张图。
+      const filledCells = (r) => r.cells.filter(c => c.text && !/^[\s\-—–]+$/.test(c.text)).length;
+      // 表头行判据强化（G69b）：枚举聚合行/按钮行填充率高但不是表头——先剔出前导带
+      const rowText = (r) => r.cells.map(c => c.text).join(' ');
+      const isEnumRow = (r) => { const t = rowText(r); return ((t.match(/未审核|审核通过|审核驳回|未生效|生效中|已失效/g) || []).length >= 3) && !/[。；;，]/.test(t); };
+      const isBtnRow = (r) => r.cells.every(c => !c.text || /^(查询|重置|查\s*询|重\s*置|新\s*增|删\s*除|导\s*入|导\s*出|审核通过|审核驳回|批量日期修改|复制|编辑|详情|修改记录)$/.test(c.text.trim())) && r.cells.some(c => c.text);
+      let headerIdx = 0;
+      while (headerIdx < tableRows.length) {
+        const r = tableRows[headerIdx];
+        const filledOk = filledCells(r) >= Math.max(3, r.cells.length * 0.7);
+        if (filledOk && !isEnumRow(r) && !isBtnRow(r)) break;
+        headerIdx++;
+      }
+      let qBand = null;
+      if (headerIdx > 0 && headerIdx < tableRows.length) {
+        const lead = tableRows.slice(0, headerIdx);
+        const leadText = lead.map(r => r.cells.map(c => c.text).join(' ')).join(' ');
+        if (/查询|重置|请选择|全部|导出|导入|新增/.test(leadText)) {
+          const xs = lead.flatMap(r => r.cells.map(c => c.left)).filter(x => x > 0);
+          const xr = lead.flatMap(r => r.cells.map(c => c.right)).filter(x => x > 0);
+          if (xs.length && xr.length) {
+            qBand = { top: lead[0].top, bottom: tableRows[headerIdx].top, left: Math.min(...xs), right: Math.max(...xr) };
+          }
+        }
+      }
+      if (qBand) { qBand.idx = tableBands.length; tableBands.push(qBand); }
 
       // 收集所有列位置并聚类
       const allLefts = [];
@@ -725,7 +753,7 @@ async function extractLanhuContent(frame) {
         for (let i = 1; i < tableData.length; i++) {
           mdLines.push('| ' + tableData[i].join(' | ') + ' |');
         }
-        blocks.push({ type: 'table', top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, mdLines });
+        blocks.push({ type: 'table', top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, mdLines, bandIdx: qBand ? qBand.idx : -1 });
       }
 
       lastRowEnd = region.end;
@@ -802,11 +830,14 @@ async function extractLanhuContent(frame) {
       if (!moved) break;
     }
 
-    // 第5步：输出
+    // 第5步：输出（带 bandIdx 的表块前插 @@TBAND:i@@ 标记——collect 据此替换为查询条件带截图）
     const outputParts = [];
     for (const b of blocks) {
       const ls = b.type === 'table' ? b.mdLines : b.lines;
-      if (ls.length) outputParts.push(ls.join('\n'));
+      if (ls.length) {
+        if (b.type === 'table' && typeof b.bandIdx === 'number' && b.bandIdx >= 0) outputParts.push('@@TBAND:' + b.bandIdx + '@@');
+        outputParts.push(ls.join('\n'));
+      }
     }
 
     // 如果没有识别到表格区域，按普通文本输出
@@ -831,10 +862,10 @@ async function extractLanhuContent(frame) {
         cleanedLines.push(line);
         lastLineEmpty = isEmpty;
       }
-      return cleanedLines.join('\n');
+      return { md: cleanedLines.join('\n'), bands: [] };
     }
 
-    return outputParts.join('\n');
+    return { md: outputParts.join('\n\n'), bands: tableBands };
   });
 }
 

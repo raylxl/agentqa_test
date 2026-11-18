@@ -40,6 +40,7 @@
 - **路线 A（默认）`collect_lanhu_req.js`**：正文 DOM 保真提取+全页图片扫描+按章节插图+内置分类器/闸门。适用离散大图。
 - **路线 B（视觉还原）三步**：`extract_lanhu_visual_v3.js`（整帧+_diag.json）→ `assemble_visual_md_v2.py`（面板裁图+y 序组装）→ `convert_to_relative_png.py`（base64→相对 PNG）。适用 axure 碎片小图拼面板。
 - 选型判据：图离散大= A；碎片拼面板= B。两路线产物都必过 lanhu_verify。
+- **介质忠实原则（2026-11-18 用户拍板）**：蓝湖上是位图的内容（弹窗 mockup 等）→ 文档出**截图**；蓝湖上是 axure 文字/表格 → 文档出**文字/MD 表**，互不替代。列表页 mockup 的**查询条件区（控件排：按钮组/输入框/下拉/查询重置）用一张截图**表达，插在对应列表表格前（extract 自动识别"表格前导控件带"，collect 截图落位 `查询条件_N.png`）；列表本体仍用 MD 表。
 
 ## 五、批量与增量
 
