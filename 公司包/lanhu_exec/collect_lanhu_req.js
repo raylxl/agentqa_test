@@ -424,49 +424,50 @@ function acceptanceGate(A, manifest, logger) {
     feBox = fe ? await fe.boundingBox() : null;
   }
   if (feBox) {
-    // G71：宽带用全 iframe 宽——bd.left 起点窄会裁掉左侧字段标签（对客报价"报价编码"实证）
-    // G72：区域右缘超出视口（axure 画布横向溢出）→ 滚到右侧补第二张（_右.png）；底部加垫防截说明/按钮
+    // G71：宽带用全 iframe 宽（bd.left 起点窄会裁掉左侧字段标签）
+    // G73：溢出区域左右两拍（内容完整已验证）→ 收尾 PIL 无缝拼接成一张（用户拍板"不拆两半"）
     const shootStrip = async (rect, file, tag) => {
       const files = [];
       const vw = Math.min(feBox.width - 8, 1900);
       const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 1080);
-      await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), rect.top).catch(() => {});
-      await page.waitForTimeout(300);
-      let curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-      const h = Math.min(2400, Math.max(40, rect.bottom - rect.top + 40));
-      let y = feBox.y + (rect.top - 6 - curScroll);
-      // 高度超出视口时上移裁剪起点（保底露出区域顶部）
-      if (y + h > feBox.y + vh) y = Math.max(feBox.y, feBox.y + vh - h);
-      if (vw >= 60 && h >= 40 && y >= feBox.y - 5) {
-        try {
-          await page.screenshot({ path: path.join(imgDir, file), clip: { x: feBox.x + 4, y, width: vw, height: h }, timeout: 25000 });
-          files.push(file);
-          logger.info(`${tag} ${file}（${Math.round(vw)}x${Math.round(h)}）`);
-        } catch (e) { logger.warn(`${tag}失败: ` + e.message.split('\n')[0]); }
-      }
-      // 横向溢出补右半张
-      if (rect.right > vw - 4) {
-        const targetX = Math.max(vw - 60, rect.right - vw + 60);
-        const scrolled = await liveFrame.evaluate((tx) => {
-          const cands = [document.documentElement, document.body, ...document.querySelectorAll('*')].filter(el => el && el.scrollWidth > el.clientWidth + 4 && el.clientWidth > 400);
-          const cont = cands.sort((a, b) => (b.scrollWidth - b.clientWidth) - (a.scrollWidth - a.clientWidth))[0] || document.documentElement;
-          if (cont.scrollTo) cont.scrollTo(tx, cont.scrollTop || Math.max(0, cont.getBoundingClientRect ? 0 : 0));
-          if (cont === document.documentElement || cont === document.body) window.scrollTo(tx, window.scrollY);
-          return { sl: cont.scrollLeft || window.scrollX || 0 };
-        }, targetX).catch(() => null);
-        await page.waitForTimeout(350);
-        if (scrolled && (scrolled.sl || 0) > 30) {
-          const f2 = file.replace(/\.png$/, '_右.png');
-          curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-          const y2 = feBox.y + (rect.top - 6 - curScroll);
+      const regionH = Math.min(2400, Math.max(40, rect.bottom - rect.top + 40));
+      const overflowX = rect.right > feBox.width - 8;
+      const cdpUsed = false; // 两拍为主路径
+        // —— 视口内单张 / 溢出时右张 ——
+        await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 150)), rect.top).catch(() => {});
+        await page.waitForTimeout(300);
+        let curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+        let y = feBox.y + (rect.top - 6 - curScroll);
+        if (y + regionH > feBox.y + vh) y = Math.max(feBox.y, feBox.y + vh - regionH);
+        if (vw >= 60 && regionH >= 40 && y >= feBox.y - 5) {
           try {
-            await page.screenshot({ path: path.join(imgDir, f2), clip: { x: feBox.x + 4, y: Math.max(feBox.y, y2), width: vw, height: h }, timeout: 25000 });
-            files.push(f2);
-            logger.info(`${tag}右半 ${f2}（scrollLeft=${scrolled.sl}）`);
-          } catch (e) { logger.warn(`${tag}右半失败: ` + e.message.split('\n')[0]); }
-          await liveFrame.evaluate(() => window.scrollTo(0, curScroll)).catch(() => {});
+            await page.screenshot({ path: path.join(imgDir, file), clip: { x: feBox.x + 4, y, width: vw, height: regionH }, timeout: 25000 });
+            files.push(file);
+            logger.info(`${tag} ${file}（${Math.round(vw)}x${Math.round(regionH)}）`);
+          } catch (e) { logger.warn(`${tag}失败: ` + e.message.split('\n')[0]); }
         }
-      }
+        if (overflowX) {
+          const targetX = Math.max(vw - 60, rect.right - vw + 60);
+          const scrolled = await liveFrame.evaluate((tx) => {
+            const cands = [document.documentElement, document.body, ...document.querySelectorAll('*')].filter(el => el && el.scrollWidth > el.clientWidth + 4 && el.clientWidth > 400);
+            const cont = cands.sort((a, b) => (b.scrollWidth - b.clientWidth) - (a.scrollWidth - a.clientWidth))[0] || document.documentElement;
+            if (cont.scrollTo) cont.scrollTo(tx, cont.scrollTop || 0);
+            if (cont === document.documentElement || cont === document.body) window.scrollTo(tx, window.scrollY);
+            return { sl: cont.scrollLeft || window.scrollX || 0 };
+          }, targetX).catch(() => null);
+          await page.waitForTimeout(350);
+          if (scrolled && (scrolled.sl || 0) > 30) {
+            const f2 = file.replace(/\.png$/, '_右.png');
+            curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+            const y2 = feBox.y + (rect.top - 6 - curScroll);
+            try {
+              await page.screenshot({ path: path.join(imgDir, f2), clip: { x: feBox.x + 4, y: Math.max(feBox.y, y2), width: vw, height: regionH }, timeout: 25000 });
+              files.push(f2);
+              logger.info(`${tag}右半 ${f2}（scrollLeft=${scrolled.sl}）`);
+            } catch (e) { logger.warn(`${tag}右半失败: ` + e.message.split('\n')[0]); }
+            await liveFrame.evaluate(() => window.scrollTo(0, curScroll)).catch(() => {});
+          }
+        }
       return files.length ? files : null;
     };
     for (let bi = 0; bi < (ex.bands || []).length; bi++) {
@@ -478,6 +479,20 @@ function acceptanceGate(A, manifest, logger) {
       fullShots.push(r);
     }
     await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    // G73 终案：①左右两拍无缝拼接成一张 ②右侧/底部空白边裁剪
+    const wideShots = [...bandShots, ...fullShots].flat().filter(Boolean);
+    if (wideShots.length) {
+      const { execFileSync } = require('child_process');
+      const py = process.platform === 'win32' ? 'python' : 'python3';
+      try {
+        execFileSync(py, [path.join(__dirname, 'stitch_pairs.py'), imgDir], { timeout: 60000 });
+        logger.info('左右拍拼接完成');
+      } catch (e) { logger.warn('拼接失败(保留两拍): ' + String(e.message).slice(0, 80)); }
+      try {
+        execFileSync(py, [path.join(__dirname, 'trim_margin.py'), imgDir, ...wideShots.filter(f => !f.includes('_右'))], { timeout: 60000 });
+        logger.info('空白边裁剪完成');
+      } catch (e) { logger.warn('空白边裁剪失败(保留原图): ' + String(e.message).slice(0, 80)); }
+    }
   }
 
   md = cleanResidue(md);
@@ -686,8 +701,8 @@ function acceptanceGate(A, manifest, logger) {
   // G69/G71/G72：@@TBAND/@@TFULL 标记 → 查询条件带/表格全景截图引用（数组=左+右多张；截失败的标记行删除）
   const refsOf = (arr, prefix) => {
     if (!arr) return '';
-    const list = Array.isArray(arr) ? arr : [arr];
-    return list.map((fn, k) => `![${prefix}${k ? '_右' : ''}](${baseName}_images/${fn})`).join('\n\n');
+    const list = (Array.isArray(arr) ? arr : [arr]).filter(fn => fs.existsSync(path.join(imgDir, fn))); // G73：拼接后 _右 已并入 base，只引用存在文件
+    return list.map(fn => `![${prefix}](${baseName}_images/${fn})`).join('\n\n');
   };
   finalMd = finalMd.replace(/^@@TBAND:(\d+)@@[ \t]*$/gm, (m, i) => refsOf(bandShots[+i], `查询条件_${+i + 1}`));
   finalMd = finalMd.replace(/^@@TFULL:(\d+)@@[ \t]*$/gm, (m, i) => refsOf(fullShots[+i], `表格全景_${+i + 1}`));

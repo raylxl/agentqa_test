@@ -525,9 +525,23 @@ async function scrollToBottom(frame, logger) {
         if (cur <= prev) break;   // 高度稳定，收工
         prev = cur;
       }
+      // G73：横向扫掠——axure 右半内容懒渲染（对客报价 kg 弹窗实证：新鲜页 DOM 右界 1823，
+      // 横向滚过一次后 4980 宽内容才物化），纵向滚稳定后必须左右扫到 scrollWidth 稳定
+      for (let hr = 0; hr < 6; hr++) {
+        const hcands = [document.documentElement, document.body, ...document.querySelectorAll('*')]
+          .filter(el => el && el.scrollWidth > el.clientWidth + 4 && el.clientWidth > 300);
+        const hcont = hcands.sort((a, b) => (b.scrollWidth - b.clientWidth) - (a.scrollWidth - a.clientWidth))[0];
+        if (!hcont) break;
+        const prevW = document.documentElement.scrollWidth;
+        const hmax = hcont.scrollWidth - hcont.clientWidth;
+        for (let x = 0; x <= hmax; x += 250) { hcont.scrollLeft = x; if (hcont === document.documentElement || hcont === document.body) window.scrollTo(x, window.scrollY); await new Promise(r => setTimeout(r, 90)); }
+        hcont.scrollLeft = 0; if (hcont === document.documentElement || hcont === document.body) window.scrollTo(0, window.scrollY);
+        await new Promise(r => setTimeout(r, 600));
+        if (document.documentElement.scrollWidth <= prevW) break;
+      }
       // 稳定后全容器回顶（提取用 viewport 坐标，回顶=坐标最小且负值最少）
       const els = findAll();
-      (els.length ? els : [document.documentElement]).forEach(el => { el.scrollTop = 0; });
+      (els.length ? els : [document.documentElement]).forEach(el => { el.scrollTop = 0; el.scrollLeft = 0; });
       window.scrollTo(0, 0);
       await new Promise(r => setTimeout(r, 600));
       return growthLog;
@@ -688,13 +702,13 @@ async function extractLanhuContent(frame) {
           }
         }
       }
-      if (qBand) { qBand.idx = tableBands.length; tableBands.push(qBand); }
+      if (qBand) { qBand.idx = tableBands.length; qBand.anchors = (tableRows[headerIdx] ? tableRows[headerIdx].cells.map(c => c.text.trim()).filter(t => t && t.length <= 14).slice(0, 4) : []); tableBands.push(qBand); }
       // G71：高表（多层表头怪物，如填充计费公式区）附整表全景截图——文本表保留（保真），视觉另给一张（用户拍板）
       if (tableRows[tableRows.length - 1].top + 25 - tableRows[0].top > 260) {
         const xs2 = tableRows.flatMap(r => r.cells.map(c => c.left)).filter(x => x > 0);
         const xr2 = tableRows.flatMap(r => r.cells.map(c => c.right)).filter(x => x > 0);
         if (xs2.length && xr2.length) {
-          tableFulls.push({ top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, left: Math.min(...xs2), right: Math.max(...xr2) });
+          tableFulls.push({ top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, left: Math.min(...xs2), right: Math.max(...xr2), anchors: (tableRows[headerIdx] ? tableRows[headerIdx].cells.map(c => c.text.trim()).filter(t => t && t.length <= 14).slice(0, 4) : []) });
         }
       }
 
