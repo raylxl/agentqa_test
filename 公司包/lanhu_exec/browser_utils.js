@@ -576,7 +576,7 @@ async function extractLanhuContent(frame) {
     const ROW_THRESHOLD = 25;
     const COL_THRESHOLD = 80;
     const MIN_TABLE_ROWS = 3; // 至少3行才算表格（1表头+2数据）
-    const MIN_TABLE_COLS = 3; // 至少3列才算表格行
+    const MIN_TABLE_COLS = 2; // G66（11-18）：3→2——迭代版本/迭代内容等 2列小表（3行×2列）被拦致退化为纯文本（货量考核实证）；列对齐由 colPositions 聚类兜底
 
     const rows = [];
     let currentRow = [];
@@ -676,9 +676,11 @@ async function extractLanhuContent(frame) {
       colPositions.push(currentCol);
 
       // 构建表格数据
-      const tableData = tableRows.map(row => {
+      let tableData = tableRows.map(row => {
         const rowData = new Array(colPositions.length).fill('');
         row.cells.forEach(cell => {
+          // G66c：axure 单元格 innerText 折行含换行，直接 join 会把一行拆成两行（税务信息维护迭代表实证）
+          cell.text = cell.text.replace(/[\r\n]+/g, ' ').trim();
           let minDist = Infinity;
           let colIndex = 0;
           colPositions.forEach((colPos, idx) => {
@@ -699,6 +701,22 @@ async function extractLanhuContent(frame) {
       });
 
       // 生成Markdown表格
+      // G66：表级清理——丢弃全空/纯横线行（mockup 边框装饰混入表头实证）与"查询/重置"按钮行（UI chrome）
+      const cellFilled = (c) => c && !/^[\s|\-—–]+$/.test(c);
+      const isBtnCell = (c) => /^(查询|重置|查\s*询|重\s*置|新\s*增|导\s*入|导\s*出)$/.test((c || '').trim());
+      // G66b：mockup 查询条件区的下拉枚举聚合行（"99+ 未审核 审核通过 审核驳回 全部 未生效 生效中 已失效"）
+      // 会被行分组当成表头→生成横线分隔行→又被 cleanResidue 行过滤删掉→留下双孤儿分隔行（货量考核实证）。
+      // 判据：行内状态枚举词≥3 且无 CJK 标点（真实数据行只含1-2个词+日期/编码，不会命中）。
+      const isEnumAggRow = (row) => {
+        const t = row.join(' ');
+        const n = (t.match(/未审核|审核通过|审核驳回|未生效|生效中|已失效/g) || []).length;
+        return n >= 3 && !/[。；;，]/.test(t);
+      };
+      tableData = tableData.filter(row =>
+        row.some(cellFilled) &&
+        !row.every(c => !c || isBtnCell(c)) &&
+        !isEnumAggRow(row)
+      );
       if (tableData.length > 0) {
         // 表头
         const mdLines = ['| ' + tableData[0].join(' | ') + ' |'];

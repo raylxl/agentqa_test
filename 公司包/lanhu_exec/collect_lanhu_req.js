@@ -119,7 +119,7 @@ function scanImagesAndHeadings() {
   });
   imgs.sort((a, b) => a.top - b.top);
   // 通用章节标题（一、二、三… / 一）二）… / 优化点一/二/三），用于图片归属与命名
-  const headRe = /^[一二三四五六七八九十]+[、）、]/;
+  const headRe = /^[一二三四五六七八九十]+[、）、]|^优化点[一二三四五六七八九十]+[：:]/; // G66：补识别"优化点N："——否则图片全归唯一章节尾部、界面图不跟优化点标题（货量考核实证）
   const heads = [];
   for (const el of doc.querySelectorAll('[id$="_text"]')) {
     const t = (el.innerText || '').trim();
@@ -284,12 +284,16 @@ function cleanResidue(md) {
     const prevIsTable = i === 0 ? false : arr[i - 1].trim().startsWith('|');
     const curIsTable = arr[i].trim().startsWith('|');
     const nextIsTable = i + 1 < arr.length && arr[i + 1].trim().startsWith('|');
-    if (curIsTable && !prevIsTable && nextIsTable && !sepRe.test(arr[i + 1].trim())) {
+    // G66c：前一行已是分隔行则不再插（双 --- 实证）；行首非表行也跳过
+    const prevIsSep = i === 0 ? false : sepRe.test(arr[i - 1].trim());
+    if (curIsTable && !prevIsTable && nextIsTable && !sepRe.test(arr[i + 1].trim()) && !prevIsSep) {
       const cols = (arr[i].match(/\|/g) || []).length - 1;
       res.push('|' + Array(cols).fill('---').join(' | ') + ' |');
     }
   }
   s = res.join('\n');
+  // G66c：连续两条分隔行去重（extract 自带一条+历史插入残留一条；通用计费双 --- 实证）
+  s = s.replace(/^(\s*\|[\s:|-]+\|\s*)\n\s*(\|[\s:|-]+\|)\s*$/gm, '$1');
   s = s.replace(/\n{3,}/g, '\n\n');
   s = s.replace(/(优化点[一二三][^\n]*?)(?=\d、[基本信息查询数据导入历史使用考核])/g, '$1\n');
   return s.trim() + '\n';
@@ -580,10 +584,27 @@ function acceptanceGate(A, manifest, logger) {
       + '以下图片位于 axure 隐藏动态面板中（画布无坐标，无法自动归属章节），请按需求内容人工插入对应触发点附近：\n\n'
       + hiddenRefs.join('\n\n') + '\n';
   }
-  const finalMd = ['# 蓝湖需求（文本保真版）— ' + A.menu, '',
+  let finalMd = ['# 蓝湖需求（文本保真版）— ' + A.menu, '',
     '> 采集时间: ' + new Date().toISOString().slice(0, 10) + ' | 文本保真提取（DOM 文本）+ 全页图片扫描（相对路径 PNG）+ 弹窗坐标裁剪。', '',
     body, hiddenSection
   ].join('\n');
+
+  // G66c：落盘前对齐表列数——合并单元格的子表头/跨列表头行列数天然不等（extract 注释明示"不用列数一致性判断"），
+  // 按各表表头列数补齐尾部空单元格（与 lanhu_verify --fix 同算法），文档"出生即对齐"，verify 硬闸不再红
+  finalMd = finalMd.split('\n').map((ln, idx, arr) => {
+    const t = ln.trim();
+    if (!t.startsWith('|') || /^[\s|:-]+$/.test(t)) return ln;
+    let h = idx;
+    while (h > 0 && arr[h - 1].trim().startsWith('|')) h--;
+    const ncol = (arr[h].match(/\|/g) || []).length;
+    const have = (ln.match(/\|/g) || []).length;
+    if (have < ncol) {
+      let x = t.endsWith('|') ? t : t + ' |';
+      while ((x.match(/\|/g) || []).length < ncol) x = x.slice(0, -1) + '  |';
+      return x;
+    }
+    return ln; // 超列不裁（保真），verify 仍拦
+  }).join('\n');
 
   checkSqueezedTable(finalMd, logger);
 
