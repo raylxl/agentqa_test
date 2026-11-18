@@ -746,6 +746,13 @@ async function extractLanhuContent(frame) {
         const cand = blocks[i];
         const prev = blocks[i - 1];
         if (cand.top - prev.bottom <= TEXT_GAP) continue;
+        // G68（11-18）：表格块禁搬——画布底部的表格 mockup（含"使用记录"标签+表）按短标题找锚点必错位
+        //（"使用记录"在优化点二"3、使用记录"处命中→标签被搬到中部、原表前反空，货量考核实证）。
+        // 表格留在画布原位=视觉忠实；浮层内联只对纯文字块生效。
+        if (cand.type === 'table') continue;
+        // G68b：紧邻后随表格块的短文本块=表格标签行（如"使用记录"），同样禁搬——它属于那张表
+        const nextBlk = blocks[i + 1];
+        if (nextBlk && nextBlk.type === 'table' && nextBlk.top - cand.bottom <= TEXT_GAP) continue;
         const candLines = cand.type === 'table' ? cand.mdLines : cand.lines;
         const cands = candLines
           .filter(l => l.trim().length >= 2 && l.trim().length <= 10 && !l.trim().startsWith('|'))
