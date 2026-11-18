@@ -605,8 +605,9 @@ async function extractLanhuContent(frame) {
     const tableRegions = [];
     let regionStart = -1;
 
-    for (let i = 0; i < rows.length; i++) {
-      const isMultiCol = rows[i].cells.length >= MIN_TABLE_COLS;
+  for (let i = 0; i < rows.length; i++) {
+    // G70：单元格>80字的"长段行"禁入表区（段落与邻行被误聚成表，仓内"基本信息：1）报价名称…"实证）——归文本
+    const isMultiCol = rows[i].cells.length >= MIN_TABLE_COLS && rows[i].cells.every(c => (c.text || '').length <= 80);
       if (isMultiCol) {
         if (regionStart === -1) regionStart = i;
       } else {
@@ -731,7 +732,7 @@ async function extractLanhuContent(frame) {
       // 生成Markdown表格
       // G66：表级清理——丢弃全空/纯横线行（mockup 边框装饰混入表头实证）与"查询/重置"按钮行（UI chrome）
       const cellFilled = (c) => c && !/^[\s|\-—–]+$/.test(c);
-      const isBtnCell = (c) => /^(查询|重置|查\s*询|重\s*置|新\s*增|导\s*入|导\s*出)$/.test((c || '').trim());
+      const isBtnCell = (c) => /^(查询|重置|查\s*询|重\s*置|新\s*增|删\s*除|导\s*入|导\s*出|复制|编辑|详情|修改记录|批量日期修改|审核通过|审核驳回)$/.test((c || '').trim()); // G70：扩全按钮集合——工具栏行（批量日期修改等）不成表
       // G66b：mockup 查询条件区的下拉枚举聚合行（"99+ 未审核 审核通过 审核驳回 全部 未生效 生效中 已失效"）
       // 会被行分组当成表头→生成横线分隔行→又被 cleanResidue 行过滤删掉→留下双孤儿分隔行（货量考核实证）。
       // 判据：行内状态枚举词≥3 且无 CJK 标点（真实数据行只含1-2个词+日期/编码，不会命中）。

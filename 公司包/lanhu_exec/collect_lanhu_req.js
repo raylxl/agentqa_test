@@ -455,13 +455,20 @@ function acceptanceGate(A, manifest, logger) {
   fs.mkdirSync(imgDir, { recursive: true });
 
   const { imgs, heads, scrollHeight } = await liveFrame.evaluate(scanImagesAndHeadings);
+  // G70：heads 按归一化标题去重（画布常把同一 mockup 重复画 N 次=同名标题多条；indexOf 全塌第一处→空块重复追加同组图引用 ×N）
+  const seenHead = new Set();
+  const uniqHeads = heads.filter(h => {
+    const k = h.text.replace(/\s+/g, '');
+    if (seenHead.has(k)) return false;
+    seenHead.add(k); return true;
+  });
   logger.info(`图片块=${imgs.length}（已过滤装饰图标 w<200||h<120） 章节标题=${heads.map(h => h.text).join(' / ')} 文档高=${scrollHeight}`);
   if (scrollHeight > 6000) logger.warn(`⚠️ 文档高 ${scrollHeight} 异常（正常≤~3500），可能异常渲染，建议先跑 reload_lanhu.js 再采集`);
 
   const sectionShort = (text) => text.replace(/[、）、\s]/g, '').slice(0, 8) || '图';
   const sectionIndexOf = (top) => {
     let idx = -1;
-    for (let i = 0; i < heads.length; i++) { if (top >= heads[i].top) idx = i; }
+    for (let i = 0; i < uniqHeads.length; i++) { if (top >= uniqHeads[i].top) idx = i; }
     return idx;
   };
   const allEls = await liveFrame.$$('img,svg');
@@ -582,10 +589,12 @@ function acceptanceGate(A, manifest, logger) {
   if (A.noMd) { logger.info('不出MD，结束'); return; } // exit 0
 
   // 3) 按章节标题切分 md，将图片 + 弹窗裁剪图插入对应章节末尾（保序、不堆末尾）
+  // 切分用顺序递进搜索（同名后文出现的并入前一节，内容与图只落一次）
   const positions = [];
-  for (const h of heads) {
-    const p = md.indexOf(h.text);
-    if (p >= 0) positions.push({ p, text: h.text });
+  let searchFrom = 0;
+  for (const h of uniqHeads) {
+    const p = md.indexOf(h.text, searchFrom);
+    if (p >= 0) { positions.push({ p, text: h.text }); searchFrom = p + h.text.length; }
   }
   const blocks = [];
   if (positions.length === 0) {
@@ -595,7 +604,7 @@ function acceptanceGate(A, manifest, logger) {
     for (let i = 0; i < positions.length; i++) {
       const start = positions[i].p;
       const end = (i + 1 < positions.length) ? positions[i + 1].p : md.length;
-      const secIdx = heads.findIndex(h => h.text === positions[i].text);
+      const secIdx = uniqHeads.findIndex(h => h.text === positions[i].text);
       blocks.push({ content: md.slice(start, end), key: secIdx < 0 ? '__pre__' : secIdx });
     }
   }
