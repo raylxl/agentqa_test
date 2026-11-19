@@ -33,7 +33,9 @@ DIST = AGENT_ROOT / "dist"
 
 # 通用排除（任何模式都不带）：git 元数据 / Python 缓存 / 本脚本自己的产出目录 /
 # playwright 工具缓存目录 / 运行日志（.log 属运行产物，2026-11-14 出包 QC 发现 AiTest 混入 5 个）
-COMMON_EXCLUDE_NAMES = {"__pycache__", ".git", "dist", ".playwright-cli"}
+# node_modules（2026-11-19 出包门禁实证混入：playwright 源码触发硬密码误报+png 运行数据红；
+#   依赖=同事侧部署器"依赖自装"步 npm i，不随包）
+COMMON_EXCLUDE_NAMES = {"__pycache__", ".git", "dist", ".playwright-cli", "node_modules"}
 COMMON_EXCLUDE_SUFFIX = (".log", ".pyc")
 # jt_chrome 瘦身：日志与截图、无头浏览器 profile 属运行垃圾，非家底
 JT_EXCLUDE_NAMES = {"ego_shots", "shots"}
