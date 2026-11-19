@@ -1,12 +1,11 @@
 @echo off
-chcp 65001 >nul
+rem deploy = bootstrap (same deployer). ASCII-only on purpose: cmd mangles non-ASCII args across codepages.
 cd /d "%~dp0"
-echo [部署] 与 [自举] 是同一部署器（克隆通道首次安装/更新通用）。开始...
 where python >nul 2>nul
 if errorlevel 1 (
-  echo [红] 未检测到 Python，先装 Python 3.8+ 再跑
+  echo [RED] Python not found. Install Python 3.8+ first.
   pause
   exit /b 1
 )
-python "Agent本体\tools\deploy_colleague.py" %*
+python deploy.py %*
 pause
