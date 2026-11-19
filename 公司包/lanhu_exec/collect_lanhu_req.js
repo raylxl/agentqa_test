@@ -410,6 +410,7 @@ function acceptanceGate(A, manifest, logger) {
   // 1) 正文（已验证保真，含浮层最近锚点内联）
   const ex = await extractLanhuContent(liveFrame);
   let md = ex.md;
+  const inlineImgs = []; // G76：{top, ref} 全部图（画布图/查询条件带/弹窗裁剪/面板）按画布 y 内联到文字块之间
 
   // G69：查询条件带截图 + G75：mockup 面板截图（每弹窗一张完整图）——必须在任何滚动前截（extract 坐标=当刻视口）
   const baseName = A.name || ('财务需求2026_' + A.menu);
@@ -472,8 +473,11 @@ function acceptanceGate(A, manifest, logger) {
       return files.length ? files : null;
     };
     for (let bi = 0; bi < (ex.bands || []).length; bi++) {
-      const r = await shootStrip(ex.bands[bi], `查询条件_${bi + 1}.png`, '查询条件带截图');
+      const bd = ex.bands[bi];
+      const r = await shootStrip(bd, `查询条件_${bi + 1}.png`, '查询条件带截图');
       bandShots.push(r);
+      const fl = (r || []).flat().filter(Boolean);
+      for (const fn of fl) inlineImgs.push({ top: bd.top, ref: `![查询条件_${bi + 1}](${baseName}_images/${fn})` });
     }
     // G75：mockup 面板逐个一张图（每面板=独立弹窗，用户拍板模型）；面板宽≤画布视口宽（无横向溢出），垂直滚入视口裁剪
     for (let pi = 0; pi < (ex.panels || []).length; pi++) {
@@ -615,8 +619,7 @@ function acceptanceGate(A, manifest, logger) {
     }
     const rel = `${baseName}_images/${file}`;
     const ref = `![${secName}_图${n}](${rel})`;
-    if (!sectionImgs.has(key)) sectionImgs.set(key, []);
-    sectionImgs.get(key).push(ref);
+    inlineImgs.push({ top: im.top, ref });
     logger.info(`截图 ${file} top=${im.top} → ${secName}`);
   }
 
@@ -652,6 +655,8 @@ function acceptanceGate(A, manifest, logger) {
         const crop = await cropPopup(liveFrame, page, feBox, cl, imgDir, baseName, secName, (sectionImgs.get(key) || []).length + popupRefs.filter(r => r.key === key).length + 1, logger);
         if (crop) {
           popupCrops++;
+          const clTop = cl.top > 0 ? cl.top : 0;
+          inlineImgs.push({ top: clTop, ref: crop.ref });
           popupRefs.push({ key, ref: crop.ref });
           logger.info(`弹窗裁剪 ${crop.file} → ${secName}`);
         } else {
@@ -663,50 +668,59 @@ function acceptanceGate(A, manifest, logger) {
     logger.info('弹窗自动裁剪跳过（detected=0 或 --popups off）');
   }
 
-  // G75：mockup 面板图按章节插入（与画布图同机制：面板 top 落哪个章节就插哪个章节末尾）
+  // G76：面板/查询条件带引用也进 inlineImgs（按画布 y 与其他图统一内联）
   for (const ps of panelShots) {
-    const key = sectionIndexOf(ps.top);
-    const k = key < 0 ? '__pre__' : key;
-    if (!sectionImgs.has(k)) sectionImgs.set(k, []);
-    sectionImgs.get(k).push(`![${ps.title}](${baseName}_images/${ps.file})`);
+    inlineImgs.push({ top: ps.top, ref: `![${ps.title}](${baseName}_images/${ps.file})` });
   }
 
   fs.writeFileSync(path.join(outDir, baseName + '_images_map.json'),
-    JSON.stringify([...sectionImgs.entries()].map(([k, v]) => [k, v]), null, 2), 'utf-8');
+    JSON.stringify([['__inline__', inlineImgs.map(i => i.ref)]], null, 2), 'utf-8');
 
   if (A.imagesOnly) { logger.info('仅图片，结束'); return; } // exit 0
   if (A.noMd) { logger.info('不出MD，结束'); return; } // exit 0
 
-  // 3) 按章节标题切分 md，将图片 + 弹窗裁剪图插入对应章节末尾（保序、不堆末尾）
-  // 切分用顺序递进搜索（同名后文出现的并入前一节，内容与图只落一次）
-  const positions = [];
-  let searchFrom = 0;
-  for (const h of uniqHeads) {
-    const p = md.indexOf(h.text, searchFrom);
-    if (p >= 0) { positions.push({ p, text: h.text }); searchFrom = p + h.text.length; }
-  }
-  const blocks = [];
-  if (positions.length === 0) {
-    blocks.push({ content: md, key: '__pre__' });
-  } else {
-    if (positions[0].p > 0) blocks.push({ content: md.slice(0, positions[0].p), key: '__pre__' });
-    for (let i = 0; i < positions.length; i++) {
-      const start = positions[i].p;
-      const end = (i + 1 < positions.length) ? positions[i + 1].p : md.length;
-      const secIdx = uniqHeads.findIndex(h => h.text === positions[i].text);
-      blocks.push({ content: md.slice(start, end), key: secIdx < 0 ? '__pre__' : secIdx });
+  // 3) G76：按画布 y 内联组装——图插在"画布上它上方那段文字"与"下方那段文字"之间（用户拍板位置对齐模型）；
+  //    parts=extract 块级 {top,bottom,text}（浮层重排后的最终序）；inlineImgs 按 top 排序逐块 flush
+  let body;
+  if (ex.parts && ex.parts.length) {
+    const sorted = [...inlineImgs].sort((a, b) => a.top - b.top);
+    let cursor = 0;
+    const chunks = [];
+    for (const pt of ex.parts) {
+      while (cursor < sorted.length && sorted[cursor].top < pt.top - 6) {
+        chunks.push(sorted[cursor].ref);
+        cursor++;
+      }
+      chunks.push(pt.text);
     }
+    while (cursor < sorted.length) { chunks.push(sorted[cursor].ref); cursor++; }
+    body = cleanResidue(chunks.join('\n\n')); // G76：内联体同样过残留清理（图行 ! 开头不受影响）
+    logger.info(`内联组装：${ex.parts.length} 块 × ${sorted.length} 图（按画布 y 对位）`);
+  } else {
+    // fallback：无块级信息（无表格页）——旧章节末尾机制
+    const positions = [];
+    let searchFrom = 0;
+    for (const h of uniqHeads) {
+      const p = md.indexOf(h.text, searchFrom);
+      if (p >= 0) { positions.push({ p, text: h.text }); searchFrom = p + h.text.length; }
+    }
+    const blocks2 = [];
+    if (positions.length === 0) {
+      blocks2.push({ content: md, key: '__pre__' });
+    } else {
+      if (positions[0].p > 0) blocks2.push({ content: md.slice(0, positions[0].p), key: '__pre__' });
+      for (let i = 0; i < positions.length; i++) {
+        const start = positions[i].p;
+        const end = (i + 1 < positions.length) ? positions[i + 1].p : md.length;
+        const secIdx = uniqHeads.findIndex(h => h.text === positions[i].text);
+        blocks2.push({ content: md.slice(start, end), key: secIdx < 0 ? '__pre__' : secIdx });
+      }
+    }
+    const byKey = new Map();
+    for (const it of inlineImgs) byKey.set('__all__', [...(byKey.get('__all__') || []), it.ref]);
+    const tail = (byKey.get('__all__') || []);
+    body = blocks2.map(b => b.content.replace(/\s+$/, '')).join('\n\n') + (tail.length ? '\n\n' + tail.join('\n\n') : '');
   }
-  const blockImgs = (key) => {
-    const arr = [];
-    if (sectionImgs.has(key)) arr.push(...sectionImgs.get(key));
-    for (const r of popupRefs) if (r.key === key) arr.push(r.ref);
-    return arr;
-  };
-  const body = blocks.map(b => {
-    const imgs2 = blockImgs(b.key);
-    return b.content.replace(/\s+$/, '') + (imgs2.length ? '\n\n' + imgs2.join('\n\n') + '\n' : '');
-  }).join('\n\n');
   let hiddenSection = '';
   if (hiddenRefs.length) {
     // G67：隐藏面板图保留引用但**不带任何人工指引注释**（R22：疑点在对话里说，禁编辑性标记落文档）；
@@ -747,7 +761,7 @@ function acceptanceGate(A, manifest, logger) {
   checkSqueezedTable(finalMd, logger);
 
   fs.writeFileSync(path.join(outDir, baseName + '.md'), finalMd, 'utf-8');
-  const totalImgs = [...sectionImgs.values()].reduce((s, v) => s + v.length, 0) + popupRefs.length;
+  const totalImgs = inlineImgs.length + hiddenRefs.length;
   logger.info(`MD 生成: ${baseName}.md（正文 + 图片 ${totalImgs} 张 = 真实图 ${realImgsCount} + 弹窗 ${popupCrops} + 隐藏 ${hiddenN}）`);
 
   // —— 阶段4：后置验收闸门（硬阻断）——

@@ -872,6 +872,10 @@ async function extractLanhuContent(frame) {
     }
 
     // 第5步：输出（带 bandIdx 的表块前插 @@TBAND:i@@ 标记——collect 据此替换为查询条件带截图）
+    // G76：parts=块级 {top,bottom,text}（浮层内联重排后的最终块序）——collect 按画布 y 把图内联到对应文字块之间
+    const parts = blocks
+      .filter(b => (b.type === 'table' ? b.mdLines : b.lines).length)
+      .map(b => ({ type: b.type, top: b.top, bottom: b.bottom, text: (b.type === 'table' ? b.mdLines : b.lines).join('\n') }));
     const outputParts = [];
     for (const b of blocks) {
       const ls = b.type === 'table' ? b.mdLines : b.lines;
@@ -906,7 +910,7 @@ async function extractLanhuContent(frame) {
       return { md: cleanedLines.join('\n'), bands: [] };
     }
 
-    return { md: outputParts.join('\n\n'), bands: tableBands, panels };
+    return { md: outputParts.join('\n\n'), bands: tableBands, panels, parts };
   });
 }
 
