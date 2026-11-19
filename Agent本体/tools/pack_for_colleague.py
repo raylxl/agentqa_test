@@ -265,7 +265,7 @@ git -C <部署根>\\agentqa_test pull     # ② 拉最新代码
 双击 <部署根>\\部署.bat                # ③ 重跑部署器：自动换算路径→选宿主→装依赖→param_check 全绿
 ```
 
-为什么安全：已填的 `agent-secrets.json` 在 .gitignore，pull 永不覆盖；需求库/台账/Chrome 登录态在 `agentqa_test/` 之外，pull 碰不到；pull 进来的新文件带占位路径，部署器第③步自动换算并经 param_check 验证，红会明说不会假成功。无 GitHub 权限/网络不通时退回上面的 zip 升级方式。
+为什么安全：已填的 `agent-secrets.json` 在 .gitignore，pull 永不覆盖；需求库/台账/Chrome 登录态在 `agentqa_test/` 之外，pull 碰不到；pull 进来的新文件带占位路径，部署器第③步自动换算并经 param_check 验证，红会明说不会假成功。升级一律走 git：克隆/拉取本仓+跑一次自举（已装安全包的机器=一次性迁移到 git 克隆，此后纯 pull）。zip 只作首次交付件，不再二次发版（2026-11-19 拍板：同事侧永远=获取 git 即可）。
 
 ## 验证
 
