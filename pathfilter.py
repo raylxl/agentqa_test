@@ -20,15 +20,13 @@ from pathlib import Path
 OLD = b"D:/ZCodetest"
 OLD_LOWER = b"d:/zcodetest"
 
-# 键锚定（仅 agent-company.json 的两行；克隆布局=公司包/jt_exec 承载执行工具）。
-# bytes 字面量禁中文 → 以 str 定义、装载时 encode（2026-11-19 实证 SyntaxError）。
+# jt_chrome 前缀通用映射（配置键+正文引用一揽子；克隆布局=公司包/jt_exec 承载执行工具）。
+# 安全性：正本全仓唯一的直指目标串 "D:/ZCodetest/agentqa_test/公司包/jt_exec" 只存在于本文件
+# （自身被 .gitattributes 自豁免不过滤）→ clean 逆映射零误伤。MD转XMind/用例设计标准 两对
+# 因正本含直指串（paths.标准体系）禁做通用映射——其正文在克隆中指不存在目录，无害。
+# bytes 字面量禁中文 → str 定义、装载时 encode（2026-11-19 实证 SyntaxError）。
 LAYOUT = [(s.encode("utf-8"), d.encode("utf-8")) for s, d in (
-    ('"执行工具": "D:/ZCodetest/jt_chrome"',
-     '"执行工具": "D:/ZCodetest/agentqa_test/公司包/jt_exec"'),
-    ('"接口执行根": "D:/ZCodetest/jt_chrome/pw_layered"',
-     '"接口执行根": "D:/ZCodetest/agentqa_test/公司包/jt_exec/pw_layered"'),
-    ('"jt_chrome": "D:/ZCodetest/jt_chrome"',
-     '"jt_chrome": "D:/ZCodetest/agentqa_test/公司包/jt_exec"'),
+    ("D:/ZCodetest/jt_chrome", "D:/ZCodetest/agentqa_test/公司包/jt_exec"),
 )]
 
 
