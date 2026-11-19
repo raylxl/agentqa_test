@@ -7,7 +7,7 @@ description: 用例生成（生成方）——理解说明闭环后，依 L1 经
 
 ## 0a. 公司适配层（开工第 0 步·2026-11-13 参数化）
 
-读 workspace `公司包/agent-company.json` 解析公司值；下文 `{paths.X}`/`{naming.X}`/`{standards.X}`/`{域词.X}`/`{白名单.X}` 均由该文件取值。**无该文件→降级通用模式**：文档目录=workspace`需求文档\`、正本=手艺包`01_标准\`（§1 条目格式/§2 步骤/§6.2 方法矩阵/§11 就绪度）、治理 JSON 缺失=BRIEF 内文本策略卡承载（异域试跑 2026-11-13 实证可行）、造数前缀=OBJ{章码}；并提示用户先建配置（模板=手艺包`04_技能包\agent-company.example.json`）。
+读 workspace `公司包/agent-company.json` 解析公司值；下文 `{paths.X}`/`{naming.X}`/`{standards.X}`/`{域词.X}`/`{白名单.X}` 均由该文件取值。**无该文件→降级通用模式**：文档目录=workspace`需求文档\`、正本=手艺包`01_标准\`（§1 条目格式/§2 步骤/§6.2 方法矩阵/§11 就绪度）、治理 JSON 缺失=BRIEF 内文本策略卡承载（异域试跑 2026-11-13 实证可行）、造数前缀=OBJ{章码}；并提示用户先建配置（模板=手艺包`04_技能包\agent-company.example.json`）。**文件在但 paths 物理不可达≠标准不存在**（2026-11-19 Mac 真机首跑教训：误降级走通用视图，整层 L2 族标准静默丢失，首轮 229 条返工）——先就近取仓内正本（`公司包\标准体系\`→`手艺包\01_标准\`）继续开工，并提示用户跑 `Agent本体/tools/migrate_paths.py` 换算路径；仓内两处全无才降级，且降级必须向用户宣告缺了哪层。
 
 分工：本技能只管**生成到结构门禁**；内容质疑与证书＝`usecase-challenger`（独立质疑方）；全链编排（go＝生成→质疑→证书）＝`usecase-pipeline` 壳。资产沿用 pipeline 目录：`{paths.pipeline_assets}`（references/brief-and-prompts.md、assets/matrices.md、scripts/assemble.py）。
 
@@ -47,7 +47,7 @@ python ../usecase-pipeline/scripts/assemble.py --dir "<分章目录>" --out "<�
   --intro-file 导语.md --pre-file PRE.md --footer-file 修改记录.md
 ```
 
-结构门禁＝重号/断号/表结构/判断依据/计数自洽等，全零才全绿；编号字母集、历史豁免和组装入口从公司 profile 解析。**治理正本＝治理 JSON**（风险—TC/执行集/P0123/阶段 readiness 由校验器硬门；策略卡是派生视图；设计/验证阶段允许 awaiting_environment，执行阶段必须 ready）。
+结构门禁＝重号/断号/表结构/判断依据/计数自洽等，全零才全绿；编号字母集、历史豁免和组装入口从公司 profile 解析。**承载条铁则**：TC-SYS/TC-DEF/TC-IMP/TC-CHG 块判断依据必须挂`老用例编号：`或`原用例无对应：…`（assemble.py 机器拦；**初版册的系统守护条同样适用**，标『原用例无对应：初版系统守护条』）；正本=《{standards.L6_闭环}》§二-2（2026-11-19 真机：规则原只在闭环标准的修订场景述，generator 侧未述，门禁红了"不明所以"）。**治理正本＝治理 JSON**（风险—TC/执行集/P0123/阶段 readiness 由校验器硬门；策略卡是派生视图；设计/验证阶段允许 awaiting_environment，执行阶段必须 ready）。
 
 **双源同步纪律（铁则）**：①**分章＝唯一源**——任何直改成册的改动下一次重组装即被冲掉，改用例必改分章；②**重组装后必须核对总条数**，与预期不符立即停并比对；③组装违例写 `.draft` 不覆盖正本（正本＝上版全绿的免费备份）。
 

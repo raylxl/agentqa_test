@@ -22,6 +22,15 @@
 
 改接线/改目录名：`python agentqa_test\Agent本体\tools\rewire.py --status|--repair|--rename 旧名 新名`（目录改名免疫：脚本按文件名逐级定位公司配置与凭证，不写死目录名）。
 
+## 新机直接克隆本仓（非发起人·过渡期例外通道，2026-11-19 Mac 真机教训立）
+
+本仓=私有仓·过渡期全量（公司包在内）。**克隆 ≠ 可用**：`公司包/agent-company.json` 的 paths 全指向发起人 `D:/ZCodetest/...`，新机（尤其 macOS）不可达；不处理就开工，技能会误判"无配置→降级通用模式"，**整层 L2 族标准静默丢失**（首例=外部参考价首轮 229 条缺族标准返工）。克隆后必做其一：
+
+- 一键：`python Agent本体/tools/deploy_colleague.py`（部署器：路径换算→接线→param_check 一体，macOS 可跑；根定位防呆告警时按提示处理）；
+- 手工三步：`python Agent本体/tools/migrate_paths.py` 换算路径 → 按手艺包`04_技能包/INSTALL.md` 接线（宿主分档）→ `python 公司包/param_check.py` 全绿。
+
+正式给同事仍优先走下一节**安全包+部署器**（macOS=`部署.command`；真机首验清单已含 WorkBuddy 软闸档）；裸克隆只作过渡期协作通道。
+
 ## 发给同事（一键打包，2026-11-14 立）
 
 `python D:\ZCodetest\agentqa_test\Agent本体\tools\pack_for_colleague.py --mode internal`

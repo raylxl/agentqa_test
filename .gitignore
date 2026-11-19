@@ -22,3 +22,7 @@ node_modules/
 公司包/lanhu_exec/__pycache__/
 recon_v2.tmp
 rb.tmp
+
+# 跨宿主/跨系统工作痕迹（2026-11-19 Mac 真机克隆：.workbuddy/ 与 .DS_Store 污染 git status）
+.workbuddy/
+.DS_Store
