@@ -134,7 +134,21 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   let ti = null;
   for (const l of docLines) {
     const t = l.trim();
-    if (HEAD_RE.test(t)) { docHeadings.push(t); ti = null; continue; }
+    if (t.startsWith('!')) { /* 图片引用 → 落入下方 image 分类 */ }
+    else if (/^[|#>]/.test(t)) { /* 表行/标题行/引用行：不参与标题提取（表行落入下方表解析） */ }
+    else if (HEAD_RE.test(t) && !/[、）、]\s*[0-9:{，]/.test(t) && !/），/.test(t)) { docHeadings.push(t); ti = null; continue; }
+    // G80：doc 侧粘连行对称处理（正文行内含标题模式也收，如"…所有公司 一、通用提醒"）
+    {
+      const re = /([一二三四五六七八九十]+[、）、][^一二三四五六七八九十]{2,18}|优化点[一二三四五六七八九十]+[：:].{0,28})/g;
+      let mm, got = [];
+      while ((mm = re.exec(t)) !== null) {
+        if (/[、）、]\s*[0-9:{，]/.test(mm[1])) continue; // G80：示例时间线（"一、10:10:01…"）非标题
+        if (/^[一二三四五六七八九十]+[）]\s*，/.test(mm[1]) || mm[1].includes('），')) continue; // G80：散文括号枚举（"三），其它…"）非标题
+        if (mm[1].includes('_图') || mm[1].includes('.png') || mm[1].includes('](') || mm[1].includes('|')) continue; // G80：图片引用行/表格碎片伪标题
+        got.push(mm[1]);
+      }
+      if (got.length && t.length > 30) { docHeadings.push(...got); }
+    }
     if (t.startsWith('|')) {
       if (!ti) { ti = 0; docTables.push({ headerCells: [], dataRows: 0, dataCells: [] }); }
       if (ti === 0) { docTables[docTables.length - 1].headerCells = t.slice(1, -1).split('|').map(c => c.trim()).filter(Boolean); ti = 1; }
@@ -184,30 +198,42 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const lh = [];
   for (const node of live.texts) {
     const lines = String(node).split('\n').map(s => s.trim()).filter(Boolean);
-    let taken = 0;
     for (const line of lines) {
-      if (!HEAD_RE.test(line)) continue;
-      if (taken >= 1) break; // 每节点只取第一处（粘连副标题=同一板块的重复表述）
-      // 标题行清洗：剥离行首前文（取最后一个标题模式起点）
-      const m = line.match(/(?:^|\s)([一二三四五六七八九十]+[、）、][^一二三四五六七八九十]{2,18}(?=\s|$)|优化点[一二三四五六七八九十]+[：:].{0,28}(?=\s|$))/);
-      if (m) { lh.push(m[1]); taken = 1; }
-      else if (HEAD_LINE.test(line)) { lh.push(line.slice(0, 26)); taken = 1; }
+      if (!HEAD_RE.test(line) && !/\s[一二三四五六七八九十]+[、）、]/.test(line) && !/\s优化点[一二三四五六七八九十]+[：:]/.test(line)) continue;
+      // G80：粘连行（"…所有公司 一、通用提醒"）取最后一个标题模式起点；一行可含多个标题则逐个取
+      const re = /([一二三四五六七八九十]+[、）、][^一二三四五六七八九十]{2,18}|优化点[一二三四五六七八九十]+[：:].{0,28})/g;
+      let mm, last = [];
+      while ((mm = re.exec(line)) !== null) {
+        if (/[、）、]\s*[0-9:{]/.test(mm[1])) continue; // G80：示例时间线非标题
+        last.push(mm[1]);
+      }
+      if (last.length) lh.push(...last);
+      else if (HEAD_RE.test(line)) lh.push(line.slice(0, 26));
     }
   }
   const headingIssue = [];
   {
-    // G80：同页重复注解块（通用提醒×N 重复画）——严格交错序无意义。判据改为：
-    // ①标题集合双向包含（norm+去冒号）②去重后首现序一致
+    // G80：同页重复注解块（通用提醒×N 重复画）——严格交错序无意义。判据：
+    // ①标题集合双向包含（norm+去冒号+前缀匹配——live 提取器截 28 字 vs doc 收全行，同标题长度不同）②去重后首现序按前缀配对一致
     const key = (h) => norm(h).replace(/[：:]$/, '');
     const seqOf = (arr) => { const seen = new Set(); const s = []; for (const h of arr) { const k = key(h); if (!seen.has(k)) { seen.add(k); s.push(k); } } return s; };
     const liveSeq = seqOf(lh), docSeq = seqOf(docHeadings);
-    const liveSet = new Set(liveSeq), docSet = new Set(docSeq);
-    const missInDoc = liveSeq.filter(k => !docSet.has(k));
-    const extraInDoc = docSeq.filter(k => !liveSet.has(k));
+    const pmatch = (a, b) => { const L = Math.min(a.length, b.length); return L >= 4 && (a === b || a.slice(0, L) === b.slice(0, L)); };
+    const inSet = (k, arr) => arr.some(k2 => pmatch(k, k2));
+    const missInDoc = liveSeq.filter(k => !inSet(k, docSeq));
+    const extraInDoc = docSeq.filter(k => !inSet(k, liveSeq));
     if (missInDoc.length) headingIssue.push({ idx: -1, live: 'live标题doc缺失×' + missInDoc.length, doc: missInDoc.slice(0, 3).join(' | ') });
     if (extraInDoc.length) headingIssue.push({ idx: -2, live: 'doc多出标题×' + extraInDoc.length, doc: extraInDoc.slice(0, 3).join(' | ') });
-    if (!headingIssue.length && JSON.stringify(liveSeq) !== JSON.stringify(docSeq)) {
-      headingIssue.push({ idx: -3, live: '首现序不一致', doc: 'live:' + liveSeq.slice(0, 4).join('›') + ' doc:' + docSeq.slice(0, 4).join('›') });
+    if (!headingIssue.length) {
+      // 首现序：前缀配对贪心
+      let j = 0, orderOk = true;
+      for (const k of liveSeq) {
+        let found = -1;
+        for (let d2 = j; d2 < docSeq.length; d2++) { if (pmatch(k, docSeq[d2])) { found = d2; break; } }
+        if (found < 0) { orderOk = false; break; }
+        j = found + 1;
+      }
+      if (!orderOk) headingIssue.push({ idx: -3, live: '首现序不一致', doc: 'live:' + liveSeq.slice(0, 4).join('›') + ' doc:' + docSeq.slice(0, 4).join('›') });
     }
   }
 

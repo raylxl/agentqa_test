@@ -825,6 +825,10 @@ async function extractLanhuContent(frame) {
         // G68b：紧邻后随表格块的短文本块=表格标签行（如"使用记录"），同样禁搬——它属于那张表
         const nextBlk = blocks[i + 1];
         if (nextBlk && nextBlk.type === 'table' && nextBlk.top - cand.bottom <= TEXT_GAP) continue;
+        // G81：候选块含章节标题（一、/优化点N：等）禁搬——标题必须留在画布 y 位
+        //（进项账单实证：优化点二整块被锚进更早块→文档标题序 21 颠覆画布序 123）
+        const candLinesForHead = cand.type === 'table' ? cand.mdLines : cand.lines;
+        if ((candLinesForHead[0] || '').match(/^[一二三四五六七八九十]+[、）、]|^优化点[一二三四五六七八九十]+[：:]/)) continue;
         const candLines = cand.type === 'table' ? cand.mdLines : cand.lines;
         const cands = candLines
           .filter(l => l.trim().length >= 2 && l.trim().length <= 10 && !l.trim().startsWith('|'))
