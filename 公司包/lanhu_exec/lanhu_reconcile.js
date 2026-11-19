@@ -178,13 +178,20 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     extras.push(l.slice(0, 60));
   }
 
-  // ── ③ headings 序（G70c：多行文本节点先拆行再判标题） ──
-  const lh = live.texts.flatMap(t => String(t).split('\n')).map(s => s.trim()).filter(t => HEAD_RE.test(t));
+  // ── ③ headings 序（G70c：多行文本节点先拆行再判标题；G80：live 标题节点常与后续句粘连——前缀比对） ──
+  const lhRaw = live.texts.flatMap(t => String(t).split('\n')).map(s => s.trim()).filter(t => HEAD_RE.test(t));
+  const lh = lhRaw.map(h => {
+    // 粘连形态："二、业务流程图 快递退件派费产生条件："→ 标题="二、业务流程图"
+    const m = h.match(/^[一二三四五六七八九十]+[、）、][^一二三四五六七八九十\s]{2,12}(?=\s)/);
+    return m ? m[0] : h;
+  }).filter(h => h.length >= 3);
   const headingIssue = [];
   const n = Math.max(lh.length, docHeadings.length);
   for (let k = 0; k < n; k++) {
     const a = norm(lh[k]), b = norm(docHeadings[k]);
-    if (a !== b) { headingIssue.push({ idx: k, live: (lh[k] || '').slice(0, 30), doc: (docHeadings[k] || '').slice(0, 30) }); if (headingIssue.length >= 5) break; }
+    if (a !== b && !(a && b.startsWith(a))) { // G80：doc 标题以 live 标题开头（同节点粘连）视为对齐
+      headingIssue.push({ idx: k, live: (lh[k] || '').slice(0, 30), doc: (docHeadings[k] || '').slice(0, 30) }); if (headingIssue.length >= 5) break;
+    }
   }
 
   // ── ④ tables 结构（按序贪心匹配；G70c：多层表头用"表头∪首数据行"池比对） ──
@@ -233,7 +240,21 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     }
   }
   for (let L = 0; L < live.tables.length; L++) {
-    if (!usedLive.has(L)) tableIssues.push({ kind: '蓝湖表未入文档', liveHeader: live.tables[L].headerCells.slice(0, 5).join('/') });
+    if (usedLive.has(L)) continue;
+    // G80：枚举/按钮行被 live 侧误判为表头（"全部/99+/已处理"）——doc 以查询条件带截图表达属正确形态，豁免
+    const hc = live.tables[L].headerCells;
+    const t = hc.join(' ');
+    const enumish = hc.length >= 2 && (
+      ((t.match(/未审核|审核通过|审核驳回|未生效|生效中|已失效|未处理|已处理|全部/g) || []).length >= 2) ||
+      hc.every(c => /^(全部|未处理|已处理|99\+|\d+)$/.test(c.trim()))
+    );
+    if (enumish) { tableNotes.push({ kind: '枚举行误判表头(豁免)', liveHeader: hc.slice(0, 4).join('/') }); continue; }
+    // G80：内容溯源豁免——表单元格全部可在 live 文本池找到=形态差异（同 sourced）
+    if (sourced(hc) && sourced(live.tables[L].firstDataRowCells || [])) {
+      tableNotes.push({ kind: 'live未聚表但内容在(豁免)', liveHeader: hc.slice(0, 4).join('/') });
+      continue;
+    }
+    tableIssues.push({ kind: '蓝湖表未入文档', liveHeader: hc.slice(0, 5).join('/') });
   }
 
   // ── ⑤ 画布图数量 ──

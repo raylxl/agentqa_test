@@ -234,7 +234,10 @@ async function robustClickMenu(page, menuName, logger) {
   });
   const item = await page.evaluateHandle((nm) => {
     const els = [...document.querySelectorAll('.tree-item-wrapper,.tree-name,[class*="tree-item"]')];
-    return els.find(x => (x.textContent || '').trim() === nm)
+    // G80：三级归一匹配（R2 全/半角问号 + 去空格——v45 表"保证金） 1.27"vs 活树"保证金）1.27"空格差异实证）
+    const norm = (s) => (s || '').replace(/？/g, '?').replace(/\s+/g, '').trim();
+    return els.find(x => norm(x.textContent) === norm(nm))
+        || els.find(x => norm(x.textContent).includes(norm(nm)))
         || els.find(x => (x.textContent || '').trim().includes(nm)) || null;
   }, menuName);
   const el = item.asElement ? item.asElement() : null;

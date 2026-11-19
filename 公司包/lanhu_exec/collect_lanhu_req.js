@@ -495,7 +495,9 @@ function acceptanceGate(A, manifest, logger) {
       const bd = ex.bands[bi];
       const r = await shootStrip(bd, `查询条件_${bi + 1}.png`, '查询条件带截图');
       bandShots.push(r);
-      const fl = (r || []).flat().filter(Boolean);
+      let fl = (r || []).flat().filter(Boolean);
+      // G80：stitch 拼接可能把 _右 并入 base（文件消失）——此处同步过滤不存在的文件，防引用悬空
+      fl = fl.filter(fn => fs.existsSync(path.join(imgDir, fn)));
       for (const fn of fl) inlineImgs.push({ top: bd.top, ref: `![查询条件_${bi + 1}](${baseName}_images/${fn})` });
     }
     // G75/G79：mockup 面板逐个一张图——元素级截图 el.screenshot（Playwright 自动滚动合成超视口整元素；
@@ -582,6 +584,21 @@ function acceptanceGate(A, manifest, logger) {
   }
 
   // 2) 图片扫描 + 截图（按通用章节标题归属、语义化命名、过滤装饰图标）
+  // G80（11-19 用户拍板"双版本并存"）：覆盖写前自动备份旧文档+图目录到 历史版本\采集覆盖备份_日期\——永不无备份覆盖
+  {
+    const dstMd = path.join(outDir, baseName + '.md');
+    if (fs.existsSync(dstMd)) {
+      const bakDir = path.join(outDir, '历史版本', '采集覆盖备份_' + new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+      fs.mkdirSync(bakDir, { recursive: true });
+      let bakMd = path.join(bakDir, baseName + '.md');
+      let n = 1;
+      while (fs.existsSync(bakMd)) bakMd = path.join(bakDir, baseName + '_' + (n++) + '.md');
+      fs.copyFileSync(dstMd, bakMd);
+      const dimg = path.join(outDir, baseName + '_images');
+      if (fs.existsSync(dimg)) fs.cpSync(dimg, bakMd.slice(0, -3) + '_images', { recursive: true });
+      logger.info('G80 已备份旧文档 → ' + path.relative(outDir, bakMd));
+    }
+  }
   fs.mkdirSync(imgDir, { recursive: true });
 
   const { imgs, heads, scrollHeight } = await liveFrame.evaluate(scanImagesAndHeadings);
@@ -748,7 +765,12 @@ function acceptanceGate(A, manifest, logger) {
   //    parts=extract 块级 {top,bottom,text}（浮层重排后的最终序）；inlineImgs 按 top 排序逐块 flush
   let body;
   if (ex.parts && ex.parts.length) {
-    const sorted = [...inlineImgs].sort((a, b) => a.top - b.top);
+    // G80：stitch 在 inlineImgs 建立之后执行（_右 文件此刻才被并入 base）——组装时终滤不存在的文件
+    const validImgs = inlineImgs.filter(it => {
+      const m = it.ref.match(/\]\((.+?)\)/);
+      return !m || fs.existsSync(path.join(outDir, m[1]));
+    });
+    const sorted = [...validImgs].sort((a, b) => a.top - b.top);
     let cursor = 0;
     const chunks = [];
     for (const pt of ex.parts) {
