@@ -411,14 +411,14 @@ function acceptanceGate(A, manifest, logger) {
   const ex = await extractLanhuContent(liveFrame);
   let md = ex.md;
 
-  // G69/G71：查询条件带 + 高表全景截图（介质忠实）——必须在任何滚动前截（extract 坐标=当刻视口）
+  // G69：查询条件带截图 + G75：mockup 面板截图（每弹窗一张完整图）——必须在任何滚动前截（extract 坐标=当刻视口）
   const baseName = A.name || ('财务需求2026_' + A.menu);
   const outDir = A.outdir;
   const imgDir = path.join(outDir, baseName + '_images');
   const bandShots = [];
-  const fullShots = [];
+  const panelShots = []; // G75：[{file, top, title}] 面板截图清单（阶段2按章节插入）
   let feBox = null;
-  if ((ex.bands && ex.bands.length) || (ex.fulls && ex.fulls.length)) {
+  if ((ex.bands && ex.bands.length) || (ex.panels && ex.panels.length)) {
     fs.mkdirSync(imgDir, { recursive: true });
     const fe = await liveFrame.frameElement().catch(() => null);
     feBox = fe ? await fe.boundingBox() : null;
@@ -475,14 +475,42 @@ function acceptanceGate(A, manifest, logger) {
       const r = await shootStrip(ex.bands[bi], `查询条件_${bi + 1}.png`, '查询条件带截图');
       bandShots.push(r);
     }
-    for (let fi = 0; fi < (ex.fulls || []).length; fi++) {
-      const r = await shootStrip(ex.fulls[fi], `表格全景_${fi + 1}.png`, '表格全景截图');
-      fullShots.push(r);
+    // G75：mockup 面板逐个一张图（每面板=独立弹窗，用户拍板模型）；面板宽≤画布视口宽（无横向溢出），垂直滚入视口裁剪
+    for (let pi = 0; pi < (ex.panels || []).length; pi++) {
+      const pn = ex.panels[pi];
+      const safeT = (pn.title || '面板').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '').slice(0, 14);
+      const f = `界面_${pi + 1}_${safeT}.png`;
+      await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 80)), pn.top).catch(() => {});
+      await page.waitForTimeout(280);
+      const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+      const vh2 = await liveFrame.evaluate(() => window.innerHeight).catch(() => 1080);
+      const ph = Math.min(2400, pn.bottom - pn.top + 16);
+      let y = feBox.y + (pn.top - 8 - curScroll);
+      if (y + ph > feBox.y + vh2) y = Math.max(feBox.y, feBox.y + vh2 - ph);
+      const w = Math.min(pn.right - pn.left + 16, feBox.width - 8);
+      const x = Math.max(feBox.x, feBox.x + pn.left - 8);
+      if (w >= 60 && ph >= 60 && y >= feBox.y - 5) {
+        const take = async () => page.screenshot({ path: path.join(imgDir, f), clip: { x, y, width: w, height: ph }, timeout: 25000 });
+        try {
+          let ok = await take().then(() => true).catch(() => false);
+          if (!ok) { // 面板在视口下缘被夹——再上滚一档重试
+            await liveFrame.evaluate((y2) => window.scrollTo(0, Math.max(0, y2 - 40)), pn.top).catch(() => {});
+            await page.waitForTimeout(250);
+            const cs2 = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+            y = Math.max(feBox.y, feBox.y + (pn.top - 8 - cs2));
+            ok = await take().then(() => true).catch(() => false);
+          }
+          if (ok) {
+            panelShots.push({ file: f, top: pn.top, title: pn.title || '面板' });
+            logger.info(`面板截图 ${f}（${Math.round(w)}x${Math.round(ph)}）`);
+          } else logger.warn('面板截图失败 ' + f);
+        } catch (e) { logger.warn('面板截图失败 ' + f + ': ' + e.message.slice(0, 60)); }
+      }
     }
     await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-    // G73 终案：①左右两拍无缝拼接成一张 ②右侧/底部空白边裁剪
-    const wideShots = [...bandShots, ...fullShots].flat().filter(Boolean);
-    if (wideShots.length) {
+    // G73 终案：查询条件带左右拍拼接 + 空白边裁剪（仅 bands；面板无横向溢出无需拼接）
+    const bandFiles = bandShots.flat().filter(Boolean);
+    if (bandFiles.length) {
       const { execFileSync } = require('child_process');
       const py = process.platform === 'win32' ? 'python' : 'python3';
       try {
@@ -490,7 +518,7 @@ function acceptanceGate(A, manifest, logger) {
         logger.info('左右拍拼接完成');
       } catch (e) { logger.warn('拼接失败(保留两拍): ' + String(e.message).slice(0, 80)); }
       try {
-        execFileSync(py, [path.join(__dirname, 'trim_margin.py'), imgDir, ...wideShots.filter(f => !f.includes('_右'))], { timeout: 60000 });
+        execFileSync(py, [path.join(__dirname, 'trim_margin.py'), imgDir, ...bandFiles.filter(f2 => !f2.includes('_右'))], { timeout: 60000 });
         logger.info('空白边裁剪完成');
       } catch (e) { logger.warn('空白边裁剪失败(保留原图): ' + String(e.message).slice(0, 80)); }
     }
@@ -635,6 +663,14 @@ function acceptanceGate(A, manifest, logger) {
     logger.info('弹窗自动裁剪跳过（detected=0 或 --popups off）');
   }
 
+  // G75：mockup 面板图按章节插入（与画布图同机制：面板 top 落哪个章节就插哪个章节末尾）
+  for (const ps of panelShots) {
+    const key = sectionIndexOf(ps.top);
+    const k = key < 0 ? '__pre__' : key;
+    if (!sectionImgs.has(k)) sectionImgs.set(k, []);
+    sectionImgs.get(k).push(`![${ps.title}](${baseName}_images/${ps.file})`);
+  }
+
   fs.writeFileSync(path.join(outDir, baseName + '_images_map.json'),
     JSON.stringify([...sectionImgs.entries()].map(([k, v]) => [k, v]), null, 2), 'utf-8');
 
@@ -706,7 +742,6 @@ function acceptanceGate(A, manifest, logger) {
     return list.map(fn => `![${prefix}](${baseName}_images/${fn})`).join('\n\n');
   };
   finalMd = finalMd.replace(/^@@TBAND:(\d+)@@[ \t]*$/gm, (m, i) => refsOf(bandShots[+i], `查询条件_${+i + 1}`));
-  finalMd = finalMd.replace(/^@@TFULL:(\d+)@@[ \t]*$/gm, (m, i) => refsOf(fullShots[+i], `表格全景_${+i + 1}`));
   finalMd = finalMd.replace(/\n{3,}/g, '\n\n');
 
   checkSqueezedTable(finalMd, logger);

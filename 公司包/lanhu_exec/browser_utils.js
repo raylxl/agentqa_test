@@ -613,6 +613,30 @@ async function extractLanhuContent(frame) {
       rows.push({ top: currentRowTop, cells: currentRow });
     }
 
+    // G75：mockup 面板检测——axure 的弹窗 mockup = .panel_state（panel_state_content 有内容、尺寸 ≥350×250；
+    // 边框画在内部线条非 CSS border，对客报价解剖实证 u142_state0=新增报价 835x534）。
+    // 模型（用户拍板）：每个弹窗一张完整图；按 y 带混拼多弹窗/多状态是错的。
+    const panels = [];
+    {
+      const docW = document.documentElement.scrollWidth;
+      const sy0 = window.scrollY || 0;
+      document.querySelectorAll('.panel_state').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 350 || r.height < 250) return; // 隐藏 state（display:none）rect=0 自动排除
+        if (r.width >= docW * 0.95) return; // 全画布底板排除
+        for (const p of panels) {
+          if (r.left >= p.left - 2 && r.right <= p.right + 2 && r.top + sy0 >= p.top - 2 && r.bottom + sy0 <= p.bottom + 2) return; // 嵌套跳过
+        }
+        let title = '';
+        for (const t of textElements) {
+          const tt = t.text.trim();
+          if (t.left >= r.left - 4 && t.left < r.right && t.top >= r.top - 4 && t.top < r.top + 60 && tt.length >= 2 && tt.length <= 16) { title = tt; break; }
+        }
+        panels.push({ top: Math.round(r.top + sy0), left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom + sy0), title: title || '面板' });
+      });
+      panels.sort((a, b) => a.top - b.top);
+    }
+
     // 第2步：识别表格区域
     // 策略：连续的多列(>=3)行构成表格区域
     // 蓝湖表格因合并单元格导致列数不一致(3-8)，所以不用列数一致性判断
@@ -645,7 +669,7 @@ async function extractLanhuContent(frame) {
     // 第3步：块级生成输出（text/table 块），供浮层精确内联使用
     const blocks = []; // {type:'text'|'table', top, bottom, lines?|mdLines?}
     const tableBands = []; // G69：查询条件带（表格前导控件区），collect 据此截图
-    const tableFulls = []; // G71：高表全景（多层表头怪物整表截图）
+    // G75：tableFulls（y 带全景）废弃——y 带把并排弹窗/重复状态混拼（用户点破"重复头部"）；改为 panels 面板级截图（声明在检测块）
     const TEXT_GAP = 200; // 垂直间隙超过该值视为独立块（浮层/弹窗 mockup 与正文间的画布间隙）
 
     const pushTextRows = (startIdx, endIdx) => {
@@ -703,14 +727,7 @@ async function extractLanhuContent(frame) {
         }
       }
       if (qBand) { qBand.idx = tableBands.length; qBand.anchors = (tableRows[headerIdx] ? tableRows[headerIdx].cells.map(c => c.text.trim()).filter(t => t && t.length <= 14).slice(0, 4) : []); tableBands.push(qBand); }
-      // G71：高表（多层表头怪物，如填充计费公式区）附整表全景截图——文本表保留（保真），视觉另给一张（用户拍板）
-      if (tableRows[tableRows.length - 1].top + 25 - tableRows[0].top > 260) {
-        const xs2 = tableRows.flatMap(r => r.cells.map(c => c.left)).filter(x => x > 0);
-        const xr2 = tableRows.flatMap(r => r.cells.map(c => c.right)).filter(x => x > 0);
-        if (xs2.length && xr2.length) {
-          tableFulls.push({ top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, left: Math.min(...xs2), right: Math.max(...xr2), anchors: (tableRows[headerIdx] ? tableRows[headerIdx].cells.map(c => c.text.trim()).filter(t => t && t.length <= 14).slice(0, 4) : []) });
-        }
-      }
+      // G75：tableFulls（y 带全景）废弃——y 带把并排弹窗/重复状态混拼一张（用户点破"重复头部"）；改 panels 面板级截图
 
       // 收集所有列位置并聚类
       const allLefts = [];
@@ -777,7 +794,7 @@ async function extractLanhuContent(frame) {
         for (let i = 1; i < tableData.length; i++) {
           mdLines.push('| ' + tableData[i].join(' | ') + ' |');
         }
-        blocks.push({ type: 'table', top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, mdLines, bandIdx: qBand ? qBand.idx : -1, fullIdx: (tableFulls.length && tableFulls[tableFulls.length - 1].top === tableRows[0].top) ? tableFulls.length - 1 : -1 });
+        blocks.push({ type: 'table', top: tableRows[0].top, bottom: tableRows[tableRows.length - 1].top + 25, mdLines, bandIdx: qBand ? qBand.idx : -1 });
       }
 
       lastRowEnd = region.end;
@@ -860,7 +877,6 @@ async function extractLanhuContent(frame) {
       const ls = b.type === 'table' ? b.mdLines : b.lines;
       if (ls.length) {
         if (b.type === 'table' && typeof b.bandIdx === 'number' && b.bandIdx >= 0) outputParts.push('@@TBAND:' + b.bandIdx + '@@');
-        if (b.type === 'table' && typeof b.fullIdx === 'number' && b.fullIdx >= 0) outputParts.push('@@TFULL:' + b.fullIdx + '@@');
         outputParts.push(ls.join('\n'));
       }
     }
@@ -890,7 +906,7 @@ async function extractLanhuContent(frame) {
       return { md: cleanedLines.join('\n'), bands: [] };
     }
 
-    return { md: outputParts.join('\n\n'), bands: tableBands, fulls: tableFulls };
+    return { md: outputParts.join('\n\n'), bands: tableBands, panels };
   });
 }
 
