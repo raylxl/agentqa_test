@@ -94,9 +94,16 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     }
     const imgs = [];
     document.querySelectorAll('img,svg').forEach(el => {
+      // G77：panel_state（mockup 面板）内部的 img/svg 由面板截图整体覆盖——不进画布图计数
+      const host = el.closest ? el.closest('.panel_state') : null;
+      if (host) {
+        const hr = host.getBoundingClientRect();
+        if (hr.width >= 350 && hr.height >= 250) return;
+      }
       const r = el.getBoundingClientRect();
       if (r.width >= 200 && r.height >= 120) imgs.push({ y: Math.round(r.top), h: Math.round(r.height), hidden: false });
-      else if (el.tagName === 'IMG' && el.naturalWidth >= 200 && el.naturalHeight >= 120) imgs.push({ y: -1, h: 0, hidden: true });
+      // G77c：hidden img（rect=0, naturalWidth 有效）不入计数——doc 侧隐藏图走"隐藏图_"引用（不进画布计数），口径须一致；
+      // 隐藏图存在性由 verify 的 MISSING 检查兜底
     });
     // G70c 复盘：位图覆盖豁免过贪（仓内 4 张真表被吞）——撤除硬豁免，仅作信息计数；
     // 位图区的表若真缺失会由 miss/图数量兜底暴露
@@ -130,7 +137,8 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     const m = t.match(/^!\[.*?\]\((.+?)\)/);
     if (m) {
       const f = m[1].split('/').pop();
-      if (/^查询条件_|^表格全景_/.test(f)) docBandImgs.push(f);
+      // G77：界面_（panel_state 面板截图）/查询条件_/表格全景_/弹窗裁剪/隐藏图 均非 live img 元素——不进画布图计数
+      if (/^界面_|^查询条件_|^表格全景_/.test(f) || /弹窗|隐藏图/.test(f)) docBandImgs.push(f);
       else if (/弹窗/.test(f)) { /* 弹窗裁剪不计画布图 */ }
       else docCanvasImgs.push(f);
     }
@@ -168,6 +176,19 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
 
   // ── ④ tables 结构（按序贪心匹配；G70c：多层表头用"表头∪首数据行"池比对） ──
   const poolOf = (arrs) => { const s = new Set(); for (const a of arrs) for (const c of a) for (const x of String(c).split(/\s+/)) { const nx = norm(x); if (nx.length >= 2) s.add(nx); } return s; };
+  // G77：内容溯源豁免——表结构差异若"doc 表全部单元格文本可溯源到 live 文本池"则降级为提示（形态差异非内容缺失）：
+  // 多层表头怪物 doc 合并行 vs live 逐层行=行数不可比；panel_state 内表格 live 行分组可能不聚表=表头无匹配但内容在
+  const tableNotes = [];
+  const sourced = (cells) => {
+    const flat = cells.flat(); // G77b：dataCells 是二维（每行 cell 数组）——必须展平，否则 String(数组) 逗号串全 miss（对客报价 noteCount=0 实证）
+    if (!flat || !flat.length) return false;
+    let hit = 0, total = 0;
+    for (const c of flat) {
+      const segs = String(c).split(/\s+/).map(norm).filter(x => x.length >= 2);
+      for (const sg of segs) { total++; if (liveAllFull.includes(sg)) hit++; }
+    }
+    return total > 0 && hit >= total * 0.9;
+  };
   const tableIssues = [];
   const usedLive = new Set();
   const matches = [];
@@ -187,9 +208,15 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
       usedLive.add(best);
       matches.push({ doc: d, live: best, score: +bestScore.toFixed(2) });
       const dr = docTables[d].dataRows, lr = live.tables[best].dataRows;
-      if (Math.abs(dr - lr) > rowTol) tableIssues.push({ kind: '行数差', docHeader: docTables[d].headerCells.slice(0, 4).join('/'), docRows: dr, liveRows: lr });
+      if (Math.abs(dr - lr) > rowTol) {
+        if (sourced([...docTables[d].headerCells, ...(docTables[d].dataCells || [])]))
+          tableNotes.push({ kind: '行数形态差(内容全溯源)', docHeader: docTables[d].headerCells.slice(0, 3).join('/'), docRows: dr, liveRows: lr });
+        else tableIssues.push({ kind: '行数差', docHeader: docTables[d].headerCells.slice(0, 4).join('/'), docRows: dr, liveRows: lr });
+      }
     } else {
-      tableIssues.push({ kind: '表头无匹配', docHeader: docTables[d].headerCells.slice(0, 5).join('/'), score: bestScore });
+      if (sourced([...docTables[d].headerCells, ...(docTables[d].dataCells || [])]))
+        tableNotes.push({ kind: 'live未聚表但内容在(面板表)', docHeader: docTables[d].headerCells.slice(0, 3).join('/') });
+      else tableIssues.push({ kind: '表头无匹配', docHeader: docTables[d].headerCells.slice(0, 5).join('/'), score: bestScore });
     }
   }
   for (let L = 0; L < live.tables.length; L++) {
@@ -207,7 +234,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     missingCount: missing.length, missingTop: missing.slice(0, 8),
     extraCount: extras.length, extraTop: extras.slice(0, 8),
     headings: { live: lh.length, doc: docHeadings.length, issueCount: headingIssue.length, issues: headingIssue },
-    tables: { live: live.tables.length, doc: docTables.length, matched: matches.length, issueCount: tableIssues.length, issues: tableIssues.slice(0, 8) },
+    tables: { live: live.tables.length, doc: docTables.length, matched: matches.length, issueCount: tableIssues.length, issues: tableIssues.slice(0, 8), noteCount: tableNotes.length, notes: tableNotes.slice(0, 4) },
     images: imgIssue || { liveImgs: liveImgCount, docCanvasImgs: docCanvasImgs.length, ok: true },
     bands: docBandImgs.length,
   };

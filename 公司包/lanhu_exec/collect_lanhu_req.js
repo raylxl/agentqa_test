@@ -103,6 +103,12 @@ function scanImagesAndHeadings() {
   const imgs = [];
   all.forEach((el, i) => {
     const r = el.getBoundingClientRect();
+    // G77：panel_state（mockup 面板）内部的 img/svg 由面板截图整体覆盖——不重复拍散图（与对账器口径一致）
+    const host = el.closest ? el.closest('.panel_state') : null;
+    if (host) {
+      const hr = host.getBoundingClientRect();
+      if (hr.width >= 350 && hr.height >= 250) return;
+    }
     let w = Math.round(r.width), h = Math.round(r.height);
     if (w <= 0 || h <= 0) {
       // 隐藏动态面板中的图（display:none）：rect 为 0 但 naturalWidth 有效 → 真实内容图

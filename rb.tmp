@@ -1,0 +1,53 @@
+{
+  "menu": "对客报价 11.30",
+  "doc": "D:/ZCodetest/需求用例库/需求文档/财务需求2026_云仓_对客报价_11.30_v1.md",
+  "coverage": 1,
+  "missingCount": 0,
+  "missingTop": [],
+  "extraCount": 0,
+  "extraTop": [],
+  "headings": {
+    "live": 5,
+    "doc": 5,
+    "issueCount": 0,
+    "issues": []
+  },
+  "tables": {
+    "live": 8,
+    "doc": 10,
+    "matched": 8,
+    "issueCount": 3,
+    "issues": [
+      {
+        "kind": "行数差",
+        "docHeader": "存储/操作/分拣 包装/装卸/出入库/拦截 快递",
+        "docRows": 9,
+        "liveRows": 23
+      },
+      {
+        "kind": "表头无匹配",
+        "docHeader": "新增报价/填充计费公式",
+        "score": 0
+      },
+      {
+        "kind": "表头无匹配",
+        "docHeader": "设置物流公司/中通冷链 中通冷配/首价            元/单+（箱数-基础箱数            ）*续价            元/箱 最低收费            元，最高收费           元",
+        "score": 0
+      }
+    ],
+    "noteCount": 0,
+    "notes": []
+  },
+  "images": {
+    "liveImgs": 4,
+    "docCanvasImgs": 6,
+    "sample": [
+      "一报价维护_图1.png",
+      "一报价维护_图2.png",
+      "一报价维护_图3.png",
+      "一报价维护_图4.png"
+    ]
+  },
+  "bands": 23,
+  "VERDICT": "RED"
+}
