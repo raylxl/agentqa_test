@@ -525,10 +525,11 @@ def main():
             ok(".gitattributes：* filter=agentpath（本地件，不入库、不污染 git status）")
         except Exception as ex:
             red(f".gitattributes 写入失败：{ex}")
-        pf = str(HERE / "path_filter.py").replace("\\", "/")
+        if not (PKG_CANDIDATE / "pathfilter.py").is_file():   # 仓根+纯ASCII名：Windows 下 git 向过滤器传中文路径会编码损坏（e2e 实证），配置用相对路径调用绕开
+            red("仓根缺 pathfilter.py（老克隆？先 git pull 再重跑自举）")
         pyx = sys.executable.replace("\\", "/")
-        git_pkg(["config", "filter.agentpath.smudge", f'"{pyx}" "{pf}" smudge'])
-        git_pkg(["config", "filter.agentpath.clean", f'"{pyx}" "{pf}" clean'])
+        git_pkg(["config", "filter.agentpath.smudge", f'"{pyx}" pathfilter.py smudge'])
+        git_pkg(["config", "filter.agentpath.clean", f'"{pyx}" pathfilter.py clean'])
         git_pkg(["config", "filter.agentpath.required", "true"])
         ok("filter.agentpath 已配置（required=true：python 不可用时宁可报错不错写路径）")
         # 清旧机制残留的 skip-worktree 位（历史自举装过的话）
