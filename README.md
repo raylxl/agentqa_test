@@ -24,12 +24,15 @@
 
 ## 新机直接克隆本仓（非发起人·过渡期例外通道，2026-11-19 Mac 真机教训立）
 
-本仓=私有仓·过渡期全量（公司包在内）。**克隆 ≠ 可用**：`公司包/agent-company.json` 的 paths 全指向发起人 `D:/ZCodetest/...`，新机（尤其 macOS）不可达；不处理就开工，技能会误判"无配置→降级通用模式"，**整层 L2 族标准静默丢失**（首例=外部参考价首轮 229 条缺族标准返工）。克隆后必做其一：
+本仓=私有仓·过渡期全量（公司包在内）。**克隆 ≠ 可用**：`公司包/agent-company.json` 的 paths 全指向发起人 `D:/ZCodetest/...`，新机（尤其 macOS）不可达；不处理就开工，技能会误判"无配置→降级通用模式"，**整层 L2 族标准静默丢失**（首例=外部参考价首轮 229 条缺族标准返工）。
 
-- 一键：`python Agent本体/tools/deploy_colleague.py`（部署器：路径换算→接线→param_check 一体，macOS 可跑；根定位防呆告警时按提示处理）；
-- 手工三步：`python Agent本体/tools/migrate_paths.py` 换算路径 → 按手艺包`04_技能包/INSTALL.md` 接线（宿主分档）→ `python 公司包/param_check.py` 全绿。
+**自举与拉更新=同一入口，幂等可重跑**：Windows 双击根目录 `自举.bat` / macOS 终端 `bash 自举.command`（等价=`python Agent本体/tools/deploy_colleague.py`，克隆/安全包两布局自适应）。每轮自动：
 
-正式给同事仍优先走下一节**安全包+部署器**（macOS=`部署.command`；真机首验清单已含 WorkBuddy 软闸档）；裸克隆只作过渡期协作通道。
+1. 恢复上轮受保护文件 → `git pull --ff-only`（拉最新；离线可 `--no-pull`）
+2. 路径换算（migrate_paths，备份在 `_migrate_backup_*/`，已 gitignore）→ 宿主检测与接线 → 依赖自装 → param_check
+3. 把本轮本地路径改写整体 skip-worktree 保护——**之后随时 `git pull` 永不与本地路径冲突；拉最新=重跑自举**（恢复→pull→重换算→重新保护，全自动）；你新建的文件不受影响
+
+发起人正本机（D:\ZCodetest）跑克隆通道部署会被防呆拦截（`--force` 才放行）。正式分发仍优先下一节**安全包+部署器**（真机首验清单已含 WorkBuddy 软闸档）；裸克隆是过渡期协作通道。
 
 ## 发给同事（一键打包，2026-11-14 立）
 

@@ -27,6 +27,33 @@ LAUNCHER = "部署.command" if IS_MAC else "部署.bat"
 HERE = Path(__file__).resolve().parent          # <根>\agentqa_test\Agent本体\tools
 ROOT = HERE.parents[2]                          # 解压根（任意盘任意目录）
 
+# ── 布局自适应（2026-11-19 Mac 真机克隆通道立）：PKG=三包所在目录 ──
+#   安全包： <解压根>\agentqa_test\Agent本体\tools → PKG=ROOT\agentqa_test（.git 不在）
+#   git克隆：<克隆根>\Agent本体\tools             → PKG=克隆根=HERE.parents[1]（.git 在此；ROOT=克隆根上一级=工作区根）
+PKG_CANDIDATE = HERE.parents[1]
+IS_CLONE = (PKG_CANDIDATE / "公司包").is_dir() and (PKG_CANDIDATE / ".git").exists()
+PKG = PKG_CANDIDATE if IS_CLONE else ROOT / "agentqa_test"
+
+
+def git_pkg(args):
+    return subprocess.run(["git", "-C", str(PKG_CANDIDATE)] + args,
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+
+def git_skipped_files():
+    """skip-worktree 受保护文件清单（git ls-files -v 前缀 S）"""
+    r = git_pkg(["ls-files", "-v"])
+    if r.returncode != 0:
+        return []
+    return [l[2:] for l in (r.stdout or "").splitlines() if l.startswith("S ")]
+
+
+def git_tracked_set():
+    r = git_pkg(["ls-files"])
+    if r.returncode != 0:
+        return set()
+    return {l.strip() for l in (r.stdout or "").splitlines() if l.strip()}
+
 
 def ok(msg):  print(f"  [OK ] {msg}")
 def red(msg): print(f"  [红 ] {msg}")
@@ -212,22 +239,47 @@ def main():
     ap.add_argument("--no-zcode", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--skip-deps", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--force", action="store_true", help="允许在 D:\\ZCodetest 正本目录执行")
+    ap.add_argument("--no-pull", action="store_true", help="克隆通道跳过 git pull（离线/刚克隆完）")
     args = ap.parse_args()
 
     print("=" * 56)
     print("测试 Agent 一键部署")
     print("=" * 56)
 
-    # ── 1. 定位根 + 防呆 ──
-    if not (ROOT / "agentqa_test").is_dir():
-        red(f"目录结构不像同事包（{ROOT}\\agentqa_test 不存在）——请解压完整 zip 后再跑")
+    # ── 1. 定位根 + 防呆（布局自适应：安全包 / git 克隆两形态，2026-11-19）──
+    if not PKG.is_dir():
+        red(f"目录结构不像同事包/克隆仓（{PKG} 不存在）——解压完整 zip 或完整克隆后再跑")
         sys.exit(1)
-    print(f"  [OK ] 部署根 = {ROOT}（部署器跟着目录走，装完别挪；挪了重跑 {LAUNCHER} 即可）")
-    # 任意目录均可（含 D:\\ZCodetest）；只有当前脚本确实位于包结构中才继续。
+    if IS_CLONE and ROOT.resolve().as_posix().lower() == "d:/zcodetest" and not args.force:
+        red("这是发起人正本机（D:\\ZCodetest）——克隆通道部署在此机禁跑（--force 才放行）")
+        sys.exit(1)
+    print(f"  [OK ] 部署根 = {ROOT}" + ("〔git 克隆通道：三包根=克隆根〕" if IS_CLONE else "")
+          + f"（部署器跟着目录走，装完别挪；挪了重跑 {LAUNCHER} 即可）")
+    if IS_CLONE:
+        # 克隆通道 git 同步：恢复受保护文件（还原上轮本地路径改写）→ 拉最新；本轮 migrate 重新换算，末尾再保护
+        print("── git 同步（克隆通道）──")
+        prot = git_skipped_files()
+        if prot:
+            r1 = git_pkg(["update-index", "--no-skip-worktree", "--"] + prot)
+            r2 = git_pkg(["checkout", "--"] + prot)
+            if r1.returncode == 0 and r2.returncode == 0:
+                ok(f"已恢复 {len(prot)} 件受保护文件到库版本（本地路径改写本轮重新生成）")
+            else:
+                red("受保护文件恢复失败——git 状态异常，先跑 git status 处理后再来")
+                sys.exit(1)
+        if args.no_pull:
+            print("  [跳过] --no-pull：本轮不拉远端")
+        else:
+            r = git_pkg(["pull", "--ff-only"])
+            if r.returncode == 0:
+                last = [x for x in (r.stdout or "").strip().splitlines() if x.strip()]
+                ok("git pull --ff-only：" + (last[-1] if last else "已是最新"))
+            else:
+                print("  [黄] pull 未成（网络/代理？）——先用本地版本继续，恢复网络后重跑自举")
 
     # ── 1.5 升级检测（2026-11-17：更新只动程序，用户数据永不触碰）──
     reg = read_reg()
-    if reg and Path(reg["root"]).is_dir() and Path(reg["root"]) != ROOT:
+    if not IS_CLONE and reg and Path(reg["root"]).is_dir() and Path(reg["root"]) != ROOT:
         old = Path(reg["root"])
         print(f"  [检测] 本机已有部署：{old}（{reg.get('打包时间', '')} / {reg.get('条目', '')}条）")
         a = ""
@@ -276,7 +328,18 @@ def main():
     root_win = str(ROOT).replace("/", "\\")
     root_fwd = str(ROOT).replace("\\", "/")
     n = 0
-    for md in list(ROOT.glob("*.md")) + list((ROOT / "agentqa_test").glob("*.md")):
+    mds = list(ROOT.glob("*.md")) + list((PKG if IS_CLONE else ROOT / "agentqa_test").glob("*.md"))
+    if IS_CLONE:
+        # 克隆通道：git 跟踪件（README 等发版说明）不做本地化改写——保住 git pull 更新流
+        _tracked = git_tracked_set()
+
+        def _is_tracked(m: Path) -> bool:
+            try:
+                return m.relative_to(PKG).as_posix() in _tracked
+            except ValueError:
+                return False
+        mds = [m for m in mds if not _is_tracked(m)]
+    for md in mds:
         try:
             s = md.read_text(encoding="utf-8")
         except Exception:
@@ -377,13 +440,13 @@ def main():
         if not npm:
             red("未检测到 npm（Node.js）——执行能力缺失；先装 Node.js 18+ 后重跑部署")
             deps_ok = False
-        elif not (ROOT / "node_modules" / "playwright").is_dir():
+        elif not ((PKG if IS_CLONE else ROOT) / "node_modules" / "playwright").is_dir():
             try:
                 npm_cmd = ([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", npm,
                             "i", "playwright", "--no-fund", "--no-audit", "--loglevel=error"]
                            if os.name == "nt" and npm.lower().endswith((".cmd", ".bat"))
                            else [npm, "i", "playwright", "--no-fund", "--no-audit", "--loglevel=error"])
-                r = subprocess.run(npm_cmd, cwd=str(ROOT), capture_output=True, text=True,
+                r = subprocess.run(npm_cmd, cwd=str(PKG if IS_CLONE else ROOT), capture_output=True, text=True,
                                    encoding="utf-8", errors="replace", timeout=300)
                 if r.returncode == 0:
                     ok("playwright 库已装（只连接本机 Chrome，不下载浏览器）")
@@ -416,7 +479,7 @@ def main():
 
     # ── 6. 校验 ──
     print("── 校验 ──")
-    pc = ROOT / "agentqa_test" / "公司包" / "param_check.py"
+    pc = PKG / "公司包" / "param_check.py"
     r = subprocess.run([sys.executable, str(pc), "--check"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-2:]))
@@ -425,8 +488,21 @@ def main():
         sys.exit(1)
     ok("param_check PASS（48 值零丢失+路径全可达）")
 
+    if IS_CLONE:
+        # ── 6.5 git 保护（克隆通道）：本轮 migrate/接线产生的本地路径改写全部 skip-worktree，
+        #    同事的 git pull 永不与本地路径冲突；拉最新=重跑本部署器（恢复→pull→重换算→重新保护）──
+        print("── git 保护（克隆通道）──")
+        r = git_pkg(["diff", "--name-only"])
+        mods = [l.strip().replace("\\", "/") for l in (r.stdout or "").splitlines() if l.strip()]
+        if mods:
+            git_pkg(["update-index", "--skip-worktree", "--"] + mods)
+            ok(f"本地路径改写已保护 {len(mods)} 件（skip-worktree；例：{'、'.join(mods[:3])}…）")
+        else:
+            ok("无本地改写，无需保护")
+        print("       以后拉最新=重跑自举（自动 恢复→pull→重换算→重新保护）；你新建的文件不受影响")
+
     # ── 7. 凭证状态提示 ──
-    sec = ROOT / "agentqa_test" / "公司包" / "agent-secrets.json"
+    sec = PKG / "公司包" / "agent-secrets.json"
     print("── 凭证 ──")
     if sec.exists():
         s = sec.read_text(encoding="utf-8")

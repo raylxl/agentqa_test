@@ -133,6 +133,7 @@ function scanImagesAndHeadings() {
     if (overlapChars >= 100) return;
     imgs.push({ index: i, id: el.id || '',
                 tag: el.tagName.toLowerCase(),
+                src: el.currentSrc || el.src || '',
                 top: Math.round(r.top + scrollY), w, h });
   });
   imgs.sort((a, b) => a.top - b.top);
@@ -497,36 +498,62 @@ function acceptanceGate(A, manifest, logger) {
       const fl = (r || []).flat().filter(Boolean);
       for (const fn of fl) inlineImgs.push({ top: bd.top, ref: `![查询条件_${bi + 1}](${baseName}_images/${fn})` });
     }
-    // G75：mockup 面板逐个一张图（每面板=独立弹窗，用户拍板模型）；面板宽≤画布视口宽（无横向溢出），垂直滚入视口裁剪
+    // G75/G79：mockup 面板逐个一张图——元素级截图 el.screenshot（Playwright 自动滚动合成超视口整元素；
+    // 审计实证：横排弹窗布局画布 4980 vs 视口 1640，5 个面板右缘超视口，page.clip 必截半——用户点破"截一半"根因）
+    await liveFrame.evaluate((pans) => {
+      document.querySelectorAll('[data-lanhu-panel]').forEach(el => el.removeAttribute('data-lanhu-panel'));
+      document.querySelectorAll('.panel_state').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 350 || r.height < 250) return;
+        const m = pans.find(p => Math.abs(Math.round(r.left) - p.left) <= 3 && Math.abs(Math.round(r.top + (window.scrollY || 0)) - p.top) <= 3);
+        if (m) el.setAttribute('data-lanhu-panel', String(m.pi));
+      });
+    }, (ex.panels || []).map((p, i) => ({ left: p.left, top: p.top, pi: i }))).catch(() => {});
     for (let pi = 0; pi < (ex.panels || []).length; pi++) {
       const pn = ex.panels[pi];
       const safeT = (pn.title || '面板').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '').slice(0, 14);
       const f = `界面_${pi + 1}_${safeT}.png`;
-      await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 80)), pn.top).catch(() => {});
-      await page.waitForTimeout(280);
-      const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-      const vh2 = await liveFrame.evaluate(() => window.innerHeight).catch(() => 1080);
-      const ph = Math.min(2400, pn.bottom - pn.top + 16);
-      let y = feBox.y + (pn.top - 8 - curScroll);
-      if (y + ph > feBox.y + vh2) y = Math.max(feBox.y, feBox.y + vh2 - ph);
-      const w = Math.min(pn.right - pn.left + 16, feBox.width - 8);
-      const x = Math.max(feBox.x, feBox.x + pn.left - 8);
-      if (w >= 60 && ph >= 60 && y >= feBox.y - 5) {
-        const take = async () => page.screenshot({ path: path.join(imgDir, f), clip: { x, y, width: w, height: ph }, timeout: 25000 });
-        try {
-          let ok = await take().then(() => true).catch(() => false);
-          if (!ok) { // 面板在视口下缘被夹——再上滚一档重试
-            await liveFrame.evaluate((y2) => window.scrollTo(0, Math.max(0, y2 - 40)), pn.top).catch(() => {});
-            await page.waitForTimeout(250);
-            const cs2 = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
-            y = Math.max(feBox.y, feBox.y + (pn.top - 8 - cs2));
-            ok = await take().then(() => true).catch(() => false);
-          }
+      let done = false;
+      // ① 元素级截图（主路径）
+      try {
+        const h = await liveFrame.$(`[data-lanhu-panel="${pi}"]`).catch(() => null);
+        const el = h || null;
+        if (el) {
+          const ok = await el.screenshot({ path: path.join(imgDir, f), timeout: 30000 }).then(() => true)
+            .catch(e => { logger.warn(`面板元素截图失败 ${f}: ` + e.message.slice(0, 60)); return false; });
           if (ok) {
+            const fsx = require('fs');
+            try {
+              const buf = fsx.readFileSync(path.join(imgDir, f));
+              if (buf.length > 2000 && buf.readUInt32BE(16) > 60) { // 有效 PNG 且宽>60
+                panelShots.push({ file: f, top: pn.top, title: pn.title || '面板' });
+                logger.info(`面板截图(元素级) ${f}（${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}）`);
+                done = true;
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (e) { logger.warn(`面板元素路径异常 ${f}: ` + e.message.slice(0, 50)); }
+      // ② 降级：旧 clip 法（视口内面板兜底）
+      if (!done) {
+        await liveFrame.evaluate((y) => window.scrollTo(0, Math.max(0, y - 80)), pn.top).catch(() => {});
+        await page.waitForTimeout(280);
+        const curScroll = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+        const vh2 = await liveFrame.evaluate(() => window.innerHeight).catch(() => 1080);
+        const ph = Math.min(2400, pn.bottom - pn.top + 16);
+        let y = feBox.y + (pn.top - 8 - curScroll);
+        if (y + ph > feBox.y + vh2) y = Math.max(feBox.y, feBox.y + vh2 - ph);
+        const w = Math.min(pn.right - pn.left + 16, feBox.width - 8);
+        const x = Math.max(feBox.x, feBox.x + pn.left - 8);
+        if (w >= 60 && ph >= 60 && y >= feBox.y - 5 && pn.right <= 1648) { // 右缘在视口内才走 clip（否则必截半，宁缺勿残）
+          try {
+            await page.screenshot({ path: path.join(imgDir, f), clip: { x, y, width: w, height: ph }, timeout: 25000 });
             panelShots.push({ file: f, top: pn.top, title: pn.title || '面板' });
-            logger.info(`面板截图 ${f}（${Math.round(w)}x${Math.round(ph)}）`);
-          } else logger.warn('面板截图失败 ' + f);
-        } catch (e) { logger.warn('面板截图失败 ' + f + ': ' + e.message.slice(0, 60)); }
+            logger.info(`面板截图(clip降级) ${f}（${Math.round(w)}x${Math.round(ph)}）`);
+            done = true;
+          } catch (e) { logger.warn('面板clip失败 ' + f + ': ' + e.message.slice(0, 50)); }
+        }
+        if (!done) logger.warn(`面板截图失败（跳过，防半图）: ${f} [right=${pn.right}]`);
       }
     }
     await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
@@ -611,7 +638,27 @@ function acceptanceGate(A, manifest, logger) {
     const file = `${secName}_图${n}.png`;
     const el = allEls[im.index];
     let shotOk = false;
-    if (el) {
+    // G79：原图下载优先（审计：蓝湖 img= http 原图 1:1 显示 complete）——比屏幕截图更保真（原分辨率、不受视口/渲染摆布）
+    if (im.src && (im.src.startsWith('http') || im.src.startsWith('data:'))) {
+      try {
+        let buf = null;
+        if (im.src.startsWith('data:')) {
+          const b64 = im.src.split(',')[1];
+          if (b64) buf = Buffer.from(b64, 'base64');
+        } else {
+          const resp = await page.context().request.get(im.src, { timeout: 20000 });
+          if (resp.ok()) buf = await resp.body();
+        }
+        if (buf && buf.length > 2000 && buf[0] === 0x89 && buf[1] === 0x50) { // PNG 魔数校验
+          fs.writeFileSync(path.join(imgDir, file), buf);
+          shotOk = true;
+          logger.info(`原图下载 ${file}（${buf.length}B ${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}）`);
+        } else if (buf) {
+          logger.warn(`原图非PNG(${buf.length}B magic=${buf[0]},${buf[1]})降级截图: ` + im.src.slice(0, 60));
+        }
+      } catch (e) { logger.warn('原图下载失败降级截图: ' + e.message.slice(0, 60)); }
+    }
+    if (!shotOk && el) {
       await el.scrollIntoViewIfNeeded().catch(() => {});
       await page.waitForTimeout(250);
       // ① 元素截图（15s）；失败则 ② bbox+clip 截图（page.clip 不要求元素 stable——池实例无头态 el.screenshot 常卡 "waiting for element to be stable"）

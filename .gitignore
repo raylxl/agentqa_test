@@ -26,3 +26,6 @@ rb.tmp
 # 跨宿主/跨系统工作痕迹（2026-11-19 Mac 真机克隆：.workbuddy/ 与 .DS_Store 污染 git status）
 .workbuddy/
 .DS_Store
+
+# 克隆通道自举的路径换算备份（deploy_colleague/migrate_paths 产物，本机专属永不入仓）
+_migrate_backup_*/

@@ -62,7 +62,11 @@ python {paths.蓝湖工具}/convert_to_relative_png.py <目标md>               
 
 0. **对账（第三道闸门，独立质检角色）**：`node lanhu_reconcile.js <端口> --menu "<菜单名>" --doc "<文档>"` ——
    与采集器同构导航（共用 robustClickMenu，G64 铁律）独立重访蓝湖，逐文本节点核对文档覆盖；
-   **coverage=1.0 才算采集完成**（非零退出=对账红→修复重采再对账）。三道闸门序：collect GATE（结构）→ lanhu_verify（文件级）→ lanhu_reconcile（内容级×原页）；
+   **coverage=1.0 才算采集完成**（非零退出=对账红→修复重采再对账）。
+0.5 **采集忠实闸（第四道闸门，2026-11-19 立·B4 堵口，离线）**：`python {paths.蓝湖工具}/lanhu_fidelity.py --doc "<文档>" --menu "<菜单名>"` ——
+   对 collect_cache 的 leaves_text.txt（采集时原页文本）查"改没改"（reconcile 查"丢没丢"，互补）：
+   ①改写/自撰（bigram-Dice 溯源）②丢失抽查(黄) ③生僻乱码字符 ④文档字∉源字集（増/説明/頃类异体错字）；非零退出=忠实红→逐条对原文修正复跑至零（R22 采集忠实，禁改写混入；溯源：Mac 真机首跑首版混入改写靠人工抽核抓回）。
+   四道闸门序：collect GATE（结构）→ lanhu_verify（文件级）→ lanhu_reconcile（内容级×原页·覆盖）→ lanhu_fidelity（文字忠实·离线）；
 1. release 实例（pool_run 自动）+ `browser_pool.js status` 确认无残留锁；
 2. 蓝湖页签必须已关（残留页签会让实例被池判忙锁死）；
 3. 台账（{paths.需求流水线台账}）登记采集事件（带时刻）；
