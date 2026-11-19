@@ -10,9 +10,9 @@ standards_version_check_v1.py — 版本一致性机检（防"索引/文件/引�
 """
 import re, sys, pathlib
 
-STD_DIR = pathlib.Path(r"D:\ZCodetest\用例设计标准_我的定稿")
+STD_DIR = pathlib.Path(r"D:/ZCodetest\用例设计标准_我的定稿")
 IDX = STD_DIR / "00_标准体系索引.md"
-SKILL_DIR = pathlib.Path(r"D:\ZCodetest\.zcode\skills")
+SKILL_DIR = pathlib.Path(r"D:/ZCodetest\.zcode\skills")
 
 VRE = re.compile(r'v(\d+(?:\.\d+)?)')
 

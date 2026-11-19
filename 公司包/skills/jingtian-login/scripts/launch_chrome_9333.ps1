@@ -7,8 +7,8 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Resolve-Path (Join-Path $ScriptDir '..\..\..\..\..')
 # G51（2026-11-17）：脚本经用户级 junction 联接位调用时相对层级解析错位（Root=C:\Users），
 # profile 落到不存在的 C:\Users\.chrome-cdp。取第一个真实存在 .chrome-cdp 的候选为准。
-$Root = @($Root.Path, 'D:\ZCodetest') | Where-Object { Test-Path (Join-Path $_ '.chrome-cdp') } | Select-Object -First 1
-if (-not $Root) { Write-Output '__FAILED__ 未找到 .chrome-cdp 配置目录（候选：脚本相对层级 / D:\ZCodetest）'; exit 1 }
+$Root = @($Root.Path, 'D:/ZCodetest') | Where-Object { Test-Path (Join-Path $_ '.chrome-cdp') } | Select-Object -First 1
+if (-not $Root) { Write-Output '__FAILED__ 未找到 .chrome-cdp 配置目录（候选：脚本相对层级 / D:/ZCodetest）'; exit 1 }
 $Chrome = @('C:\Program Files\Google\Chrome\Application\chrome.exe', (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $Chrome) { Write-Output '__FAILED__ 未找到 Google Chrome'; exit 1 }
 

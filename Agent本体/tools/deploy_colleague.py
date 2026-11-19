@@ -257,7 +257,7 @@ def main():
     print(f"  [OK ] 部署根 = {ROOT}" + ("〔git 克隆通道：三包根=克隆根〕" if IS_CLONE else "")
           + f"（部署器跟着目录走，装完别挪；挪了重跑 {LAUNCHER} 即可）")
     if IS_CLONE:
-        # 克隆通道 git 同步：恢复受保护文件（还原上轮本地路径改写）→ 拉最新；本轮 migrate 重新换算，末尾再保护
+        # 克隆通道 git 同步：恢复旧机制保护文件（如有）→ 拉最新；路径本地化由 6.5 路径过滤器接管（2026-11-19 起）
         print("── git 同步（克隆通道）──")
         prot = git_skipped_files()
         if prot:
@@ -508,17 +508,55 @@ def main():
     ok("param_check PASS（48 值零丢失+路径全可达）")
 
     if IS_CLONE:
-        # ── 6.5 git 保护（克隆通道）：本轮 migrate/接线产生的本地路径改写全部 skip-worktree，
-        #    同事的 git pull 永不与本地路径冲突；拉最新=重跑本部署器（恢复→pull→重换算→重新保护）──
-        print("── git 保护（克隆通道）──")
+        # ── 6.5 路径过滤器（克隆通道·2026-11-19）：同事日常更新=纯 git pull，零额外动作 ──
+        #    原理：本地 .gitattributes(* filter=agentpath) + smudge/clean 双向换算根路径；
+        #    检出自动本地化、比较自动还原 → 无本地改动、无 pull 冲突。skip-worktree 旧机制废弃
+        #    （实证：裸 pull 遇受保护文件直接报错卡死，post-merge 钩子无机会跑）。
+        print("── 路径过滤器（克隆通道·日常更新=纯 git pull）──")
+        ga = PKG_CANDIDATE / ".gitattributes"
+        try:
+            cur = ga.read_text(encoding="utf-8") if ga.exists() else ""
+            if "filter=agentpath" not in cur:
+                ga.write_text(cur + "* filter=agentpath\n", encoding="utf-8", newline="\n")
+            excl = PKG_CANDIDATE / ".git" / "info" / "exclude"
+            e = excl.read_text(encoding="utf-8") if excl.exists() else ""
+            if "/.gitattributes" not in e:
+                excl.write_text(e + "\n/.gitattributes\n", encoding="utf-8", newline="\n")
+            ok(".gitattributes：* filter=agentpath（本地件，不入库、不污染 git status）")
+        except Exception as ex:
+            red(f".gitattributes 写入失败：{ex}")
+        pf = str(HERE / "path_filter.py").replace("\\", "/")
+        pyx = sys.executable.replace("\\", "/")
+        git_pkg(["config", "filter.agentpath.smudge", f'"{pyx}" "{pf}" smudge'])
+        git_pkg(["config", "filter.agentpath.clean", f'"{pyx}" "{pf}" clean'])
+        git_pkg(["config", "filter.agentpath.required", "true"])
+        ok("filter.agentpath 已配置（required=true：python 不可用时宁可报错不错写路径）")
+        # 清旧机制残留的 skip-worktree 位（历史自举装过的话）
+        r = git_pkg(["ls-files", "-v"])
+        skips = [l[2:] for l in (r.stdout or "").splitlines() if l.startswith("S ")]
+        if skips:
+            git_pkg(["update-index", "--no-skip-worktree", "--"] + skips)
+            ok(f"已清 {len(skips)} 件旧 skip-worktree 保护位")
+        # 你本地改过的文件先备份（重检出会按库版本+过滤路径重写）
         r = git_pkg(["diff", "--name-only"])
-        mods = [l.strip().replace("\\", "/") for l in (r.stdout or "").splitlines() if l.strip()]
+        mods = [l.strip() for l in (r.stdout or "").splitlines() if l.strip()]
         if mods:
-            git_pkg(["update-index", "--skip-worktree", "--"] + mods)
-            ok(f"本地路径改写已保护 {len(mods)} 件（skip-worktree；例：{'、'.join(mods[:3])}…）")
-        else:
-            ok("无本地改写，无需保护")
-        print("       以后拉最新=重跑自举（自动 恢复→pull→重换算→重新保护）；你新建的文件不受影响")
+            import time as _t3
+            bak = PKG_CANDIDATE / ("_local_edits_backup_" + _t3.strftime("%Y%m%d_%H%M%S"))
+            for m in mods:
+                s = PKG_CANDIDATE / m
+                if s.is_file():
+                    d = bak / m
+                    d.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(s, d)
+            print(f"    [备份] 你本地改过的 {len(mods)} 件 → {bak.name}/（重检出后可取回重放）")
+        # 强制全量重检出：让过滤器接管全部现有文件（一次性，几十秒）
+        git_pkg(["rm", "-r", "--cached", "-q", "."])
+        git_pkg(["reset", "-q", "--hard"])
+        r = git_pkg(["status", "--porcelain"])
+        if (r.stdout or "").strip():
+            print("    [黄] 重检出后仍有本地改动（上方清单）——你自改的文件，属预期")
+        ok("路径本地化已由过滤器接管——**以后拉最新=纯 git pull，无需再跑自举**")
 
     # ── 7. 凭证状态提示 ──
     sec = PKG / "公司包" / "agent-secrets.json"

@@ -33,7 +33,7 @@
 ## 三、三步生成纪律（禁止跳步）
 
 ```bash
-cd 05_交付工具链D:\ZCodetest\MD转XMind生成工具集\07_新标准工具链7_新标准工具链（本包内）
+cd 05_交付工具链D:/ZCodetest\MD转XMind生成工具集\07_新标准工具链7_新标准工具链（本包内）
 
 # 1. 生成（输出路径缺省 = MD 同名 .xmind；sheet 标题缺省取 MD 的 H1）
 python -X utf8 xmind_unified_generator_v2.py <md路径> [<xmind输出路径>] [--sheet-title 标题]

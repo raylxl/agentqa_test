@@ -3,13 +3,13 @@
 param([switch]$Visual)
 $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Cands = @((Resolve-Path (Join-Path $ScriptDir '..\..\..\..\..')).Path, 'D:\ZCodetest')
+$Cands = @((Resolve-Path (Join-Path $ScriptDir '..\..\..\..\..')).Path, 'D:/ZCodetest')
 # G51 同款：经 junction/硬链接位调用时相对层级解析错位——优先取已有 .chrome-cdp-9338 的候选，
 # 其次取已跑过 Chrome CDP（有 .chrome-cdp）的候选，都无才退回第一个存在的候选（首跑建目录）。
 $Root = $Cands | Where-Object { Test-Path (Join-Path $_ '.chrome-cdp-9338') } | Select-Object -First 1
 if (-not $Root) { $Root = $Cands | Where-Object { Test-Path (Join-Path $_ '.chrome-cdp') } | Select-Object -First 1 }
 if (-not $Root) { $Root = $Cands | Where-Object { Test-Path $_ } | Select-Object -First 1 }
-if (-not $Root) { Write-Output '__FAILED__ 未找到部署根（候选：脚本相对层级 / D:\ZCodetest）'; exit 1 }
+if (-not $Root) { Write-Output '__FAILED__ 未找到部署根（候选：脚本相对层级 / D:/ZCodetest）'; exit 1 }
 $Profile = Join-Path $Root '.chrome-cdp-9338'
 if (-not (Test-Path $Profile)) { New-Item -ItemType Directory -Path $Profile | Out-Null }
 $Chrome = @('C:\Program Files\Google\Chrome\Application\chrome.exe', (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')) | Where-Object { Test-Path $_ } | Select-Object -First 1

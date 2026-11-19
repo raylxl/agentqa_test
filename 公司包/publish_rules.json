@@ -521,7 +521,7 @@
    ],
    [
     "rep",
-    "`python D:\\ZCodetest\\jt_chrome\\writeback_check.py",
+    "`python D:/ZCodetest\\jt_chrome\\writeback_check.py",
     "`python {paths.执行工具}/writeback_check.py"
    ],
    [

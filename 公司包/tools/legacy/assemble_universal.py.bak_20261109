@@ -7,12 +7,12 @@ r"""
 
 用法（各需求 _assemble.py 模板）：
     import sys, os
-    sys.path.insert(0, r'D:\ZCodetest\.zcode\skills\usecase-generator\scripts')
+    sys.path.insert(0, r'D:/ZCodetest\.zcode\skills\usecase-generator\scripts')
     from assemble_universal import AssembleConfig, run
     cfg = AssembleConfig()
-    cfg.BASE = r'D:\ZCodetest\需求用例库\用例文件\{菜单}分章'
+    cfg.BASE = r'D:/ZCodetest\需求用例库\用例文件\{菜单}分章'
     cfg.FILES = ['01_xx.md', '02_xx.md', ...]
-    cfg.OUT = r'D:\ZCodetest\需求用例库\用例文件\财务需求{年}_{族}_{菜单}_{版本}_测试用例_v2.md'
+    cfg.OUT = r'D:/ZCodetest\需求用例库\用例文件\财务需求{年}_{族}_{菜单}_{版本}_测试用例_v2.md'
     cfg.TITLE = '财务需求{年}_{族}_{菜单}_{版本} 测试用例'
     cfg.INTRO_FILE = '导语.md'
     cfg.PRE_FILE = 'PRE.md'
