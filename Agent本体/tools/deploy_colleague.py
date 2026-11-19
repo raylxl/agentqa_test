@@ -271,10 +271,17 @@ def main():
         if args.no_pull:
             print("  [跳过] --no-pull：本轮不拉远端")
         else:
+            import hashlib
+            _self = Path(__file__).resolve()
+            _h0 = hashlib.md5(_self.read_bytes()).hexdigest() if _self.exists() else ""
             r = git_pkg(["pull", "--ff-only"])
             if r.returncode == 0:
                 last = [x for x in (r.stdout or "").strip().splitlines() if x.strip()]
                 ok("git pull --ff-only：" + (last[-1] if last else "已是最新"))
+                _h1 = hashlib.md5(_self.read_bytes()).hexdigest() if _self.exists() else ""
+                if _h0 and _h1 and _h0 != _h1:
+                    ok("部署器自身已随 pull 更新——请再跑一次自举（新版接管后续步骤）")
+                    sys.exit(0)
             else:
                 print("  [黄] pull 未成（网络/代理？）——先用本地版本继续，恢复网络后重跑自举")
 
