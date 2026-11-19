@@ -27,6 +27,8 @@ LAYOUT = [(s.encode("utf-8"), d.encode("utf-8")) for s, d in (
      '"执行工具": "D:/ZCodetest/agentqa_test/公司包/jt_exec"'),
     ('"接口执行根": "D:/ZCodetest/jt_chrome/pw_layered"',
      '"接口执行根": "D:/ZCodetest/agentqa_test/公司包/jt_exec/pw_layered"'),
+    ('"jt_chrome": "D:/ZCodetest/jt_chrome"',
+     '"jt_chrome": "D:/ZCodetest/agentqa_test/公司包/jt_exec"'),
 )]
 
 
