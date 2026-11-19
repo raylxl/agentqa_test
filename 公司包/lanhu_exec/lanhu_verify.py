@@ -36,7 +36,10 @@ def main():
     imgs = re.findall(r'!\[.*?\]\((.+?)\)', doc)
     files = sorted(os.listdir(a.imgdir)) if os.path.isdir(a.imgdir) else []
     missing = [i for i in imgs if not os.path.exists(os.path.join(base, i))]
-    print("IMG_REFS", len(imgs), "FILES", len(files), "MISSING", missing)
+    # G79：孤儿文件检查（图目录有 png 但 MD 未引用=历史迭代尸体，删除或补引用）——防"文件比引用多"的静默膨胀
+    referenced = set(os.path.basename(i) for i in imgs)
+    orphans = [f for f in files if f.lower().endswith(".png") and f not in referenced]
+    print("IMG_REFS", len(imgs), "FILES", len(files), "MISSING", missing, "ORPHANS", orphans[:6], "..." if len(orphans) > 6 else "")
 
     # 2. 表格列数一致（按表分组）
     lines = doc.splitlines()
@@ -97,6 +100,8 @@ def main():
     hard = []
     if missing:
         hard.append("图片引用缺文件 %d 处: %s" % (len(missing), missing[:3]))
+        if orphans:
+            hard.append("孤儿文件(未引用png) %d 张: %s" % (len(orphans), orphans[:3]))
     if mismatch:
         hard.append("表格列数不一致 %d 表: %s" % (len(mismatch), [m[0] for m in mismatch]))
     if key_fail:
