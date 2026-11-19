@@ -3,7 +3,7 @@
   "paths": {
     "需求文档": "D:/ZCodetest/需求用例库/需求文档",
     "用例文件": "D:/ZCodetest/需求用例库/用例文件",
-    "标准体系": "D:/ZCodetest/用例设计标准_我的定稿",
+    "标准体系": "D:/ZCodetest/agentqa_test/公司包/标准体系",
     "jt_chrome": "D:/ZCodetest/jt_chrome",
     "pipeline_assets": "D:/ZCodetest/agentqa_test/Agent本体/skills/usecase-pipeline",
     "ai_test": "D:/ZCodetest/AiTest",
@@ -215,6 +215,7 @@
   },
   "路径迁移别名_说明": "目录搬迁/改名登记（旧→新）。param_check 按此把快照旧值换算成新值再判；改名工具 rewire.py 自动追加。旧路径多数仍由兼容联接（junction）保持可达。",
   "路径迁移别名": {
+    "D:/ZCodetest/用例设计标准_我的定稿": "D:/ZCodetest/agentqa_test/公司包/标准体系",
     "D:/ZCodetest/.zcode/skills": "D:/ZCodetest/agentqa_test/Agent本体/skills",
     "D:/ZCodetest/.zcode/agent-company.json": "D:/ZCodetest/agentqa_test/公司包/agent-company.json",
     "D:/ZCodetest/.zcode/agent-secrets.json": "D:/ZCodetest/agentqa_test/公司包/agent-secrets.json",

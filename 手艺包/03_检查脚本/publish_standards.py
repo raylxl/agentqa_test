@@ -96,7 +96,7 @@ def apply_ops(text, ops, src_name):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", default=str(PACK.parent.parent / "用例设计标准_我的定稿"))
+    ap.add_argument("--src", default=str(PACK.parent / "公司包" / "标准体系"))
     ap.add_argument("--rules", default=str(PACK.parent / "公司包" / "publish_rules.json"),
                     help="清洗规则表（内部资产，包外；结构见 publish_rules.example.json）")
     ap.add_argument("--check", action="store_true", help="生成后跑 generic_layer_check（公司词表）自验")
