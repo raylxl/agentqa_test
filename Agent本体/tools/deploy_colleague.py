@@ -36,7 +36,8 @@ PKG = PKG_CANDIDATE if IS_CLONE else ROOT / "agentqa_test"
 
 
 def git_pkg(args):
-    return subprocess.run(["git", "-C", str(PKG_CANDIDATE)] + args,
+    # core.quotepath=false：git 默认把中文路径转八进制转义，过滤/skip-worktree 会全部失配（真机实测实证）
+    return subprocess.run(["git", "-C", str(PKG_CANDIDATE), "-c", "core.quotepath=false"] + args,
                           capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
@@ -310,6 +311,17 @@ def main():
         ok("需求流水线台账_v1.md（占位）")
     else:
         ok("需求流水线台账_v1.md 已存在，跳过")
+    # 凭证空骨架（2026-11-19 克隆通道立：agent-secrets.json 被 .gitignore 挡住不随仓走，param_check 要求可达）
+    sec = PKG / "公司包" / "agent-secrets.json"
+    sec_tpl = PKG / "公司包" / "agent-secrets.template.json"
+    if not sec.exists():
+        if sec_tpl.exists():
+            shutil.copy2(sec_tpl, sec)
+            ok("agent-secrets.json 空骨架（自模板；本机填账密，永不再外发）")
+        else:
+            sec.write_text('{\n  "_说明": "凭证空骨架（模板缺失兜底）：填入账号凭证后保存；本文件=明文凭证唯一落点，永不入仓/外发。",\n'
+                           '  "jt_login": "", "jt_login_2": "", "pm_login": "", "db_pwqsdb": "", "weknora": ""\n}\n', encoding="utf-8")
+            ok("agent-secrets.json 空骨架（兜底键集）")
 
     # ── 3. 路径换算（整包内嵌 D:/ZCodetest → 当前根；migrate_paths 自带备份+幂等）──
     print("── 路径换算 ──")
