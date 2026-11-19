@@ -496,17 +496,6 @@ def main():
     else:
         print("  [测试模式] 跳过依赖安装")
 
-    # ── 6. 校验 ──
-    print("── 校验 ──")
-    pc = PKG / "公司包" / "param_check.py"
-    r = subprocess.run([sys.executable, str(pc), "--check"],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
-    print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-2:]))
-    if r.returncode != 0:
-        red("param_check 未过——把上面输出发给发起人")
-        sys.exit(1)
-    ok("param_check PASS（48 值零丢失+路径全可达）")
-
     if IS_CLONE:
         # ── 6.5 路径过滤器（克隆通道·2026-11-19）：同事日常更新=纯 git pull，零额外动作 ──
         #    原理：本地 .gitattributes(* filter=agentpath) + smudge/clean 双向换算根路径；
@@ -560,6 +549,17 @@ def main():
         if (r.stdout or "").strip():
             print("    [黄] 重检出后仍有本地改动（上方清单）——你自改的文件，属预期")
         ok("路径本地化已由过滤器接管——**以后拉最新=纯 git pull，无需再跑自举**")
+
+    # ── 6. 校验 ──
+    print("── 校验 ──")
+    pc = PKG / "公司包" / "param_check.py"
+    r = subprocess.run([sys.executable, str(pc), "--check"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    print("\n".join("    " + x for x in (r.stdout or "").strip().splitlines()[-2:]))
+    if r.returncode != 0:
+        red("param_check 未过——把上面输出发给发起人")
+        sys.exit(1)
+    ok("param_check PASS（48 值零丢失+路径全可达）")
 
     # ── 7. 凭证状态提示 ──
     sec = PKG / "公司包" / "agent-secrets.json"
