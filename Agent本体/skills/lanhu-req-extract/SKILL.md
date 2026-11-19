@@ -70,6 +70,7 @@ python {paths.蓝湖工具}/convert_to_relative_png.py <目标md>               
 1. release 实例（pool_run 自动）+ `browser_pool.js status` 确认无残留锁；
 2. 蓝湖页签必须已关（残留页签会让实例被池判忙锁死）；
 3. 台账（{paths.需求流水线台账}）登记采集事件（带时刻）；
+3b. **菜单配置正本升版**（G84 教训：11-19 全量重采后漏升 v46 被用户点破）——凡本日有采集动作，收尾必核《财务需求{年份}_菜单配置_vNN》：①表内"提取时间"列刷新 ②更新记录置顶新增本日条目 ③按"只增不覆盖"出 vN+1；
 4. 图片身份确认走 GLM-5.3-Flash（全局规则）；flash 不可用回退 WinRT OCR（`ocr_run.ps1 -Paths <ASCII路径>`，中文路径须先拷 C:\temp 类 ASCII 目录）；两者皆不可→标注"需人工确认图身份"。
 
 ## 坑（本体系实测）
