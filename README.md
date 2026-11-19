@@ -26,7 +26,7 @@
 
 本仓=私有仓·过渡期全量（公司包在内）。**同事侧永远=获取 git 即可**（2026-11-19 用户定谳：首次自举一次，此后更新一律纯 `git pull`；安全包 zip 只作一次性首装件给 git 不可达者，不再二次发版）。**克隆 ≠ 可用**：`公司包/agent-company.json` 的 paths 全指向发起人 `D:/ZCodetest/...`，新机（尤其 macOS）不可达；不处理就开工，技能会误判"无配置→降级通用模式"，**整层 L2 族标准静默丢失**（首例=外部参考价首轮 229 条缺族标准返工）。
 
-**首次自举一次，此后日常更新=纯 `git pull`（零额外动作）**：Windows 双击根目录 `自举.bat` / macOS 终端 `bash 自举.command`（等价=`python Agent本体/tools/deploy_colleague.py`，克隆/安全包两布局自适应）。自举自动完成：git pull → 路径换算 → 宿主接线 → 依赖自装 → param_check → **装路径过滤器**（本地 `.gitattributes` `* filter=agentpath` + smudge/clean：检出自动把发起人路径换成本机路径、比较时自动换回——无本地改动、无 pull 冲突）。此后：
+**首次部署一次，此后日常更新=纯 `git pull`（零额外动作）**：Windows 双击根目录 `部署.bat`（或 `自举.bat`，同一部署器）/ macOS 双击或 `bash 部署.command`（克隆/安全包两布局自适应；zip 包内同名部署入口=同一个东西）。自举自动完成：git pull → 路径换算 → 宿主接线 → 依赖自装 → param_check → **装路径过滤器**（本地 `.gitattributes` `* filter=agentpath` + smudge/clean：检出自动把发起人路径换成本机路径、比较时自动换回——无本地改动、无 pull 冲突）。此后：
 
 - **拉最新=直接 `git pull`**：新内容自动本地化，什么都不用再做（技能/标准有更新需重开宿主会话才生效；你新建的文件不受影响）；
 - 仅这些情况重跑自举：换宿主/换机器、拉到"新增依赖"提示、或 pull 出现意外冲突（自举会先备份你本地改过的文件到 `_local_edits_backup_*/`）；
