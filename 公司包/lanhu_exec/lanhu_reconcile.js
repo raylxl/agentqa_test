@@ -178,19 +178,36 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     extras.push(l.slice(0, 60));
   }
 
-  // ── ③ headings 序（G70c：多行文本节点先拆行再判标题；G80：live 标题节点常与后续句粘连——前缀比对） ──
-  const lhRaw = live.texts.flatMap(t => String(t).split('\n')).map(s => s.trim()).filter(t => HEAD_RE.test(t));
-  const lh = lhRaw.map(h => {
-    // 粘连形态："二、业务流程图 快递退件派费产生条件："→ 标题="二、业务流程图"
-    const m = h.match(/^[一二三四五六七八九十]+[、）、][^一二三四五六七八九十\s]{2,12}(?=\s)/);
-    return m ? m[0] : h;
-  }).filter(h => h.length >= 3);
+  // ── ③ headings 序（G80：live 标题常与正文粘连在同一 _text 节点（"…所有公司 一、通用提醒"）——
+  //    每节点只取第一处标题行，且标题必须处于行首或行尾的粘连位（中段截断行丢弃） ──
+  const HEAD_LINE = /^[一二三四五六七八九十]+[、）、][^一二三四五六七八九十]{2,18}$|^[一二三四五六七八九十]+[、）、].{0,40}$|^优化点[一二三四五六七八九十]+[：:].{0,30}$/;
+  const lh = [];
+  for (const node of live.texts) {
+    const lines = String(node).split('\n').map(s => s.trim()).filter(Boolean);
+    let taken = 0;
+    for (const line of lines) {
+      if (!HEAD_RE.test(line)) continue;
+      if (taken >= 1) break; // 每节点只取第一处（粘连副标题=同一板块的重复表述）
+      // 标题行清洗：剥离行首前文（取最后一个标题模式起点）
+      const m = line.match(/(?:^|\s)([一二三四五六七八九十]+[、）、][^一二三四五六七八九十]{2,18}(?=\s|$)|优化点[一二三四五六七八九十]+[：:].{0,28}(?=\s|$))/);
+      if (m) { lh.push(m[1]); taken = 1; }
+      else if (HEAD_LINE.test(line)) { lh.push(line.slice(0, 26)); taken = 1; }
+    }
+  }
   const headingIssue = [];
-  const n = Math.max(lh.length, docHeadings.length);
-  for (let k = 0; k < n; k++) {
-    const a = norm(lh[k]), b = norm(docHeadings[k]);
-    if (a !== b && !(a && b.startsWith(a))) { // G80：doc 标题以 live 标题开头（同节点粘连）视为对齐
-      headingIssue.push({ idx: k, live: (lh[k] || '').slice(0, 30), doc: (docHeadings[k] || '').slice(0, 30) }); if (headingIssue.length >= 5) break;
+  {
+    // G80：同页重复注解块（通用提醒×N 重复画）——严格交错序无意义。判据改为：
+    // ①标题集合双向包含（norm+去冒号）②去重后首现序一致
+    const key = (h) => norm(h).replace(/[：:]$/, '');
+    const seqOf = (arr) => { const seen = new Set(); const s = []; for (const h of arr) { const k = key(h); if (!seen.has(k)) { seen.add(k); s.push(k); } } return s; };
+    const liveSeq = seqOf(lh), docSeq = seqOf(docHeadings);
+    const liveSet = new Set(liveSeq), docSet = new Set(docSeq);
+    const missInDoc = liveSeq.filter(k => !docSet.has(k));
+    const extraInDoc = docSeq.filter(k => !liveSet.has(k));
+    if (missInDoc.length) headingIssue.push({ idx: -1, live: 'live标题doc缺失×' + missInDoc.length, doc: missInDoc.slice(0, 3).join(' | ') });
+    if (extraInDoc.length) headingIssue.push({ idx: -2, live: 'doc多出标题×' + extraInDoc.length, doc: extraInDoc.slice(0, 3).join(' | ') });
+    if (!headingIssue.length && JSON.stringify(liveSeq) !== JSON.stringify(docSeq)) {
+      headingIssue.push({ idx: -3, live: '首现序不一致', doc: 'live:' + liveSeq.slice(0, 4).join('›') + ' doc:' + docSeq.slice(0, 4).join('›') });
     }
   }
 
