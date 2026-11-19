@@ -357,7 +357,10 @@ function acceptanceGate(A, manifest, logger) {
 
   logger.info('—— 验收闸门清单 ——');
   report.forEach(l => logger.info(l));
-  const manifestPath = path.join(A.outdir, safeFileBase(A) + '_collect_manifest.json');
+  // G82：验收清单落工具侧（lanhu_exec/out/manifests/），不进需求库——库只留 .md + _images/（用户拍板，总需求库干净）
+  const manifestDir = path.join(__dirname, 'out', 'manifests');
+  fs.mkdirSync(manifestDir, { recursive: true });
+  const manifestPath = path.join(manifestDir, safeFileBase(A) + '.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
   logger.info('结构化清单已写: ' + manifestPath);
 
@@ -754,9 +757,7 @@ function acceptanceGate(A, manifest, logger) {
   for (const ps of panelShots) {
     inlineImgs.push({ top: ps.top, ref: `![${ps.title}](${baseName}_images/${ps.file})` });
   }
-
-  fs.writeFileSync(path.join(outDir, baseName + '_images_map.json'),
-    JSON.stringify([['__inline__', inlineImgs.map(i => i.ref)]], null, 2), 'utf-8');
+  // G82：images_map 停写（内联模式后纯冗余、零消费方——用户拍板需求库只留 .md + _images/）
 
   if (A.imagesOnly) { logger.info('仅图片，结束'); return; } // exit 0
   if (A.noMd) { logger.info('不出MD，结束'); return; } // exit 0

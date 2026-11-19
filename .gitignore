@@ -29,3 +29,6 @@ rb.tmp
 
 # 克隆通道自举的路径换算备份（deploy_colleague/migrate_paths 产物，本机专属永不入仓）
 _migrate_backup_*/
+
+# G82：需求库json清理（manifest迁工具侧/out/manifests，images_map停写）
+公司包/lanhu_exec/out/
