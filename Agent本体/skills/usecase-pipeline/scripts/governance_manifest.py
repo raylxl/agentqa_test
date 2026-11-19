@@ -48,7 +48,12 @@ def _load_company_whitelists():
     ids = []
     try:
         with io.open(cfgp, "r", encoding="utf-8") as f:
-            ids = json.load(f).get("白名单", {}).get("历史豁免需求ID", [])
+            cfg_ = json.load(f)
+        wl = cfg_.get("白名单")
+        if wl is None:   # 2026-11-19 三段嵌套化：白名单物理归 业务线.{当前线}
+            _bl = cfg_.get("业务线", {})
+            wl = _bl.get(_bl.get("当前线", ""), {}).get("白名单", {})
+        ids = wl.get("历史豁免需求ID", [])
     except (OSError, ValueError):
         pass
     return frozenset(ids)
