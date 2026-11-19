@@ -145,6 +145,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
         if (/[、）、]\s*[0-9:{，]/.test(mm[1])) continue; // G80：示例时间线（"一、10:10:01…"）非标题
         if (/^[一二三四五六七八九十]+[）]\s*，/.test(mm[1]) || mm[1].includes('），')) continue; // G80：散文括号枚举（"三），其它…"）非标题
         if (mm[1].includes('_图') || mm[1].includes('.png') || mm[1].includes('](') || mm[1].includes('|')) continue; // G80：图片引用行/表格碎片伪标题
+        if (/^[一二三四五六七八九十]+[）]\s*、/.test(mm[1])) continue; // G83：枚举小项（"一）、保价费专用模板"）非章节标题
         got.push(mm[1]);
       }
       if (got.length && t.length > 30) { docHeadings.push(...got); }
