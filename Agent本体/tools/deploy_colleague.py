@@ -513,11 +513,13 @@ def main():
         #    检出自动本地化、比较自动还原 → 无本地改动、无 pull 冲突。skip-worktree 旧机制废弃
         #    （实证：裸 pull 遇受保护文件直接报错卡死，post-merge 钩子无机会跑）。
         print("── 路径过滤器（克隆通道·日常更新=纯 git pull）──")
+        write_reg(ROOT)   # REG 提前写（原在末尾）：过滤器按 REG 决定激活——迟写会让下面的重检出把 migrate 本地化冲回正本
         ga = PKG_CANDIDATE / ".gitattributes"
         try:
             cur = ga.read_text(encoding="utf-8") if ga.exists() else ""
             if "filter=agentpath" not in cur:
-                ga.write_text(cur + "* filter=agentpath\n", encoding="utf-8", newline="\n")
+                # pathfilter.py 自豁免：git 更新文件=先删工作区件再跑 smudge，脚本自己也在罩内会把自己删掉（e2e 实证级联 fatal）
+                ga.write_text(cur + "* filter=agentpath\npathfilter.py -filter\n", encoding="utf-8", newline="\n")
             excl = PKG_CANDIDATE / ".git" / "info" / "exclude"
             e = excl.read_text(encoding="utf-8") if excl.exists() else ""
             if "/.gitattributes" not in e:
