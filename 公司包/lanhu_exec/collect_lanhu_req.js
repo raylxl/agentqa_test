@@ -119,6 +119,18 @@ function scanImagesAndHeadings() {
     }
     // 过滤装饰性小图标/关闭按钮等（真实界面图均 >=200x120）
     if (w < 200 || h < 120) return;
+    // G78：文字型位图识别——img 包围盒内有整段 axure 文本重叠（≥100 字符）= 产品把文字说明贴成图；
+    // 文字已由文本提取覆盖（miss=0 证明），按用户拍板"内容是文字的用文字不用图"跳拍。
+    // 实测：货量考核 6 张文字图 142~764 字符；真界面图（新增/编辑弹窗截图）0 字符。
+    const y1 = r.top + scrollY, y2 = y1 + h;
+    let overlapChars = 0;
+    doc.querySelectorAll('[id$="_text"]').forEach(t => {
+      const tr = t.getBoundingClientRect();
+      if (tr.width <= 0 || tr.height <= 0) return;
+      const ty = tr.top + scrollY;
+      if (ty >= y1 && ty < y2) overlapChars += (t.innerText || '').replace(/\s+/g, '').length;
+    });
+    if (overlapChars >= 100) return;
     imgs.push({ index: i, id: el.id || '',
                 tag: el.tagName.toLowerCase(),
                 top: Math.round(r.top + scrollY), w, h });

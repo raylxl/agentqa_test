@@ -101,7 +101,20 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
         if (hr.width >= 350 && hr.height >= 250) return;
       }
       const r = el.getBoundingClientRect();
-      if (r.width >= 200 && r.height >= 120) imgs.push({ y: Math.round(r.top), h: Math.round(r.height), hidden: false });
+      if (r.width >= 200 && r.height >= 120) {
+        // G78：文字型位图（img 区域内 axure 文本重叠 ≥100 字符）不入计数——内容为文字说明，
+        // 文档以文本呈现（用户拍板），与生成者跳拍判据同源
+        const sy0 = window.scrollY || 0;
+        let oc = 0;
+        document.querySelectorAll('[id$="_text"]').forEach(t => {
+          const tr = t.getBoundingClientRect();
+          if (tr.width <= 0 || tr.height <= 0) return;
+          const ty = tr.top + sy0;
+          if (ty >= r.top + sy0 && ty < r.top + sy0 + r.height) oc += (t.innerText || '').replace(/\s+/g, '').length;
+        });
+        if (oc >= 100) return;
+        imgs.push({ y: Math.round(r.top), h: Math.round(r.height), hidden: false });
+      }
       // G77c：hidden img（rect=0, naturalWidth 有效）不入计数——doc 侧隐藏图走"隐藏图_"引用（不进画布计数），口径须一致；
       // 隐藏图存在性由 verify 的 MISSING 检查兜底
     });
