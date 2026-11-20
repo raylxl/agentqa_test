@@ -41,6 +41,10 @@ ENTRY_RX = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\)", re.M)
 BACKUP_KEEP = 10
 
 
+def zcode_home():
+    return Path(os.environ.get("ZCODE_HOME") or (Path.home() / ".zcode")).expanduser()
+
+
 def locate_root(mem_md):
     """状态/备份落点：沿目录上溯找 memories\，取其上级（=cli\）；找不到则落索引同目录（沙箱模式）"""
     p = Path(mem_md).resolve()
@@ -190,7 +194,7 @@ def main():
     if a.path:
         targets = [a.path]
     else:
-        mem_root = Path.home() / ".zcode" / "cli" / "memories" / "projects"
+        mem_root = zcode_home() / "cli" / "memories" / "projects"
         targets = sorted(str(m) for m in mem_root.glob("*/memory/MEMORY.md")) if mem_root.exists() else []
         if not targets:
             print("[红] 未找到任何 MEMORY.md")

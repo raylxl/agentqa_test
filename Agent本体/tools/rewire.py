@@ -27,7 +27,7 @@ from pathlib import Path
 
 AGENT_ROOT = Path(__file__).resolve().parents[2]          # …\agentqa_test\Agent本体\tools\ 上溯两级= agentqa_test
 WORKSPACE = AGENT_ROOT.parent                              # workspace 根（联接位所在）
-USER_ZCODE = Path(os.path.expanduser("~")) / ".zcode"
+USER_ZCODE = Path(os.environ.get("ZCODE_HOME") or (Path(os.path.expanduser("~")) / ".zcode")).expanduser()
 CLI_CONFIG = USER_ZCODE / "cli" / "config.json"
 ENV_SKILLS = ["jingtian-login", "jingtian-org-switch", "jingtian-tenant-switch", "pm-center-login"]
 
@@ -189,7 +189,8 @@ def ensure_hooks(agent):
         print("  hooks 配置已齐，无改动")
 
 
-CLAUDE_SETTINGS = Path(os.path.expanduser("~")) / ".claude" / "settings.json"
+CLAUDE_HOME = Path(os.environ.get("CLAUDE_HOME") or (Path(os.path.expanduser("~")) / ".claude")).expanduser()
+CLAUDE_SETTINGS = CLAUDE_HOME / "settings.json"
 
 
 def ensure_claude_hooks(agent):

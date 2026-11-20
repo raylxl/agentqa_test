@@ -9,7 +9,7 @@
  *
  * 用法：node chrome_jt_open_menu.js <一级栏目> <菜单名> [--tenant <租户ID|名称>] [--port <CDP端口，缺省9333>]
  * v3（2026-11-09 鲸天菜单改版适配）：侧栏默认停「常用菜单」页签时无栏目→先切「全部菜单」；栏目树改为自研 .tree-node-label（非 el-tree）→新增新版树路径；
- *   业务 frame URL 含菜单 uri 末段亦判打开成功；--port 参数化（注意：--tenant 调用的切租户脚本仍硬编码 9333，非 9333 端口勿带 --tenant）
+ *   业务 frame URL 含菜单 uri 末段亦判打开成功；--port 会同步透传给切租户脚本
  *   例：node chrome_jt_open_menu.js <一级栏目> <菜单名>
  * 输出：RESULT: menu-opened | already-open | menu-not-found | column-click-failed | open-unverified
  */
@@ -59,9 +59,12 @@ async function currentTenant(page) {
     const cur = await currentTenant(page);
     if (cur !== realName) {
       console.log(`[tenant] ${cur} → ${realName}，调租户切换脚本`);
-      const { execSync } = require('child_process');
+      const { execFileSync } = require('child_process');
       try {
-        execSync(`node "${path.join(require('os').homedir(), '.zcode', 'skills', 'jingtian-tenant-switch', 'scripts', 'chrome_jt_tenant.js')}" switch ${wantId}`, { stdio: 'inherit', timeout: 90000 });
+        execFileSync(process.execPath, [
+          path.join(require('os').homedir(), '.zcode', 'skills', 'jingtian-tenant-switch', 'scripts', 'chrome_jt_tenant.js'),
+          'switch', String(wantId), '--port', String(PORT)
+        ], { stdio: 'inherit', timeout: 90000 });
       } catch (_) { console.log('RESULT: tenant-switch-failed'); process.exit(2); }
       page = (await findJtPage(browser)) || page;
       await sleep(2000);

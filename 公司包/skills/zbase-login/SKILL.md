@@ -82,4 +82,4 @@ node scripts/zpeek2.js 一体化 zbase-zlog <expr文件>   # Target.setAutoAttac
 | 点击后 45s 仍不回跳 | 宝盒端没人确认 | 提醒用户；确认后重跑③（登录态幂等） |
 | evaluate 全超时 | 页签导航中/卡死 | `curl -X GET http://127.0.0.1:9338/json/close/<tabId>` 关页签，重跑③ |
 | 9338 连不上 | 实例没起/端口被抢 | 重跑②；`netstat -ano \| grep :9338` 查占用 |
-| profile 落错位置 | 从公司包/联接位调用时相对层级错位 | 脚本按 G51 同款逻辑优先取已有 `.chrome-cdp(-9338)` 的根；仍错则显式改 D:/ZCodetest |
+| profile 落错位置 | 从公司包/联接位调用时相对层级错位 | 脚本按 G51 同款逻辑优先取已有 `.chrome-cdp(-9338)` 的根；仍错则修正公司 profile 的工作区根 |

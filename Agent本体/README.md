@@ -16,6 +16,7 @@
 
 - 物理正本 = 本目录；ZCode 只认固定运行位，靠 junction 联接（`<workspace>\.zcode\skills` → 本目录 `skills\`；用户级环境技能 → `..\公司包\skills\`）；
 - 技能/脚本内定位公司配置与凭证一律**按文件名逐级上溯扫描**（`agent-company.json`/`agent-secrets.json`），不写死目录名——三包目录随便改名，rewire.py 一键重接。
+- 客户端目录可用环境变量覆盖：`ZCODE_HOME`（默认 `<user-home>\.zcode`）、`CLAUDE_HOME`（默认 `<user-home>\.claude`），供并行客户端或多用户目录排查使用。
 
 ## 隔离契约（2026-11-14 验收）
 

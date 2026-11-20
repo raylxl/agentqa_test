@@ -5,6 +5,7 @@
  *   node chrome_jt_tenant.js list                # 列出全部可切租户（实时接口）
  *   node chrome_jt_tenant.js current             # 查看当前租户
  *   node chrome_jt_tenant.js switch <id|名称>    # 切换租户（支持租户ID或名称，如 switch 43 / switch 智冷仓链）
+ *   任意命令可追加 --port <CDP端口>（缺省9333）
  *
  * 机制：POST gateway-ll/uas/auth/changeTenant 拿新 token 写回 localStorage → 清菜单缓存 → reload /dashboard
  * 前提：Chrome 9333 已启动且鲸天已登录（jingtian-login 技能）
@@ -20,6 +21,8 @@ const DASH = 'http://jt-ll.test.ztoeco.com/dashboard';
 // 登录人显示名优先 JT_DISPLAY；未提供时只按鲸天页签/环境标识校验
 const DISPLAY = process.env.JT_DISPLAY || '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const portIdx = process.argv.indexOf('--port');
+const PORT = portIdx > -1 ? process.argv[portIdx + 1] : '9333';
 const HEADERS = t => ({ 'Content-Type': 'application/json', 'Authorization': t, 'authtoken': t, 'PlatformCode': 'ZTOCC_PLATFORM_001', 'client-Type': 'pc' });
 const BODY = extra => JSON.stringify({ platformCode: 'ZTOCC_PLATFORM_001', ...extra });
 
@@ -49,7 +52,7 @@ async function readState(page) {
 (async () => {
   const cmd = (process.argv[2] || '').toLowerCase();
   const arg = process.argv[3];
-  const browser = await chromium.connectOverCDP('http://127.0.0.1:9333');
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   const page = await findJtPage(browser);
   if (!page) { console.error('未找到 jt-ll 页签，先跑 jingtian-login 的 chrome_jt_login.js'); console.log('RESULT: no-jt-tab'); process.exit(2); }
 
