@@ -3,6 +3,7 @@
 用法: python report_sync_lite.py <pw_run_results.log> <测试报告.md>
 解析 `R{n}-TC-{id}|日期|判定|...` 行格式，提取四态数字，与报告§1.2对账+收尾行日期比对。
 不匹配即 RED；全部通过输出 GREEN。
+定位：仅烟雾回归用，不作出口门依据；出口门一律 report_sync.py。
 """
 import sys, io, re, os, datetime
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -13,6 +14,7 @@ if len(sys.argv) < 3:
     sys.exit(2)
 
 log_path, report_path = sys.argv[1], sys.argv[2]
+print('[定位] 仅烟雾回归用，不作出口门依据；出口门一律 report_sync.py')
 
 # ---- 解析文本账本 ----
 lines = io.open(log_path, encoding='utf-8').read().strip().split('\n')

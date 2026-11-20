@@ -13,7 +13,7 @@ description: 需求流水线总调度（跨段状态机）——读流水线台�
 
 - **台账**＝状态正本：`{paths.需求流水线台账}`（活区可更、事件日志只增）；
 - **本技能**＝跨段状态机：读台账 → 验门 → 调环节技能 → 更台账 → 停机。**只做调度，不干环节内的活**；
-- **环节技能**＝手脚（一律不改）：qa-loop（①）/ generator（②）/ challenger（③）/ 交付工具链（④，经 usecase-pipeline）/ executor（⑤）/ feedback-loop（⑥）；
+- **环节技能**＝手脚（一律不改）：qa-loop（①答疑）/ generator（②生成）/ spec-gate（②生成后规格保真门）/ challenger（③设计稿质疑）/ 交付工具链（④，经 usecase-pipeline）/ executor（⑤执行）/ execution-challenger（⑤收尾判定质疑门）/ feedback-loop（⑥反馈）/ defect-challenger（提单前缺陷质疑门）/ usecase-qc（⑦独立质检）。四道门调用时点：spec-gate＝规格生成后开批前；execution-challenger＝每轮执行收尾、进反馈闭环前；defect-challenger＝任何缺陷提单动作前；usecase-qc＝收官放行前。
 - **usecase-pipeline**＝资产宿主＋设计段编排（BRIEF/矩阵/证书/assemble 住那），本技能在其上做跨段调度，不替代。
 
 ## 触发与动作表
@@ -31,7 +31,7 @@ description: 需求流水线总调度（跨段状态机）——读流水线台�
 1. 读台账该线状态行 → 按台账 §二 查**上一段出口门的文件证据**（证书存在？report_sync 绿？两节已更？）；
 2. **门没过 → 不推进**，输出差什么、差在哪（上轮没结账禁开新段——executor 硬闸思想全局化）；
 3. 首次调度该线（或距上次调度>1天）→ 先回查该册测试报告「当前余项清单」+「呈报-拍板台账」两节，校准台账状态行再动（多会话并行，台账可能滞后）。
-4. **质疑门开工巡检（2026-11-20 立·整改③）**：`python jt_chrome/gate_scan.py` 退出码 0 才推进——扫全部在途册，生效后轮次缺质疑门覆盖即红；红=先安排补账（execution-challenger）再推进该线执行段，禁带病开新轮。
+4. **质疑门开工巡检（2026-11-20 立·整改③）**：`python {paths.执行工具}/gate_scan.py` 退出码 0 才推进——扫全部在途册，生效后轮次缺质疑门覆盖即红；红=先安排补账（execution-challenger）再推进该线执行段，禁带病开新轮。
 
 ## 推进粒度（各段不同，禁贪全链）
 
