@@ -293,6 +293,50 @@ else:
     gate_ok = False
     print('  ✗ 报告缺质疑门/双账本结论节，也无「质疑门降级」声明——判定质疑门未过（executor §6.95：无指针=未收官，禁收尾）')
 
+# ===== 硬⑦v2：轮次级覆盖校验（2026-11-20 立 · 质疑门补账整改②）=====
+# 报告级存在性只防"从未有过"；本查防"出过一次就永久绿"（对客 R21 后 R22~R34 漏门实证）：
+# 生效时刻（2026-11-18 02:00）后收尾的每个轮次块，须满足其一：
+#   a) 轮次块内含质疑门/双账本标记；
+#   b) 轮次块内含「质疑门降级」且同块含「抽验」——降级口收紧：自报降级必须附抽验记录（整轮降级须用户拍板字样）；
+#   c) 报告存在「质疑门覆盖：」声明行（补账复核节声明覆盖的历史轮次，如 R1~R3）覆盖该轮号。
+if _norm_max >= RULE7_TS:
+    print('\n=== 质疑门轮次级覆盖校验（硬⑦v2 · 2026-11-20）===')
+    _blocks = re.split(r'(?m)^###\s+', md)
+    _cov_txt = ' '.join(re.findall(r'质疑门覆盖[：:][^\n]{0,120}', md))
+    _cov_nums = set(int(x) for x in re.findall(r'第\s*(\d+)\s*轮', _cov_txt))
+    for _a, _b in re.findall(r'(\d+)\s*[~～]\s*(\d+)', _cov_txt):
+        _cov_nums.update(range(int(_a), int(_b) + 1))
+    _uncovered = []
+    for _blk in _blocks:
+        _hm = re.match(r'第\s*(\d+)\s*轮[^\n]*?（[^）]*?(\d{4}-\d{2}-\d{2})', _blk)
+        if not _hm:
+            continue
+        _rn, _rd = int(_hm.group(1)), _hm.group(2)
+        if _rd < '2026-11-18' or _rn in _cov_nums:
+            continue
+        if re.search(r'双账本|质疑门', _blk):
+            continue
+        if '质疑门降级' in _blk and '抽验' in _blk:
+            continue
+        _uncovered.append(f'第{_rn}轮({_rd})')
+    if _uncovered:
+        gate_ok = False
+        print('  ✗ 生效后轮次未过质疑门且无覆盖声明/合规降级：' + '、'.join(_uncovered) + '——禁收尾（补账=写质疑门覆盖声明行或逐轮出双账本节）')
+    else:
+        print('  ✓ 生效后全部轮次均有质疑门覆盖（块内标记/覆盖声明/附抽验降级三者其一）')
+
+# ===== 硬⑦v3：质疑门内容质量机检（gate_quality · 2026-11-20 立·整改②延伸）=====
+# 机检三查=计数自洽（分项和==合计==账本数）/逐条表对量（复核结果文件在案且 TC 行数≥分项和，抽查冒充全量=红）
+# /改判对账（声明改判数==账本复评改判行数）。质量下限机器拦；上限仍靠 qc/独立复核抽位。
+if _norm_max >= RULE7_TS and re.search(r'双账本|质疑门', md):
+    import subprocess as _sp
+    _gq = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gate_quality.py')
+    if os.path.exists(_gq):
+        _rc = _sp.run([sys.executable, _gq, ledger, report]).returncode
+        if _rc != 0:
+            gate_ok = False
+            print('  ✗ ⑦v3 gate_quality 红——质疑门内容质量不达下限（详见上方 gate_quality 输出）')
+
 print(f'''
 === 判定 ===
 数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"} ／ 失败报告 {"✓ 对上/不适用" if fr_ok else "✗ 缺失/缺卡片，禁收尾"} ／ 质疑门 {"✓ 在案/豁免" if gate_ok else "✗ 缺结论节，禁收尾"}
