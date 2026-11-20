@@ -12,6 +12,9 @@ Agent本体/skills/zbase-log-query/
 __pycache__/
 *.pyc
 *.log
+*.bak
+*.bak_*
+logs/
 .playwright-cli/
 locks/
 
