@@ -9,10 +9,11 @@ ZCode 只认固定运行位（workspace\\.zcode\\skills、用户目录 skills、
   python rewire.py --status                 体检：三包定位/接线贯通/hook 路径/公司配置路径可达
   python rewire.py --rename 公司包 新名      改名（agentqa_test 下的子目录名）：迁目录→重建受影响联接
                                             →改 hook 配置路径→改公司配置路径值→登记路径迁移别名→旧名留兼容联接
-  python rewire.py --repair                 按接线表重建缺失/断开的联接（不动目录），并把 hooks 四件
+  python rewire.py --rename 公司包 新名 --dry-run  只打印改名计划（摘/建联接＋改写配置），不落盘
+  python rewire.py --repair                 按接线表重建缺失/断开的联接（不动目录），并把 hooks 五件
                                             幂等写进 cli\config.json（新机器部署=解压后只跑这一条）
                                             （2026-11-14 随 pack_for_colleague.py 立，补"第二实例"缺口；
-                                             2026-11-15 增第四件 memory_guard 记忆索引守卫）
+                                             后增 memory_guard 记忆索引守卫与 activity_trace 计时底账）
 
 说明：改 cli\\config.json 属重启级配置，执行后必须重开会话才生效（硬规则 8）。
 """
@@ -71,7 +72,8 @@ def wiring(agent, company, workbuddy=False, claude=False, codex=False, codebuddy
     if zcode:
         w.append((WORKSPACE / ".zcode" / "skills", agent / "skills", "流程技能运行位（ZCode 发现口）"))
     # agent 内部技能挂载始终需要：这是物理本体内的公司环境技能联接，不是宿主选择。
-    w.append((agent / "skills" / "devops-login", company / "skills" / "devops-login", "环境技能挂入技能树"))
+    for n in ("devops-login", "zbase-login", "zbase-log-query"):
+        w.append((agent / "skills" / n, company / "skills" / n, "环境技能挂入技能树"))
     if zcode:
         w.append((USER_ZCODE / "cli" / "hooks", agent / "hooks", "hook 旧路径兼容联接（缓存未失效会话用；稳定后可删）"))
         for n in ENV_SKILLS:
@@ -96,6 +98,8 @@ def wiring(agent, company, workbuddy=False, claude=False, codex=False, codebuddy
 
 def make_junction(link, target):
     link, target = Path(link), Path(target)
+    if not target.is_dir():
+        raise RuntimeError(f"联接目标不存在或不是目录，拒绝创建悬空联接：{target}")
     if link.exists() or is_junction(link):
         if is_junction(link):
             (link.unlink() if IS_MAC and link.is_symlink() else os.rmdir(link))   # 只删联接本身，不碰目标内容
@@ -130,8 +134,8 @@ def hook_paths():
 
 def hook_templates(agent):
     """hooks 五件接线表：(事件, matcher, 脚本名, 状态文案)；路径按当前本体解析，不写死。
-    第四件 memory_guard（2026-11-15 立）：MEMORY.md 写后自动体检，防多会话并发写坏记忆索引。
-    第五件 activity_trace（2026-11-16 立，计时与时间线规范§十一第二批）：全部工具调用时刻落
+    memory_guard（2026-11-15 立）：MEMORY.md 写后自动体检，防多会话并发写坏记忆索引。
+    activity_trace（2026-11-16 立，计时与时间线规范§十一第二批）：全部工具调用时刻落
     workspace\\.zcode\\agent_activity.jsonl（净耗时底账）；只挂 PostToolUse 单边=每调用一次开销。"""
     return [("PostToolUse", "Write|Edit", "reread_reminder.py", "正本改动检查"),
             ("PostToolUse", "Write|Edit|ApplyPatch", "paiban_ledger_reminder.py", "拍板对账提醒"),
@@ -141,8 +145,8 @@ def hook_templates(agent):
 
 
 def ensure_hooks(agent):
-    """把 hooks 三件幂等写进 cli\\config.json：按脚本文件名识别，缺则补、路径旧则改；写前备份。
-    （新机器部署缺口：--repair 原先只管联接，同事的 config.json 里没有 hook 条目则三道机器闸全不生效）"""
+    """把 hooks 五件幂等写进 cli\\config.json：按脚本文件名识别，缺则补、路径旧则改；写前备份。
+    （新机器部署缺口：--repair 原先只管联接，同事的 config.json 里没有 hook 条目则五道机器闸全不生效）"""
     events = {}
     if CLI_CONFIG.exists():
         cfg = json.loads(io.open(CLI_CONFIG, encoding="utf-8").read())
@@ -285,7 +289,14 @@ def repair(workbuddy=False, claude=False, codex=False, codebuddy=False, zcode=Tr
     return status(workbuddy, claude, codex, codebuddy, zcode)
 
 
-def rename(old, new):
+def _backup(path):
+    import time
+    bak = path.with_name(path.name + ".bak_rewire_" + time.strftime("%Y%m%d_%H%M%S"))
+    io.open(bak, "wb").write(io.open(path, "rb").read())
+    return bak
+
+
+def rename(old, new, dry_run=False):
     src, dst = AGENT_ROOT / old, AGENT_ROOT / new
     if not src.is_dir() or is_junction(src):
         print(f"[RED] 不是 {AGENT_ROOT} 下的实体目录：{src}")
@@ -295,31 +306,72 @@ def rename(old, new):
         return 1
     old_s, new_s = str(src).replace("\\", "/"), str(dst).replace("\\", "/")
     agent0, company0, _ = locate()
-    for link, target, _n in wiring(agent0, company0):
-        if is_junction(link) and str(target).replace("\\", "/").startswith(old_s):
+    removed = [(link, target) for link, target, _n in wiring(agent0, company0)
+               if is_junction(link) and str(target).replace("\\", "/").startswith(old_s)]
+    if dry_run:
+        print(f"[DRY-RUN] 将改名 {src} → {dst}")
+        for link, target in removed:
+            print(f"[DRY-RUN] 摘联接 {link} → {target}")
+        cp0 = company0 / "agent-company.json"
+        print(f"[DRY-RUN] 备份并改写 {cp0}（{old_s} → {new_s}＋登记路径迁移别名）")
+        if CLI_CONFIG.exists():
+            print(f"[DRY-RUN] 备份并按需改写 {CLI_CONFIG} 的 hook 路径")
+        print(f"[DRY-RUN] 按接线表重建受影响联接，并留旧名兼容联接 {src} → {dst}")
+        return 0
+    baks, made = {}, []
+    try:
+        cp = company0 / "agent-company.json"
+        baks[cp] = _backup(cp)
+        if CLI_CONFIG.exists():
+            baks[CLI_CONFIG] = _backup(CLI_CONFIG)
+        for link, _target in removed:
             (Path(link).unlink() if IS_MAC and Path(link).is_symlink() else os.rmdir(link))
-    os.rename(src, dst)
-    agent, company, _ = locate()
-    cp = company / "agent-company.json"
-    text = io.open(cp, encoding="utf-8").read().replace(old_s, new_s)
-    cfg = json.loads(text)
-    cfg.setdefault("路径迁移别名", {})[old_s] = new_s
-    io.open(cp, "w", encoding="utf-8", newline="").write(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
-    if CLI_CONFIG.exists():
-        raw = io.open(CLI_CONFIG, encoding="utf-8").read()
-        o_esc, n_esc = str(src).replace("\\", "\\\\"), str(dst).replace("\\", "\\\\")
-        if o_esc in raw:
-            io.open(CLI_CONFIG, "w", encoding="utf-8", newline="").write(raw.replace(o_esc, n_esc))
-            print("  ⚠ 已改 cli\\config.json 的 hook 路径 —— 需重开会话生效")
-    for link, target, _n in wiring(agent, company):
+        os.rename(src, dst)
+        agent, company, _ = locate()
+        text = io.open(cp, encoding="utf-8").read().replace(old_s, new_s)
+        cfg = json.loads(text)
+        cfg.setdefault("路径迁移别名", {})[old_s] = new_s
+        io.open(cp, "w", encoding="utf-8", newline="").write(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
+        if CLI_CONFIG.exists():
+            raw = io.open(CLI_CONFIG, encoding="utf-8").read()
+            o_esc, n_esc = str(src).replace("\\", "\\\\"), str(dst).replace("\\", "\\\\")
+            if o_esc in raw:
+                io.open(CLI_CONFIG, "w", encoding="utf-8", newline="").write(raw.replace(o_esc, n_esc))
+                print("  ⚠ 已改 cli\\config.json 的 hook 路径 —— 需重开会话生效")
+        for link, target, _n in wiring(agent, company):
+            try:
+                ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
+            except OSError:
+                ok = False
+            if not ok:
+                make_junction(link, target)
+                made.append(link)
+        make_junction(src, dst)
+    except Exception as e:
+        print(f"[RED] 改名中途失败，开始逆序回滚：{e}")
         try:
-            ok = is_junction(link) and Path(link).exists() and os.path.samefile(link, target)
-        except OSError:
-            ok = False
-        if not ok:
-            make_junction(link, target)
-    make_junction(src, dst)
-    print(f"  已改名 {old} → {new}；旧名保留为兼容联接；别名已登记")
+            for link in made:
+                if is_junction(link):
+                    (Path(link).unlink() if IS_MAC and Path(link).is_symlink() else os.rmdir(link))
+            if dst.is_dir() and not is_junction(dst):
+                os.rename(dst, src)
+            for path, bak in baks.items():
+                if bak.exists():
+                    io.open(path, "wb").write(io.open(bak, "rb").read())
+            for link, target in removed:
+                if not (link.exists() or is_junction(link)):
+                    make_junction(link, target)
+            print("[RED] 已回滚到改名前状态；改前备份保留：")
+            for bak in baks.values():
+                print(f"  {bak}")
+        except Exception as e2:
+            print(f"[RED] 回滚不完整，请按下列备份手工恢复：{e2}")
+            for path, bak in baks.items():
+                print(f"  原文件 {path} ← 备份 {bak}")
+        return 1
+    print(f"  已改名 {old} → {new}；旧名保留为兼容联接；别名已登记；改前备份：")
+    for bak in baks.values():
+        print(f"  {bak}")
     print("  后续人工清扫（可选，旧路径经兼容联接仍可达）：技能/记忆/文档里的旧名文字引用")
     return status()
 
@@ -339,9 +391,11 @@ def main():
     ap.add_argument("--no-zcode", action="store_true",
                     help="不改 ZCode 运行位/hooks（非 ZCode 宿主选择时使用；仅接宿主参数指定的技能位）")
     ap.add_argument("--rename", nargs=2, metavar=("旧名", "新名"))
+    ap.add_argument("--dry-run", action="store_true",
+                    help="配合 --rename：仅打印改名计划（摘/建联接、改写配置），不落盘")
     a = ap.parse_args()
     if a.rename:
-        sys.exit(rename(*a.rename))
+        sys.exit(rename(*a.rename, dry_run=a.dry_run))
     zcode = not a.no_zcode
     if a.repair:
         sys.exit(repair(a.workbuddy, a.claude, a.codex, a.codebuddy, zcode))
