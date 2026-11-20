@@ -1,1 +1,0 @@
-JSON.stringify({kw:(()=>{const i=[...document.querySelectorAll('input')].find(e=>e.offsetParent&&e.placeholder==='搜索...');return i?i.value:'?'})(),head:document.body.innerText.slice(0,260)})

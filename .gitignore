@@ -5,8 +5,10 @@
 dist/
 _git归档/
 公司包/tools/legacy/private-reference/
-# 运行时联接位：物理正本在公司包/skills/devops-login，部署后由 rewire 重建
+# 运行时联接位：物理正本在公司包/skills/{devops-login,zbase-login,zbase-log-query}，部署后由 rewire 重建
 Agent本体/skills/devops-login/
+Agent本体/skills/zbase-login/
+Agent本体/skills/zbase-log-query/
 __pycache__/
 *.pyc
 *.log
