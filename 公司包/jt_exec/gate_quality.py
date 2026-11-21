@@ -39,8 +39,9 @@ judged = sum(1 for r in led.values() if r.get('status') in ('PASS', 'FAIL'))
 rejudge_rows = sum(1 for r in led.values() if '复评改判' in json.dumps(r, ensure_ascii=False))
 
 md = io.open(report_p, encoding='utf-8').read()
-# 定位质疑门节：标题行含"双账本"的 ###/## 节，取其正文到下一个标题
-hm = re.search(r'(?m)^#{2,3} [^\n]*双账本[^\n]*$', md)
+# 定位质疑门节：标题行含"双账本"的 ###/## 节，取**最后一个**（一册多节时=现行覆盖态；历史节为往轮记录）
+_hits = list(re.finditer(r'(?m)^#{2,3} [^\n]*双账本[^\n]*$', md))
+hm = _hits[-1] if _hits else None
 if not hm:
     print('✗ Q0 未找到质疑门/双账本结论节'); sys.exit(1)
 start = hm.end()
@@ -48,7 +49,7 @@ nm = re.search(r'(?m)^#{1,3} ', md[start:])
 sec = md[start:start + nm.start()] if nm else md[start:]
 
 # Q1 解析分项（标签按"包含"匹配：兼容"跳过不成立·待补测"等前缀变体）
-labels = ['确认', '改判通过', '改判失败', '无效待重跑', '存疑', '合法跳过', '待补测']
+labels = ['确认', '改判挂起', '改判通过', '改判失败', '无效待重跑', '存疑', '合法跳过', '待补测']
 nums = {}
 for line in sec.splitlines():
     c = [x.strip() for x in line.strip().strip('|').split('|')] if line.startswith('|') else []
@@ -77,7 +78,7 @@ else:
 # Q2 引用文件存在+逐条行数（支持绝对/相对/通配写法；解析不出时按账本标签落 jt_chrome 全局找）
 tags = re.findall(r'final_([a-z]+)\.json', os.path.basename(ledger_p), re.I)
 tag = tags[0] if tags else None
-cands = re.findall(r'[^\s`，。；）)=]*复核结果[^\s`，。；）)]*\.md', sec)
+cands = re.findall(r'[^\s`，。；）)=]*复核结果[^\s`，。；）)=]*\.md', sec)   # 2026-11-20 Q2修正：右字符类补=号（含等号/冒号路径防截断——TY复核引用首例）
 roots = [os.path.dirname(os.path.abspath(report_p)), r'D:\ZCodetest\jt_chrome', r'D:\ZCodetest\jt_chrome\bill2_exec']
 refs = set()
 for c0 in cands:
@@ -107,8 +108,15 @@ elif full_mode and rows < s:
 else:
     print(f'  ✓ Q2 引用文件 {len(refs)} 份在案，逐条行 {rows} 条' + ('' if not full_mode else f' ≥ 分项和 {s}'))
 
-# Q3 改判对账
-declared = nums.get('改判通过', 0) + nums.get('改判失败', 0)
+# Q3 改判对账（多轮累计：全部双账本节的改判声明合计 vs 账本全量复评改判行）
+declared = nums.get('改判通过', 0) + nums.get('改判失败', 0) + nums.get('改判挂起', 0)
+for _hb in _hits[:-1]:
+    _stop = md.find(chr(10)+'### ', _hb.end())
+    _seg2 = md[_hb.end():_stop if _stop > 0 else len(md)]
+    for _ln in _seg2.splitlines():
+        _c=[x.strip() for x in _ln.strip().strip('|').split('|')] if _ln.startswith('|') else []
+        if len(_c)>=2 and _c[0].replace(' ','').startswith(('改判通过','改判失败','改判挂起')) and _c[1].isdigit():
+            declared += int(_c[1])
 if declared != rejudge_rows:
     print(f'  ✗ Q3 声明改判 {declared} 条 ≠ 账本复评改判行 {rejudge_rows} 条——口头改判未落账'); red += 1
 elif declared or rejudge_rows:
