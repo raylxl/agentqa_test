@@ -24,6 +24,7 @@ r"""memory_health_check.py — 记忆索引体检与守卫校验器（2026-11-15
 import argparse
 import io
 import json
+import os
 import re
 import shutil
 import sys
