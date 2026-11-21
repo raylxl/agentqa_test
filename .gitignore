@@ -19,6 +19,7 @@ logs/
 locks/
 公司包/jt_exec/locks_journal.jsonl
 总用例库设计文档/
+Agent体检/
 
 # 依赖与蓝湖本机配置（地址因人而异，永不入仓/包）
 node_modules/
