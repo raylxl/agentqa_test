@@ -21,7 +21,7 @@ description: 蓝湖原型→Markdown 需求文档采集（当前 agent 版，Chr
 POOL_START=9334 bash {paths.公司包}/jt_exec/pool_run.sh {paths.蓝湖工具}/collect_lanhu_req.js \
   --menu "<probe 出的树内真实菜单名，一字不差>" \
   --name "财务需求{年份}_{域}_{菜单简名}_v1" \
-  --outdir "<产物目录：正式=D:/ZCodetest/需求用例库/需求文档；试采=lanhu_exec/out>" \
+  --outdir "<产物目录：正式={paths.需求文档}；试采=lanhu_exec/out>" \
   --url "<用户本次给的链接（可省，走本机默认）>"
 ```
 
@@ -51,7 +51,7 @@ python {paths.蓝湖工具}/convert_to_relative_png.py <目标md>               
 
 ## 六、入库定稿（产物 → 权威库）
 
-落 `D:/ZCodetest/需求用例库/需求文档` 时头部按权威库 4 行元信息改写：
+落 `{paths.需求文档}` 时头部按权威库 4 行元信息改写：
 `# {菜单名}` / `> 采集来源：蓝湖 财务需求2026.rp / {模块} / {菜单名}` / `> 采集时间：{ISO}` / `> 状态：{一句话}`（+`> 修订：`有则加）。图片目录与 MD 同名 `_images/`。命名 `财务需求{年份}_{域}_{菜单简名}_vN.md`（域=快运/云仓/智运/财务中心；同库已有同名需求先查重，禁覆盖——历史版本归档处理）。
 
 ## 七、红线摘录（全本见标准）

@@ -35,7 +35,7 @@ DIST = AGENT_ROOT / "dist"
 # playwright 工具缓存目录 / 运行日志（.log 属运行产物，2026-11-14 出包 QC 发现 AiTest 混入 5 个）
 # node_modules（2026-11-19 出包门禁实证混入：playwright 源码触发硬密码误报+png 运行数据红；
 #   依赖=同事侧部署器"依赖自装"步 npm i，不随包）
-COMMON_EXCLUDE_NAMES = {"__pycache__", ".git", "dist", ".playwright-cli", "node_modules"}
+COMMON_EXCLUDE_NAMES = {"__pycache__", ".git", "dist", ".playwright-cli", "node_modules", "logs", "locks"}
 COMMON_EXCLUDE_SUFFIX = (".log", ".pyc")
 # jt_chrome 瘦身：日志与截图、无头浏览器 profile 属运行垃圾，非家底
 JT_EXCLUDE_NAMES = {"ego_shots", "shots"}
@@ -86,7 +86,7 @@ def walk_collect(src, arc_prefix, skip=None):
                 isd = ent.is_dir(follow_symlinks=False)
             except OSError:
                 continue
-            if p.name in COMMON_EXCLUDE_NAMES:
+            if p.name in COMMON_EXCLUDE_NAMES or ".bak" in p.name.lower():
                 continue
             if not isd and p.name.lower().endswith(COMMON_EXCLUDE_SUFFIX):
                 continue
@@ -267,7 +267,7 @@ git -C <部署根>\\agentqa_test pull     # ② 拉最新代码
 双击 <部署根>\\部署.bat                # ③ 重跑部署器：自动换算路径→选宿主→装依赖→param_check 全绿
 ```
 
-为什么安全：已填的 `agent-secrets.json` 在 .gitignore，pull 永不覆盖；需求库/台账/Chrome 登录态在 `agentqa_test/` 之外，pull 碰不到；pull 进来的新文件带占位路径，部署器第③步自动换算并经 param_check 验证，红会明说不会假成功。升级一律走 git：克隆/拉取本仓+跑一次自举（已装安全包的机器=一次性迁移到 git 克隆，此后纯 pull）。zip 只作首次交付件，不再二次发版（2026-11-19 拍板：同事侧永远=获取 git 即可）。
+为什么安全：已填的 `agent-secrets.json` 在 .gitignore，pull 永不覆盖；需求库/台账/Chrome 登录态在 `agentqa_test/` 之外，pull 碰不到；pull 进来的新文件带占位路径，部署器第③步自动换算并经 param_check 验证，红会明说不会假成功。升级一律走 git：克隆/拉取本仓+跑一次部署（已装安全包的机器=一次性迁移到 git 克隆，此后纯 pull）。zip 只作首次交付件，不再二次发版（2026-11-19 拍板：同事侧永远=获取 git 即可）。
 
 ## 验证
 

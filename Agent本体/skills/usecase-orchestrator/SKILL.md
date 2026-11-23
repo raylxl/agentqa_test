@@ -31,7 +31,7 @@ python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/cas
 
 - **台账**＝状态正本：`{paths.需求流水线台账}`（活区可更、事件日志只增）；
 - **本技能**＝跨段状态机：读台账 → 验门 → 调环节技能 → 更台账 → 停机。**只做调度，不干环节内的活**；
-- **环节技能**＝手脚（一律不改）：qa-loop（①）/ generator（②）/ challenger（③）/ 交付工具链（④，经 usecase-pipeline）/ executor（⑤）/ feedback-loop（⑥）；
+- **环节技能**＝手脚（一律不改）：qa-loop（①答疑）/ generator（②生成）/ spec-gate（②生成后规格保真门）/ challenger（③设计稿质疑）/ 交付工具链（④，经 usecase-pipeline）/ executor（⑤执行）/ execution-challenger（⑤收尾判定质疑门）/ feedback-loop（⑥反馈）/ defect-challenger（提单前缺陷质疑门）/ usecase-qc（⑦独立质检）。四道门调用时点：spec-gate＝规格生成后开批前；execution-challenger＝每轮执行收尾、进反馈闭环前；defect-challenger＝任何缺陷提单动作前；usecase-qc＝收官放行前。
 - **usecase-pipeline**＝资产宿主＋设计段编排（BRIEF/矩阵/证书/assemble 住那），本技能在其上做跨段调度，不替代。
 
 ## 触发与动作表
@@ -49,7 +49,7 @@ python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/cas
 1. 读台账该线状态行 → 按台账 §二 查**上一段出口门的文件证据**（证书存在？report_sync 绿？两节已更？）；
 2. **门没过 → 不推进**，输出差什么、差在哪（上轮没结账禁开新段——executor 硬闸思想全局化）；
 3. 首次调度该线（或距上次调度>1天）→ 先回查该册测试报告「当前余项清单」+「呈报-拍板台账」两节，校准台账状态行再动（多会话并行，台账可能滞后）。
-4. **质疑门开工巡检（2026-11-20 立·整改③）**：`python jt_chrome/gate_scan.py` 退出码 0 才推进——扫全部在途册，生效后轮次缺质疑门覆盖即红；红=先安排补账（execution-challenger）再推进该线执行段，禁带病开新轮。
+4. **质疑门开工巡检（2026-11-20 立·整改③）**：`python {paths.执行工具}/gate_scan.py` 退出码 0 才推进——扫全部在途册，生效后轮次缺质疑门覆盖即红；红=先安排补账（execution-challenger）再推进该线执行段，禁带病开新轮。
 
 ## 推进粒度（各段不同，禁贪全链）
 
@@ -59,7 +59,7 @@ python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/cas
 | ②③④ | 段内连跑：生成→质疑修复循环→证书→三格式差异=0，段末汇报 |
 | ⑤执行 | **一轮一停**：报告产出即停 |
 | ⑥反馈 | 呈报一停：四源盘点→五段式呈报（场景/操作/预期/实际/消息原文）→挂拍板队列→停 |
-| ⑦收尾 | 一次到位，置信度判断输出后停机等签字 |
+| ⑦收尾 | usecase-qc 独立质检（六查证伪→红清零＋复检绿＝放行）；坑库沉淀/回写候选/置信度已在⑤尾部完成，放行后停机等签字 |
 
 ## 停机卡（每次停机必输出，固定四行）
 
@@ -85,7 +85,7 @@ python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/cas
 2. **开发知识库检索（可选适配器）**：按公司 profile `integrations.knowledge_base` 声明的能力调用；未配置或不可用时跳过并记录 BLOCKED，不猜测 provider/tool 名称。
 3. 界面遍历：{环境.登录技能}（{环境.chrome端口.用户交互主实例}）→ {环境.租户体系} → 开菜单脚本；字段/必填/长度格式、按钮、弹窗、列表列、筛选器、导入导出、状态流转、提示文案；
 4. 历史用例：总用例库＋usecase-external-compare 圈参考范围；
-5. DB 反推（连接信息不入本文件，见私有配置/项目记忆）：查表结构/枚举值/关联（反推数据模型与状态机）；
+5. DB 反推（连接信息不入本文件，见 integrations.database）：**严格只读**，仅 SELECT/SHOW/DESCRIBE/DESC/EXPLAIN 查表结构/枚举值/关联（反推数据模型与状态机）；
 6. 接口抓包：CDP 抓请求看入参出参、前后端校验分工。
 
 **①' 需求重建（逆向稿两栏铁律）**：写《需求理解说明（逆向稿）》——

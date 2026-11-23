@@ -41,11 +41,9 @@ OLD_FWD = "D:/ZCodetest"
 # ── 包内布局 v2（2026-11-17 用户拍板"解压后=agentqa_test+说明件"）──
 # 工作区正本形态 → 同事包内形态：三资产从部署根收进三包（标准体系/执行工具→公司包；工具链→手艺包05）
 # 仅作用于同事部署包（migrate 只在包解压根跑，工作区正本不经此路径）。
-LAYOUT_MAP = [
-    ("MD转XMind生成工具集/07_新标准工具链", "agentqa_test/手艺包/05_交付工具链/07_新标准工具链"),
-    ("用例设计标准_我的定稿", "agentqa_test/公司包/标准体系"),
-    ("jt_chrome", "agentqa_test/公司包/jt_exec"),
-]
+SHARED_LAYOUT = AGENT_ROOT / "pathfilter_layout.json"
+_LAYOUT_CFG = json.loads(SHARED_LAYOUT.read_text(encoding="utf-8"))
+LAYOUT_MAP = [tuple(pair) for pair in _LAYOUT_CFG["layout_map"]]
 _ROOT_FORMS = ["D:/ZCodetest", "D:\\ZCodetest", "D:\\\\ZCodetest", "d:/ZCodetest", "d:\\ZCodetest", "d:\\\\ZCodetest"]
 
 # 三种字节形态（正/双反/单反）× 盘符大小写两种，替换后同形保留

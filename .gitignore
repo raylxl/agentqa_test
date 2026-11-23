@@ -5,13 +5,21 @@
 dist/
 _git归档/
 公司包/tools/legacy/private-reference/
-# 运行时联接位：物理正本在公司包/skills/devops-login，部署后由 rewire 重建
+# 运行时联接位：物理正本在公司包/skills/{devops-login,zbase-login,zbase-log-query}，部署后由 rewire 重建
 Agent本体/skills/devops-login/
+Agent本体/skills/zbase-login/
+Agent本体/skills/zbase-log-query/
 __pycache__/
 *.pyc
 *.log
+*.bak
+*.bak_*
+logs/
 .playwright-cli/
 locks/
+公司包/jt_exec/locks_journal.jsonl
+总用例库设计文档/
+Agent体检/
 
 # 依赖与蓝湖本机配置（地址因人而异，永不入仓/包）
 node_modules/

@@ -11,6 +11,10 @@ from collections import Counter
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except Exception: pass
 
+if len(sys.argv) < 3:
+    print('用法: python report_sync.py <账本.json> <报告.md> [轮次名]')
+    sys.exit(2)
+
 ledger = sys.argv[1]
 report = sys.argv[2]
 round_name = sys.argv[3] if len(sys.argv) > 3 else '本轮'

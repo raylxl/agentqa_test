@@ -15,6 +15,10 @@ from pathlib import Path
 from _company_profile import load_company_profile, normalize_path, prefix_regex
 
 
+def _zcode_home():
+    return Path(os.environ.get("ZCODE_HOME") or (Path.home() / ".zcode")).expanduser()
+
+
 def _path_rules(profile):
     paths = profile.get("paths") or {}
     rules = []
@@ -37,7 +41,7 @@ def _path_rules(profile):
         add(str(Path(agent_root).parent), "std", "agent三包")
 
     # 用户级 CLI 配置是会话运行配置；改动后需重开会话（按原路径匹配，不 realpath）。
-    user_zcode = Path.home() / ".zcode"
+    user_zcode = _zcode_home()
     rules.extend([
         (re.compile(r"^" + re.escape(normalize_path(user_zcode / "cli" / "config.json")) + r"$", re.I), "cfg", "客户端主配置"),
         (re.compile(r"^" + re.escape(normalize_path(user_zcode / "mcp.json")) + r"$", re.I), "cfg", "MCP配置"),
@@ -54,8 +58,9 @@ def main():
     if not fp:
         return
     # 重启级配置按原路径判定；物理正本规则按 realpath（联接→物理位）判定
-    cfg_hit = fp.lower() == normalize_path(Path.home() / ".zcode" / "cli" / "config.json").lower() \
-        or fp.lower() == normalize_path(Path.home() / ".zcode" / "mcp.json").lower()
+    zcode_home = _zcode_home()
+    cfg_hit = fp.lower() == normalize_path(zcode_home / "cli" / "config.json").lower() \
+        or fp.lower() == normalize_path(zcode_home / "mcp.json").lower()
     if cfg_hit:
         msg = f"⚠[硬规则8] 会话级配置已修改：{fp} —— 需重开会话生效，收尾输出须含此⚠行。"
         sys.stdout.buffer.write(json.dumps({"additionalContext": msg}, ensure_ascii=False).encode("utf-8"))

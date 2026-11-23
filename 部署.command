@@ -1,5 +1,5 @@
 #!/bin/bash
-# [部署] 与 [自举] 是同一部署器（克隆通道首次安装/更新通用）
+# Deploy entry for git-clone installs and updates.
 cd "$(dirname "$0")"
 PY=$(command -v python3 || command -v python)
 if [ -z "$PY" ]; then
@@ -7,4 +7,4 @@ if [ -z "$PY" ]; then
   read -r -p "回车退出" _
   exit 1
 fi
-"$PY" "Agent本体/tools/deploy_colleague.py" "$@"
+"$PY" "deploy.py" "$@"

@@ -56,6 +56,24 @@ node "<本技能>/scripts/zbase_login.js"
 | 操作 | 编辑 → 任务参数填 JSON → 提交 → 运行一次 |
 | 参数 | `{"orderNumber": "订单号", "settlementDate": "yyyy-MM-dd"}`（按订单号+指定日期精确触发，无需等真实周期日） |
 
+## 日志查询（2026-11-17 用户演示路径 + 自动化实测固化）
+
+| 项 | 内容 |
+| --- | --- |
+| 入口 | 应用详情 → 日志菜单：`#/user/application/log?appId={应用}&env={环境}&productCode=prddefhov` |
+| 查询框 | zlog iframe（`zbase-zlog.zt-express.com`，**跨域 OOPIF**）内的"搜索..."框；填词→点"搜索"按钮 |
+| 时间 | 默认 Last 15 minutes；改法=时间弹层 Relative 数字+单位（原生 select 可 JS 设值+change） |
+| 环境 | URL env 参数：`pro*`=生产 / `fat*`=测试；应用列表页"搜索信息"框=**搜应用名**，不是日志关键字 |
+
+**铁律：必须在 ZBASE 内嵌 iframe 态下操作**——顶层直接打开 zlog URL 时"搜索"按钮哑火（不发任何查询请求，performance 里可证）；填词须 `input`+`change` 双事件（change 才把词写进查询模型，缺 change=提交空条件假命中，2026-11-17 双盲验证），双事件后合成 `btn.click()` 有效。
+
+**自动化通道**（跨域 iframe 主文档 JS 够不着，须 CDP 进 OOPIF session）：
+```bash
+# expr 文件示例见 scripts/zlog_query_example.txt（填词+点搜索+抓结果一体，awaitPromise）
+node scripts/zpeek2.js 一体化 zbase-zlog <expr文件>   # Target.setAutoAttach(flatten) 进 iframe 独立 session
+```
+坑：zpeek2 的 evaluate 必须带 `returnByValue+awaitPromise`（async IIFE 否则返回 undefined）；搜索框填值用原生 value setter+input 事件（React 受控）。
+
 ## 故障排查
 
 | 症状 | 原因 | 处理 |
@@ -64,4 +82,4 @@ node "<本技能>/scripts/zbase_login.js"
 | 点击后 45s 仍不回跳 | 宝盒端没人确认 | 提醒用户；确认后重跑③（登录态幂等） |
 | evaluate 全超时 | 页签导航中/卡死 | `curl -X GET http://127.0.0.1:9338/json/close/<tabId>` 关页签，重跑③ |
 | 9338 连不上 | 实例没起/端口被抢 | 重跑②；`netstat -ano \| grep :9338` 查占用 |
-| profile 落错位置 | 从公司包/联接位调用时相对层级错位 | 脚本按 G51 同款逻辑优先取已有 `.chrome-cdp(-9338)` 的根；仍错则显式改 D:/ZCodetest |
+| profile 落错位置 | 从公司包/联接位调用时相对层级错位 | 脚本按 G51 同款逻辑优先取已有 `.chrome-cdp(-9338)` 的根；仍错则修正公司 profile 的工作区根 |

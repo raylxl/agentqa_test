@@ -10,7 +10,7 @@
  *   → 新 token 写回 MICRO_APP_MAIN_TOKEN_KEY，清租户菜单缓存，reload /dashboard
  *
  * 租户ID：冷链快运=1(ZTOCC) 智冷仓链=43(T00011) 物料商城=46 网络货运=49 …
- * 用法：node chrome_jt_switch_tenant_api.js <tenantId> [租户名]
+ * 用法：node chrome_jt_switch_tenant_api.js <tenantId> [租户名] [--port <CDP端口，缺省9333>]
  */
 const path = require('path');
 let chromium;
@@ -20,10 +20,12 @@ if (!chromium) { console.error('找不到 playwright 库'); process.exit(1); }
 
 const TENANT_ID = parseInt(process.argv[2] || '43', 10);
 const TENANT_NAME = process.argv[3] || '智冷仓链';
+const portIdx = process.argv.indexOf('--port');
+const PORT = portIdx > -1 ? process.argv[portIdx + 1] : '9333';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
-  const browser = await chromium.connectOverCDP('http://127.0.0.1:9333');
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   const page = browser.contexts()[0].pages().find(p => {
     try { return p.url().includes('jt-ll.test.ztoeco.com'); } catch (_) { return false; }
   });

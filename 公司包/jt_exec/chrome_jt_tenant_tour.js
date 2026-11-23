@@ -8,6 +8,7 @@
  *   3. 结束切回冷链快运（tenantId=1）
  * 输出：tenant_tour_report.json + tenant_tour_<id>_<name>.png
  * 容错：单租户 API 失败记录后继续；页面跳 SSO（登录态断）则中止并报告。
+ * 用法：node chrome_jt_tenant_tour.js [--port <CDP端口，缺省9333>]
  */
 const path = require('path');
 const fs = require('fs');
@@ -17,6 +18,8 @@ catch (_) { console.error('找不到 playwright：重跑部署器自动安装，
 if (!chromium) { console.error('找不到 playwright 库'); process.exit(1); }
 
 const OUT_DIR = __dirname;
+const portIdx = process.argv.indexOf('--port');
+const PORT = portIdx > -1 ? process.argv[portIdx + 1] : '9333';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const GW = 'http://gateway-ll.test.ztoeco.com';
 
@@ -27,7 +30,7 @@ async function findJtPage(browser) {
 }
 
 (async () => {
-  const browser = await chromium.connectOverCDP('http://127.0.0.1:9333');
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   let page = await findJtPage(browser);
   if (!page) { console.error('未找到 jt-ll 页签，先跑登录脚本'); process.exit(2); }
 

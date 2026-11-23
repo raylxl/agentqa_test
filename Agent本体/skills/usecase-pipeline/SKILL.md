@@ -30,7 +30,7 @@ description: 用例流水线编排壳——编排 L1 设计方法驱动的生成
 
 - `assets/matrices.md`——三矩阵模板（generator 规划用；challenger 另自建一版对照）；
 - `assets/certificate.tpl.md`——九项尺子证书模板（**challenger 签发**）；
-- `scripts/assemble.py`＋格式转换工具；其他物理形态使用需求侧轻量组装配置（见 generator §3）；
+- `scripts/assemble.py`＋格式转换工具；通用组装引擎=`../usecase-generator/scripts/assemble_universal.py`（本体与手艺包均为该相对布局）；其他物理形态使用需求侧轻量组装配置（见 generator §3）；
 - 公司白名单（历史豁免需求 ID/历史分章目录/归档默认根）＝workspace `公司包/agent-company.json`「白名单」节，assemble/governance/universal/archive 脚本自加载（2026-11-13 参数化，等价性由 param_check 快照守护；缺配置=空集/降级路径）。
 
 ## 沿用硬规则（对两方同效）

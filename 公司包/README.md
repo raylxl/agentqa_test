@@ -20,3 +20,4 @@
 1. 凭证只进 `agent-secrets.json`，别处一律写"读凭证文件 xx 字段"；
 2. 本包任何文件不随分发出门；`手艺包` 发版前跑 `generic_layer_check`（词表=本包 company_wordlist.json）+ 密钥扫描双绿；
 3. 接线体检/改名：`python ..\Agent本体\tools\rewire.py --status`。
+4. **数据库只读，开发代码库默认只读并允许指定分支安全同步**：DB 仅 `SELECT/SHOW/DESCRIBE/DESC/EXPLAIN`，禁一切写 SQL、DDL、DCL、锁与事务写操作；开发代码库日常禁 commit/push 及任何工作区写入。用户明确要求当前版本或指定分支审计时，按《开发代码库接入说明》先检查工作区，再 `fetch + switch + pull --ff-only` 并绑定 `branch@commit`；不可安全同步时改用 `git show origin/<分支>:<路径>`。测试执行造数按场景走系统正口：11.30 订单/计费/账单事件请求可用已授权 Mock，标注界面造数的 11.30 报价/政策基础数据必须 UI 构造。

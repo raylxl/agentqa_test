@@ -280,10 +280,10 @@ def main():
                 ok("git pull --ff-only：" + (last[-1] if last else "已是最新"))
                 _h1 = hashlib.md5(_self.read_bytes()).hexdigest() if _self.exists() else ""
                 if _h0 and _h1 and _h0 != _h1:
-                    ok("部署器自身已随 pull 更新——请再跑一次自举（新版接管后续步骤）")
+                    ok("部署器自身已随 pull 更新——请再跑一次部署（新版接管后续步骤）")
                     sys.exit(0)
             else:
-                print("  [黄] pull 未成（网络/代理？）——先用本地版本继续，恢复网络后重跑自举")
+                print("  [黄] pull 未成（网络/代理？）——先用本地版本继续，恢复网络后重跑部署")
 
     # ── 1.5 升级检测（2026-11-17：更新只动程序，用户数据永不触碰）──
     reg = read_reg()
@@ -517,13 +517,13 @@ def main():
         except Exception as ex:
             red(f".gitattributes 写入失败：{ex}")
         if not (PKG_CANDIDATE / "pathfilter.py").is_file():   # 仓根+纯ASCII名：Windows 下 git 向过滤器传中文路径会编码损坏（e2e 实证），配置用相对路径调用绕开
-            red("仓根缺 pathfilter.py（老克隆？先 git pull 再重跑自举）")
+            red("仓根缺 pathfilter.py（老克隆？先 git pull 再重跑部署）")
         pyx = sys.executable.replace("\\", "/")
         git_pkg(["config", "filter.agentpath.smudge", f'"{pyx}" pathfilter.py smudge'])
         git_pkg(["config", "filter.agentpath.clean", f'"{pyx}" pathfilter.py clean'])
         git_pkg(["config", "filter.agentpath.required", "true"])
         ok("filter.agentpath 已配置（required=true：python 不可用时宁可报错不错写路径）")
-        # 清旧机制残留的 skip-worktree 位（历史自举装过的话）
+        # 清旧机制残留的 skip-worktree 位（历史部署装过的话）
         r = git_pkg(["ls-files", "-v"])
         skips = [l[2:] for l in (r.stdout or "").splitlines() if l.startswith("S ")]
         if skips:
@@ -548,7 +548,7 @@ def main():
         r = git_pkg(["status", "--porcelain"])
         if (r.stdout or "").strip():
             print("    [黄] 重检出后仍有本地改动（上方清单）——你自改的文件，属预期")
-        ok("路径本地化已由过滤器接管——**以后拉最新=纯 git pull，无需再跑自举**")
+        ok("路径本地化已由过滤器接管——**以后拉最新=纯 git pull，无需再跑部署**")
 
     # ── 6. 校验 ──
     print("── 校验 ──")
