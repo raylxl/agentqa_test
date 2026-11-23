@@ -9,6 +9,24 @@ description: 需求流水线总调度（跨段状态机）——读流水线台�
 
 读 workspace `公司包/agent-company.json` 解析公司值；`{paths.X}`/`{standards.X}`/`{环境.X}` 由该文件取值（台账路径/机检脚本/考古源均配置化）。**无该文件→降级通用模式**：台账=workspace`需求流水线台账.md`（无则建），考古源按目标系统可得资源裁剪；禁凭旧记忆硬写公司路径。
 
+**总用例库网关（2026-11-20 接入）**：绝对路径全文 = `/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py`（来源 `paths.总用例库`，路径变更时须同步本行）。调用命令 = `python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py <子命令>`。**硬约束：必须用上面的绝对路径全文原样执行，禁止缩写成 `total-case-library/case_library.py` 等相对路径或目录名——2026-11-20 实测相对路径会被判"网关本机不存在"而误降级。** 网关不存在、或输出 `ok=false` → 跳过查库并记一句 BLOCKED 到台账，不影响原流程（等同降级通用模式）。
+
+## 0.5 历史用例预判（进入②生成段前必做·2026-11-20 接入）
+
+派发 generator 之前，先用总库判"这条需求是否已有历史用例"，避免重复造轮子：
+
+```bash
+python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py impact --title "<需求名>" --keyword "<核心词>"
+```
+
+- 读 JSON 输出的 `判定`（NEW / MODIFY / REVIEW）、`复用候选`、`受影响用例(IMPACTS)`；
+- 把判定与候选 case_id 写进派发给 generator 的 BRIEF，作为生成约束：
+  - **NEW**（零命中）→ 生成全新用例；
+  - **MODIFY**（高相似命中）→ 基于候选用例改新版，要求 generator 走格式桥生成"修改+失效"型变更单、建 REPLACES/DERIVED_FROM 关系；
+  - **REVIEW**（弱命中、低于阈值）→ 不自动判复用，把候选 case_id 一并写进 BRIEF，标"需人工确认复用关系"，按全新生成推进、但在答疑/拍板环节请用户确认是否改为改版；
+- **只预判、不写真本**：本步仅输出判定供生成参考，绝不写 `cases/`；沉淀由 generator 经格式桥 → 人工审批 → merge 完成；
+- **降级**：锚点未配置 / 网关不可用 / 输出 `ok=false` → 记一句 BLOCKED 到台账，按"无历史用例"继续，禁卡流程。
+
 ## 定位与分工（不造重叠的壳）
 
 - **台账**＝状态正本：`{paths.需求流水线台账}`（活区可更、事件日志只增）；

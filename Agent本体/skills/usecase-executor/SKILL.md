@@ -97,6 +97,15 @@ description: 用例 AI 执行——按执行操作细则和治理计划执行已
    - **6.6 批次收尾计时（细则§十五）**：全部跑完或终止时写 `run_end` 行，耗时=run_end−run_start——轮次块「做了多久」三要素由此出，漏记=执行工序违规
 6.9 **每轮报告同步（硬性工序·2026-11-13 用户拍板"有规范必须执行"）**：每一轮执行收尾（含增量轮/攻坚轮/复测轮，不只全量轮）必须完成三件事后才算收尾：
    ① **账本落定**（全部状态写回账本 json/jsonl）；
+   ①b **总库回写（2026-11-23 接入）**：账本落定后，把本轮执行结果回写一份到总用例库的 `executions/` 账本——用绝对路径全文（禁缩写为相对路径，实测会误判路径不存在）：
+   ```bash
+   GW=/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library
+   python3 $GW/schemas/write_execution.py --ledger "<本轮ledger.json>" --change-set <本轮变更单号> --requirement "<需求ID>" --source "<环境/菜单/run_id>" --commit
+   ```
+   - **必传 `--requirement`**：不同需求各自用 `TC-COL-01` 这类短编号、全局撞号（实测 `TC-QRY-01` 命中3条）；按需求 ID 过滤 `case.requirement_ids` 才能精准映射到总库流水号。不传则撞号的条自动降级跳过。
+   - **只写 `executions/`**：脚本靠 `legacy_ids` 把 agent 私有编号映射成总库 `case_id`，四态如实透传（PASS/BLOCKED/OBSERVE/FAIL），**收口处置照录、脚本不擅自把 BLOCKED/OBSERVE 改成 PASS**；绝不碰 `cases/` 正本。
+   - **幂等**：同一 `--change-set` 的账本已存在则拒绝覆盖（exit 4），重跑不重复写；确需重写加 `--force`。
+   - **降级**：变更单号未知 / 需求 ID 未知 / 脚本不存在 → 记一句 BLOCKED 到台账、跳过回写，**不影响执行收尾主流程**（等同未接库前的状态）；`unmapped`/`ambiguous` 条脚本会记进账本对应节，不中断其余条。
    ② **报告同步**——按 `execution_adapters.report_sync` 运行收尾校验，再更新总进度、轮次块、最后收尾声明和余项清单；本轮有失败条时同步更新**失败用例专项报告**（交付物§20.10，硬⑥校验对象）；
    ②b **回写完成性校验**——按 `execution_adapters.writeback_check` 对 pending、锚点、统计块和分章一致性做校验；本轮有回写义务时先登记再运行；
    ③ **memory 更新**（本轮关键拍板/新教训一句话）。

@@ -67,3 +67,24 @@ description: 执行反馈闭环——含执行收尾后的 SYS/DEF/IMP/CHG 四�
 2. 按执行反馈闭环正本的分流与五段式呈报；候选用例逐条展示完整五列表并标明载体和来源。
 3. 用户拍板后按正本增量修复：SYS/DEF/IMP/CHG 保留各自载体和血缘，禁止把 CHG 塞进 IMP；修复后重组装、过门禁并执行影响面回归。
 4. 回归轮结束后重新盘点四源并更新报告总账。
+
+## 沉淀到总用例库（收尾动作·2026-11-20 接入）
+
+**时机**：四源盘点、用户拍板收口、执行四态回填全部完成后的最后一步——只有此时用例才定稿（质疑改条数、执行回填、收口拍板都已发生）。**不在 generator 生成后沉淀**（那时变更单必因后续改动过期作废）。
+
+**用户拍板"沉淀"后**（绝对路径全文，禁止缩写为相对路径——2026-11-20 实测会误判网关不存在）：
+
+```bash
+# --profile 按业务线选：external-price（默认）/ customer-bill（对客账单）/ settle-record（结算交易记录）；新域先在 md_to_changeset.py 的 PROFILES 加档
+GW=/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library
+python3 $GW/schemas/md_to_changeset.py --dir "<最终分章目录>" --profile <profile名> --scope-file "<理解说明绝对路径>"  # 生成变更单+证据链到 changes/active/，绝不写真本
+python3 $GW/case_library.py merge $GW/changes/active/CHG-xxx.yaml                       # 人工核对审批记录后，才由人执行合并
+python3 $GW/case_library.py stats                                                        # 对账：源/SQLite/FTS 三数一致
+python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/.总用例库_用例清单.ref/build.py  # 刷新 Excel 派生视图
+```
+
+- **四轴 scope 传导（2026-11-23 接入）**：格式桥 `--scope-file` 传本需求《需求理解说明》绝对路径，沉淀自动带出 qa-loop 答疑拍板的租户/客户范围（对齐主数据）；产品版本主数据未立项恒 `PENDING_SCOPE`，不传则全部降级 `PENDING_SCOPE`、绝不默认 ALL。缺此参数会得到空 scope（2026-11-23 结算交易记录 37 条曾因此回填）。
+- **铁律**：格式桥只写 `changes/active/`，**严禁直接写 `cases/` 主库**；merge 须人工核对审批记录（decision=通过、approver=当前用户）后才执行，AI 不自助合并（一期 §5）。
+- **四态如实回填**：执行结果（PASS/BLOCKED/OBSERVE/FAIL）按执行账本原貌写入 `executions/EXEC-CHG-xxx.yaml`，BLOCKED/OBSERVE 的用户收口处置单独记 `收口处置` 字段，不篡改原始判定。
+- **收尾三件事**：merge → stats 对账 → 刷新 Excel 派生视图（Excel 是派生产物，入库后必须重建，否则条数 stale）。
+- **降级**：锚点未配置 / 格式桥或网关不存在 / 输出异常 → 记一句 BLOCKED 到台账、跳过沉淀，不影响闭环主流程。

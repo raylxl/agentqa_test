@@ -32,3 +32,11 @@ _migrate_backup_*/
 
 # G82：需求库json清理（manifest迁工具侧/out/manifests，images_map停写）
 公司包/lanhu_exec/out/
+
+# 2026-11-23 补：浏览器运行数据（含登录态风险，永不入仓）
+公司包/jt_exec/.chrome-cdp-*/
+# 标准文件备份与执行期临时件
+*.bak.*
+公司包/jt_exec/review_*/
+公司包/jt_exec/routes_*/
+_exec_artifacts/downloads/

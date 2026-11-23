@@ -1,0 +1,420 @@
+[
+ {
+  "id": "TC-COL-01",
+  "module": "COL",
+  "priority": "P1",
+  "status": "PASS",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "表头实测存在列「寄件人姓名」，文案逐字一致",
+  "evidence": "源=无头9335实时复查:ths.indexOf寄件人姓名=16",
+  "execution_id": "LX-20261120-001"
+ },
+ {
+  "id": "TC-COL-02",
+  "module": "COL",
+  "priority": "P1",
+  "status": "PASS",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "列序实测相邻:寄件人姓名(16)→寄件客户名称(17)→寄件客户编码(18)",
+  "evidence": "源=无头9335实时复查:adjacent=true",
+  "execution_id": "LX-20261120-001"
+ },
+ {
+  "id": "TC-COL-03",
+  "module": "COL",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无运单WDC10002(senderName=李四/senderCustomerName=乙达商贸)对应账单行,无法做取值来源精确对照",
+  "evidence": "造数依赖PRE-03;真实环境为196条接口测试账单,无该构造数据",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-COL-04",
+  "module": "COL",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无运单WDC10003快照数据,无法对照senderCustomerName精确值",
+  "evidence": "造数依赖PRE-03",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-COL-05",
+  "module": "COL",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无WDC10001(张三/甲运物流)构造数据;真实数据样本两列独立显示(sender与custName有同有异),但预期写死具体值,不做零证据等价判PASS",
+  "evidence": "造数依赖PRE-03;真实样本=[{},{},{}]",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-COL-06",
+  "module": "COL",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无「客户改名前后快照」对照数据(甲运物流→集团股份),无法验证改名不漂移",
+  "evidence": "造数依赖PRE-04",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-QRY-01",
+  "module": "QRY",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无客户TESTQ2CA及其2条账单,无法验证按该客户编码查询命中",
+  "evidence": "造数依赖PRE-05;查询功能本身可用但预期写死TESTQ2CA",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-QRY-02",
+  "module": "QRY",
+  "priority": "P1",
+  "status": "PASS",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "查询区实测无「寄件人姓名」查询项,查询维度仅为客户主体/单号等,PS口径未变",
+  "evidence": "源=无头9335实时复查:hasSenderNameQuery=false",
+  "execution_id": "LX-20261120-001"
+ },
+ {
+  "id": "TC-QRY-03",
+  "module": "QRY",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无TESTQ2CA组合数据,无法验证预期行数=2的过滤断言",
+  "evidence": "造数依赖PRE-05",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-QRY-04",
+  "module": "QRY",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "前置造数缺失:环境无客户TESTQ2CC(顺达供应链有限公司)及其账单,无法验证按名称查询命中",
+  "evidence": "造数依赖PRE-05",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-01",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出列头校验需下载文件,导出任务可生成（实测文件名对客账单20261120163117428/196条/任务页有下载按钮），但下载需到导出任务页虚拟渲染表格人工点击，工具链抓取不稳定（判定标准§2.4 导出需任务页下载=BLOCKED）；且预期写死具体造数值，环境无对应数据",
+  "evidence": "导出通道探明:任务生成OK/下载文件未取到",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-02",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出列序校验需下载文件,导出任务可生成（实测文件名对客账单20261120163117428/196条/任务页有下载按钮），但下载需到导出任务页虚拟渲染表格人工点击，工具链抓取不稳定（判定标准§2.4 导出需任务页下载=BLOCKED）；且预期写死具体造数值，环境无对应数据",
+  "evidence": "同上",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-03",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出全量行数校验需下载文件且需造数12条跨页,导出任务可生成（实测文件名对客账单20261120163117428/196条/任务页有下载按钮），但下载需到导出任务页虚拟渲染表格人工点击，工具链抓取不稳定（判定标准§2.4 导出需任务页下载=BLOCKED）；且预期写死具体造数值，环境无对应数据",
+  "evidence": "同上+造数PRE-05",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-04",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出取值校验需下载文件+造数WDE10001,导出任务可生成（实测文件名对客账单20261120163117428/196条/任务页有下载按钮），但下载需到导出任务页虚拟渲染表格人工点击，工具链抓取不稳定（判定标准§2.4 导出需任务页下载=BLOCKED）；且预期写死具体造数值，环境无对应数据",
+  "evidence": "同上+造数",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-05",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出快照校验需下载文件+改名造数,导出任务可生成（实测文件名对客账单20261120163117428/196条/任务页有下载按钮），但下载需到导出任务页虚拟渲染表格人工点击，工具链抓取不稳定（判定标准§2.4 导出需任务页下载=BLOCKED）；且预期写死具体造数值，环境无对应数据",
+  "evidence": "同上+PRE-04",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-06",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出无掩码校验需下载文件,导出任务可生成（实测文件名对客账单20261120163117428/196条/任务页有下载按钮），但下载需到导出任务页虚拟渲染表格人工点击，工具链抓取不稳定（判定标准§2.4 导出需任务页下载=BLOCKED）；且预期写死具体造数值，环境无对应数据",
+  "evidence": "同上;列表侧已实证完整显示无掩码",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-EXP-07",
+  "module": "EXP",
+  "priority": "P1",
+  "status": "OBSERVE",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "转测校准⑥:特殊字符导出转义观察,依赖下载文件+含特殊字符造数,未取到文件,转人工观察",
+  "evidence": "转测校准观察条;造数PRE-08",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "OBSERVE",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-UI-01",
+  "module": "UI",
+  "priority": "P2",
+  "status": "PASS",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "表头从左到右实测寄件人姓名→寄件客户名称→寄件客户编码三列相邻",
+  "evidence": "源=无头9335实时复查:adjacent=true",
+  "execution_id": "LX-20261120-001"
+ },
+ {
+  "id": "TC-UI-02",
+  "module": "UI",
+  "priority": "P2",
+  "status": "PASS",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "表头文案实测:更名列=寄件人姓名、新增列=寄件客户名称,逐字一致无旧文案残留",
+  "evidence": "源=无头9335实时复查:sender=true,custName=true",
+  "execution_id": "LX-20261120-001"
+ },
+ {
+  "id": "TC-UI-03",
+  "module": "UI",
+  "priority": "P2",
+  "status": "OBSERVE",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "转测校准:寄件人姓名列表头实测为灰底(rgb(250, 250, 250)),无原型绿色高亮;按设计口径原型示意≠最终样式,记录形态不判缺陷",
+  "evidence": "源=无头9335实时复查:senderThStyle={\"bg\":\"rgb(250, 250, 250)\",\"color\":\"rgba(0, 0, 0, 0.8)\",\"fw\":\"600\"}",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "OBSERVE",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-UI-04",
+  "module": "UI",
+  "priority": "P2",
+  "status": "OBSERVE",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "转测校准:超长文本展示形态,环境无对应超长值造数,转人工观察列表截断/换行形态及导出是否保留完整值",
+  "evidence": "转测校准⑤;造数依赖",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "OBSERVE",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-SEC-01",
+  "module": "SEC",
+  "priority": "P0",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "列表默认过滤越权验证,权限隔离验证需客户A(TESTS1A)/客户B(TESTS1B)两个客户账号做越权对照;当前仅总部账号(房耀华/15121193680),无法构造双账号越权场景(依赖缺失=§2.4 BLOCKED)",
+  "evidence": "账号依赖PRE-02",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-SEC-02",
+  "module": "SEC",
+  "priority": "P0",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "精确查询越权验证,权限隔离验证需客户A(TESTS1A)/客户B(TESTS1B)两个客户账号做越权对照;当前仅总部账号(房耀华/15121193680),无法构造双账号越权场景(依赖缺失=§2.4 BLOCKED)",
+  "evidence": "账号依赖PRE-02",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-SEC-03",
+  "module": "SEC",
+  "priority": "P0",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "导出越权验证,权限隔离验证需客户A(TESTS1A)/客户B(TESTS1B)两个客户账号做越权对照;当前仅总部账号(房耀华/15121193680),无法构造双账号越权场景(依赖缺失=§2.4 BLOCKED)",
+  "evidence": "账号依赖PRE-02",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-SEC-04",
+  "module": "SEC",
+  "priority": "P0",
+  "status": "BLOCKED",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "不脱敏安全边界越权对照,权限隔离验证需客户A(TESTS1A)/客户B(TESTS1B)两个客户账号做越权对照;当前仅总部账号(房耀华/15121193680),无法构造双账号越权场景(依赖缺失=§2.4 BLOCKED);列表侧已实证权限内两列完整显示无掩码",
+  "evidence": "账号依赖PRE-02",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "BLOCKED",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-REL-01",
+  "module": "REL",
+  "priority": "P2",
+  "status": "OBSERVE",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "转测校准①/空值降级:环境无寄件人姓名/寄件客户名称为空的构造账单行,转人工观察空值显示形态",
+  "evidence": "转测校准②;造数PRE-06",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "OBSERVE",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-REL-02",
+  "module": "REL",
+  "priority": "P2",
+  "status": "OBSERVE",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "转测校准①/多条地址:环境无同一寄件客户多条寄件地址的构造运单,转人工观察取值稳定性",
+  "evidence": "转测校准①;造数PRE-06",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "OBSERVE",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ },
+ {
+  "id": "TC-REL-03",
+  "module": "REL",
+  "priority": "P2",
+  "status": "OBSERVE",
+  "ts": "2026-11-20T08:34:39.083+00:00",
+  "reason": "转测校准③/性能:实测列表加载196条正常(7ms DOM渲染)、分页可用(20页);无2336条量级造数,大批量导出耗时转人工观察",
+  "evidence": "源=无头9335实时复查:pagination=共 171 条10条/页 1 2345618前往页,renderMs=7",
+  "execution_id": "LX-20261120-001",
+  "收口处置": {
+   "decision": "用户拍板先当通过（接受带阻塞收口）",
+   "decision_ts": "2026-11-20T16:48:00+08:00",
+   "original_status": "OBSERVE",
+   "note": "处置决策，不改变原始判定；四态数字保留原貌；非真实PASS"
+  }
+ }
+]

@@ -132,7 +132,9 @@ if os.path.exists(xlsx_p) and not defer_art:
         for x in wb:
             if x.get('status') == 'done' and x.get('new') and len(str(x['new'])) <= 20 and re.match(r'^[\d.]+$', str(x['new'])):
                 if str(x['new']) in all_text: n_hit += 1
-        if '已失效' not in all_text: reds.append('⑤ xlsx 全文无〔已失效〕标注痕迹——生成器丢弃效标注（对照正本失效 79 条）')
+        # 2026-11-23 修正：失效标注检查仅在正本确有失效条时适用（原为无条件断言，硬编码"79 条"对无失效新册误报）
+        if n_inv > 0 and '已失效' not in all_text: reds.append(f'⑤ xlsx 全文无〔已失效〕标注痕迹——生成器丢弃效标注（对照正本失效 {n_inv} 条）')
+        elif n_inv == 0: greens.append('⑤ 正本无失效条，xlsx 无失效标注为正常')
         else: greens.append(f'⑤ xlsx 载体在案：数值锚点命中 {n_hit} 条+失效标注存在')
     except ImportError:
         yellows.append('⑤ openpyxl 不可用，xlsx 锚点抽验跳过（安装后启用）')

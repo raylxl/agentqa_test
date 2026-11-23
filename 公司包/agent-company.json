@@ -16,7 +16,8 @@
     "凭证文件": "D:/ZCodetest/agentqa_test/公司包/agent-secrets.json",
     "执行工具": "D:/ZCodetest/jt_chrome",
     "接口执行根": "D:/ZCodetest/jt_chrome/pw_layered",
-    "蓝湖工具": "D:/ZCodetest/agentqa_test/公司包/lanhu_exec"
+    "蓝湖工具": "D:/ZCodetest/agentqa_test/公司包/lanhu_exec",
+    "总用例库": "/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library"
   },
   "standards": {
     "L0_角色": "测试角色定位标准_v1.md",
@@ -98,7 +99,7 @@
       "enabled": true,
       "provider": "公司财务开发代码库（git.dev.ztoeco.com GitLab；SSH 免密=本机 ~/.ssh/id_rsa 已登记 GitLab 账号，2026-11-17 实测认证与仓库访问全通）",
       "base_url": "git@git.dev.ztoeco.com:ztocc/finance-product",
-      "clone_root": "D:/caiwu",
+      "clone_root": "{本机未接入财务代码库；发起人机为 D:/caiwu}",
       "repos": "29 仓=finance-product 25＋ztoce/ 组 w* 4（**2026-11-17 晚终态：全部 29 仓均在远端最新提交分支且 SYNC**——13 仓默认 master/main 即最新，16 仓切至最新 release 线，其中 8 仓在 release-phecda-20261201〔12月大版本线=11.30需求实现线，11-16~17 仍活跃〕）",
       "update_cmd": "各仓 git fetch --all --prune -q && git pull --ff-only -q；工作区脏/不可快进自动跳过禁覆盖（未跟踪文件如造数脚本属用户资产不动）；缺口仓补克隆用 --depth 1",
       "usage_points": "源码实证（feedback-loop 分流②/RB-026 源码比对）/表结构 DO 直读（@TableName ↔ information_schema 互证，首证=t_pbs_bill_head 族）/接口契约直读（Controller/Feign）/考古第 2 源增强",

@@ -5,11 +5,21 @@
 红=先补账再开工，禁带病开新轮。只认机器事实（报告轮次块/覆盖声明/降级声明），零依赖自觉。
 用法：python gate_scan.py   （exit 0=全绿可开工；exit 1=有漏门轮，先补账）
 """
-import io, os, re, sys
+import io, os, re, sys, json, glob
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-BASE = r'D:\ZCodetest\需求用例库\用例文件'
-BOOKS = [
+# 2026-11-23 Mac 真机修正：BASE 优先取 公司包/agent-company.json 的 paths.用例文件（跨机），
+# 取不到回落原 Windows 硬编码（发起机行为不变）；BOOKS 仅作兜底登记，实际扫目录内全部 *_测试报告_*.md
+# （根治"登记名失效"反复红：报告升版改名后登记表滞后）。
+_BASE_DEFAULT = r'D:\ZCodetest\需求用例库\用例文件'
+try:
+    _cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'agent-company.json')
+    _cfg = json.load(io.open(_cfg_path, encoding='utf-8'))
+    BASE = _cfg.get('paths', {}).get('用例文件') or _BASE_DEFAULT
+except Exception:
+    BASE = _BASE_DEFAULT
+BASE = os.path.normpath(BASE) if BASE != _BASE_DEFAULT else BASE
+_BOOKS_DEFAULT = [
     '财务需求2026_云仓_云仓账单_11.30_测试报告_v2.md',
     '财务需求2026_云仓_存储账单_11.30_测试报告_v2.md',
     '财务需求2026_云仓_通用计费规则调整_11.30_测试报告_v2.md',
@@ -19,6 +29,13 @@ BOOKS = [
     '财务需求2026_云仓_客户特定结算规则配置_11.30_测试报告_v2.md',
     '财务需求2026_云仓_配送价格_11.30_测试报告_v2.md',
 ]
+_discovered = sorted(os.path.basename(p) for p in glob.glob(os.path.join(BASE, '*_测试报告_v*.md')))
+if _discovered:
+    BOOKS = _discovered          # 目录实际在途册为准（含升版改名），登记表滞后不再误红
+    print(f'[i] 扫描目录：{BASE}（自动发现 {len(BOOKS)} 份报告）')
+else:
+    BOOKS = _BOOKS_DEFAULT        # 目录无报告（或路径不可达）→ 按原登记表报缺
+    print(f'[i] 扫描目录：{BASE}（未发现报告，按登记表 {len(BOOKS)} 项核对）')
 RULE_TS = '2026-11-18'
 
 bad = 0

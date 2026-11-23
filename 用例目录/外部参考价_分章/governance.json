@@ -1,0 +1,2065 @@
+{
+  "schema_version": "1.0",
+  "requirement": {
+    "id": "REQ-WAI-BUCANKAOJIA-2026",
+    "name": "财务需求2026-外部参考价 3.31/8.11",
+    "version": "v1",
+    "intake_tier": "standard"
+  },
+  "phase": "design",
+  "policy": {
+    "require_all_tc_risk": true
+  },
+  "full_spectrum": {
+    "functional": {
+      "decision": "test",
+      "reason": "报价维护页面+匹配逻辑全功能面，本册主体"
+    },
+    "ui": {
+      "decision": "test",
+      "reason": "列表列头/分页/按钮权限形态守护（TC-SYS-02），轻度覆盖"
+    },
+    "performance": {
+      "decision": "not_test",
+      "reason": "需求无非功能性能指标（仅菜单/按钮权限两项非功能需求），性能留待专项"
+    },
+    "security": {
+      "decision": "test",
+      "reason": "数据权限（仅总部）与越权路径（TC-QRY-02、TC-MCH 必填校验）"
+    },
+    "compatibility": {
+      "decision": "not_test",
+      "reason": "外部渠道（小程序/官网/满帮）入口改造由各端自测，本册聚焦后端接口与后台页面"
+    },
+    "reliability": {
+      "decision": "not_test",
+      "reason": "GIS 兜底链路以功能正确性覆盖（TC-MCH-07），容灾降级不在本期范围"
+    },
+    "accessibility": {
+      "decision": "not_test",
+      "reason": "内部后台系统，无无障碍要求"
+    },
+    "observability": {
+      "decision": "not_test",
+      "reason": "无监控埋点需求条目"
+    }
+  },
+  "risks": [
+    {
+      "risk_id": "RISK-MONEY-CALC",
+      "description": "价格明细金额字段约束失效导致计费错误（重量段交叉、价格越界、首重配对）",
+      "level": "critical",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 3,
+      "exposure": 15,
+      "minimum_priority": "P0",
+      "test_depth": "边界值+判定表全覆盖",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-DET-01",
+        "TC-DET-04",
+        "TC-DET-05",
+        "TC-DET-11",
+        "TC-DET-34",
+        "TC-MCH-78",
+        "TC-MCH-83"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-PERM",
+      "description": "非总部机构可查看或操作外部参考价数据（越权）",
+      "level": "critical",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 2,
+      "exposure": 10,
+      "minimum_priority": "P0",
+      "test_depth": "角色-功能矩阵：页面+按钮双线",
+      "nfr_dimensions": [
+        "security"
+      ],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-QRY-16",
+        "TC-QRY-17",
+        "TC-SYS-01",
+        "TC-QRY-24",
+        "TC-QRY-25"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-MATCH",
+      "description": "优先级匹配或费用类型匹配错误导致询价返回错误报价（资损面）",
+      "level": "critical",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 3,
+      "exposure": 15,
+      "minimum_priority": "P0",
+      "test_depth": "判定表：产品类型/温层/区域三梯度+最新操作tie-break+四费用枚举",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-MCH-16",
+        "TC-MCH-17",
+        "TC-MCH-18",
+        "TC-MCH-19",
+        "TC-MCH-20",
+        "TC-MCH-21",
+        "TC-MCH-22",
+        "TC-MCH-23",
+        "TC-MCH-24",
+        "TC-MCH-25",
+        "TC-MCH-26",
+        "TC-MCH-27",
+        "TC-MCH-28",
+        "TC-MCH-29",
+        "TC-MCH-30",
+        "TC-MCH-31",
+        "TC-MCH-32",
+        "TC-MCH-33",
+        "TC-MCH-34",
+        "TC-MCH-35",
+        "TC-MCH-36",
+        "TC-MCH-37",
+        "TC-MCH-38",
+        "TC-MCH-39",
+        "TC-MCH-40",
+        "TC-MCH-41",
+        "TC-MCH-42",
+        "TC-MCH-43",
+        "TC-MCH-44",
+        "TC-MCH-45",
+        "TC-MCH-46",
+        "TC-MCH-47",
+        "TC-MCH-48",
+        "TC-MCH-49",
+        "TC-MCH-50",
+        "TC-MCH-51",
+        "TC-MCH-52",
+        "TC-MCH-53",
+        "TC-MCH-54",
+        "TC-MCH-55",
+        "TC-MCH-56",
+        "TC-MCH-57",
+        "TC-MCH-61",
+        "TC-MCH-62",
+        "TC-MCH-63",
+        "TC-MCH-64",
+        "TC-MCH-69",
+        "TC-MCH-70",
+        "TC-MCH-71",
+        "TC-MCH-72",
+        "TC-MCH-73",
+        "TC-MCH-74",
+        "TC-MCH-75",
+        "TC-MCH-76",
+        "TC-MCH-77",
+        "TC-MCH-79",
+        "TC-MCH-89"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-API-VALID",
+      "description": "报价查询接口必填校验缺失导致脏数据匹配",
+      "level": "high",
+      "risk_owner": "测试组",
+      "impact": 4,
+      "likelihood": 3,
+      "exposure": 12,
+      "minimum_priority": "P0",
+      "test_depth": "等价类+错误推测：必填缺失逐项",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-MCH-01",
+        "TC-MCH-02",
+        "TC-MCH-03",
+        "TC-MCH-04",
+        "TC-MCH-05",
+        "TC-MCH-06",
+        "TC-MCH-07",
+        "TC-MCH-08",
+        "TC-MCH-09",
+        "TC-MCH-10",
+        "TC-MCH-11",
+        "TC-MCH-12",
+        "TC-MCH-13",
+        "TC-MCH-14",
+        "TC-MCH-15"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-IMPORT",
+      "description": "导入非原子失败或合并规则错误导致报价库脏数据",
+      "level": "high",
+      "risk_owner": "测试组",
+      "impact": 4,
+      "likelihood": 3,
+      "minimum_priority": "P0",
+      "test_depth": "整文件失败+错误明细+合并展示",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-IMP-01",
+        "TC-IMP-02"
+      ],
+      "exposure": 12,
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-CRUD",
+      "description": "编辑/删除/复制操作破坏数据或留痕缺失",
+      "level": "high",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 3,
+      "exposure": 9,
+      "minimum_priority": "P1",
+      "test_depth": "场景法：行为+留痕+数据不变性",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-OPS-01",
+        "TC-OPS-02",
+        "TC-OPS-03",
+        "TC-OPS-05",
+        "TC-OPS-06",
+        "TC-OPS-08",
+        "TC-OPS-09",
+        "TC-OPS-11",
+        "TC-OPS-13",
+        "TC-OPS-14",
+        "TC-OPS-16",
+        "TC-OPS-17",
+        "TC-OPS-18",
+        "TC-OPS-19",
+        "TC-OPS-20"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-QUERY",
+      "description": "查询条件组合过滤错误或导出与页面不一致",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 2,
+      "exposure": 6,
+      "minimum_priority": "P1",
+      "test_depth": "等价类：单条件+组合",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-EXP-01",
+        "TC-EXP-02",
+        "TC-EXP-03",
+        "TC-EXP-04",
+        "TC-QRY-01",
+        "TC-QRY-03",
+        "TC-QRY-04",
+        "TC-QRY-05",
+        "TC-QRY-06",
+        "TC-QRY-07",
+        "TC-QRY-08",
+        "TC-QRY-09",
+        "TC-QRY-10",
+        "TC-QRY-11",
+        "TC-QRY-12",
+        "TC-QRY-13",
+        "TC-QRY-20",
+        "TC-QRY-22",
+        "TC-QRY-23",
+        "TC-EXP-06",
+        "TC-EXP-08",
+        "TC-DUP-02",
+        "TC-DUP-03",
+        "TC-DUP-04",
+        "TC-DUP-05",
+        "TC-DUP-06",
+        "TC-DUP-07",
+        "TC-DUP-08",
+        "TC-DUP-09",
+        "TC-DUP-12",
+        "TC-DUP-14",
+        "TC-DUP-17",
+        "TC-DUP-20"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-FIELD-BASIC",
+      "description": "新增基本信息字段控件形态/默认值/联动与需求不符",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 2,
+      "exposure": 6,
+      "minimum_priority": "P1",
+      "test_depth": "等价类+判定表",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-ADD-01",
+        "TC-ADD-02",
+        "TC-ADD-03",
+        "TC-ADD-04",
+        "TC-ADD-05",
+        "TC-ADD-06",
+        "TC-ADD-07",
+        "TC-ADD-08",
+        "TC-ADD-09",
+        "TC-ADD-10",
+        "TC-ADD-11",
+        "TC-ADD-12",
+        "TC-ADD-13",
+        "TC-ADD-14",
+        "TC-ADD-15",
+        "TC-ADD-16",
+        "TC-ADD-17",
+        "TC-ADD-18",
+        "TC-ADD-19",
+        "TC-ADD-20",
+        "TC-ADD-21",
+        "TC-ADD-22",
+        "TC-ADD-23",
+        "TC-ADD-24",
+        "TC-ADD-25",
+        "TC-ADD-26",
+        "TC-ADD-27",
+        "TC-ADD-28",
+        "TC-ADD-29",
+        "TC-ADD-30",
+        "TC-ADD-31",
+        "TC-ADD-32",
+        "TC-ADD-33",
+        "TC-ADD-34",
+        "TC-ADD-35",
+        "TC-ADD-36",
+        "TC-ADD-37",
+        "TC-ADD-38",
+        "TC-ADD-39",
+        "TC-ADD-40",
+        "TC-ADD-41",
+        "TC-ADD-42",
+        "TC-ADD-43",
+        "TC-ADD-44",
+        "TC-ADD-45",
+        "TC-ADD-46",
+        "TC-ADD-47",
+        "TC-ADD-48",
+        "TC-ADD-49",
+        "TC-ADD-50",
+        "TC-ADD-51",
+        "TC-ADD-52",
+        "TC-ADD-53",
+        "TC-ADD-54",
+        "TC-ADD-55",
+        "TC-DET-16",
+        "TC-DET-45",
+        "TC-DET-07",
+        "TC-DET-39",
+        "TC-DET-38",
+        "TC-DET-15",
+        "TC-DET-08",
+        "TC-DET-12",
+        "TC-DET-14",
+        "TC-DET-37",
+        "TC-DET-35",
+        "TC-DET-31",
+        "TC-DET-24",
+        "TC-DET-09",
+        "TC-DET-33",
+        "TC-DET-29",
+        "TC-DET-20",
+        "TC-DET-19",
+        "TC-DET-30",
+        "TC-DET-03",
+        "TC-DET-32",
+        "TC-DET-44",
+        "TC-DET-40",
+        "TC-DET-41",
+        "TC-DET-21",
+        "TC-DET-25",
+        "TC-DET-06",
+        "TC-DET-43",
+        "TC-DET-22",
+        "TC-DET-27",
+        "TC-DET-26",
+        "TC-DET-10",
+        "TC-DET-18",
+        "TC-DET-36",
+        "TC-DET-13",
+        "TC-DET-02",
+        "TC-DET-28",
+        "TC-DET-17",
+        "TC-DET-23",
+        "TC-ADD-56"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-GIS-FALLBACK",
+      "description": "无网点场景 GIS 兜底取点错误导致匹配错报价",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 2,
+      "exposure": 6,
+      "minimum_priority": "P1",
+      "test_depth": "场景法：官网入口链路",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-MCH-65",
+        "TC-MCH-66",
+        "TC-MCH-67",
+        "TC-MCH-68"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-UI",
+      "description": "列表呈现缺列/截断/分页异常影响可用性",
+      "level": "low",
+      "risk_owner": "测试组",
+      "impact": 2,
+      "likelihood": 2,
+      "exposure": 4,
+      "minimum_priority": "P2",
+      "test_depth": "守护条",
+      "nfr_dimensions": [
+        "ui"
+      ],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-SYS-02",
+        "TC-SYS-03",
+        "TC-SYS-04",
+        "TC-SYS-05",
+        "TC-SYS-06",
+        "TC-SYS-07",
+        "TC-SYS-08"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-OBS",
+      "description": "历史修改记录与历史版本明细查看失效（留痕观察级）",
+      "level": "low",
+      "risk_owner": "测试组",
+      "impact": 2,
+      "likelihood": 2,
+      "exposure": 4,
+      "minimum_priority": "P2",
+      "test_depth": "守护条",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-OPS-04",
+        "TC-OPS-15",
+        "TC-SYS-11"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-MATCH-P1",
+      "description": "优先级匹配或费用类型匹配错误导致询价返回错误报价（资损面）（PP1 级条目）",
+      "level": "critical",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 3,
+      "exposure": 15,
+      "minimum_priority": "P1",
+      "test_depth": "判定表：产品类型/温层/区域三梯度+最新操作tie-break+四费用枚举",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-MCH-58",
+        "TC-MCH-59",
+        "TC-MCH-60",
+        "TC-MCH-80",
+        "TC-MCH-81",
+        "TC-MCH-84",
+        "TC-MCH-85",
+        "TC-MCH-86"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-PERM-P1",
+      "description": "非总部机构可查看或操作外部参考价数据（越权）（PP1 级条目）",
+      "level": "critical",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 2,
+      "exposure": 10,
+      "minimum_priority": "P1",
+      "test_depth": "角色-功能矩阵：页面+按钮双线",
+      "nfr_dimensions": [
+        "security"
+      ],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-SYS-09",
+        "TC-SYS-10"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-IMPORT-P1",
+      "description": "导入非原子失败或合并规则错误导致报价库脏数据（PP1 级条目）",
+      "level": "high",
+      "risk_owner": "测试组",
+      "impact": 4,
+      "likelihood": 3,
+      "minimum_priority": "P1",
+      "test_depth": "整文件失败+错误明细+合并展示",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-IMP-03",
+        "TC-IMP-04",
+        "TC-IMP-05",
+        "TC-IMP-06",
+        "TC-IMP-07",
+        "TC-IMP-08",
+        "TC-IMP-09",
+        "TC-IMP-10"
+      ],
+      "exposure": 12,
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-CRUD-P2",
+      "description": "编辑/删除/复制操作破坏数据或留痕缺失（P2 级观察条目，风险降级为 medium）",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 3,
+      "exposure": 9,
+      "minimum_priority": "P2",
+      "test_depth": "场景法：行为+留痕+数据不变性",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-OPS-07",
+        "TC-OPS-10",
+        "TC-OPS-12"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-QUERY-P2",
+      "description": "查询条件组合过滤错误或导出与页面不一致（P2 级条目）",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 2,
+      "exposure": 6,
+      "minimum_priority": "P2",
+      "test_depth": "等价类：单条件+组合",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-EXP-05",
+        "TC-QRY-02",
+        "TC-QRY-14",
+        "TC-QRY-15",
+        "TC-QRY-18",
+        "TC-QRY-19",
+        "TC-EXP-07"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-FIELD-BASIC-P2",
+      "description": "新增基本信息字段控件形态/默认值/联动与需求不符（P2 级条目）",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 3,
+      "likelihood": 2,
+      "exposure": 6,
+      "minimum_priority": "P2",
+      "test_depth": "等价类+判定表",
+      "nfr_dimensions": [],
+      "execution_set": "full",
+      "tc_ids": [
+        "TC-DET-42",
+        "TC-QRY-21"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-MONEY-CALC-P1",
+      "description": "价格明细金额字段约束失效导致计费错误（重量段交叉、价格越界、首重配对）（PP1 级条目）",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 3,
+      "exposure": 15,
+      "minimum_priority": "P1",
+      "test_depth": "边界值+判定表全覆盖",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-MCH-82",
+        "TC-DET-46"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-API-VALID-P1",
+      "description": "报价查询接口必填校验缺失导致脏数据匹配（PP1 级条目）",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 4,
+      "likelihood": 3,
+      "exposure": 12,
+      "minimum_priority": "P1",
+      "test_depth": "等价类+错误推测：必填缺失逐项",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-MCH-87",
+        "TC-MCH-88"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-MATCH-P2",
+      "description": "优先级匹配或费用类型匹配错误导致询价返回错误报价（资损面）（PP2 级条目）",
+      "level": "medium",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 3,
+      "exposure": 15,
+      "minimum_priority": "P2",
+      "test_depth": "判定表：产品类型/温层/区域三梯度+最新操作tie-break+四费用枚举",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-MCH-90"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    },
+    {
+      "risk_id": "RISK-DUP",
+      "description": "同键判重失效导致重复报价并存（匹配二义/资损面）——拍板 Q1=A/Q2=A",
+      "level": "critical",
+      "risk_owner": "测试组",
+      "impact": 5,
+      "likelihood": 3,
+      "exposure": 15,
+      "minimum_priority": "P0",
+      "test_depth": "N×2+1 公式全量+时间点矩阵",
+      "nfr_dimensions": [],
+      "execution_set": "smoke",
+      "tc_ids": [
+        "TC-DUP-01",
+        "TC-DUP-10",
+        "TC-DUP-11",
+        "TC-DUP-13",
+        "TC-DUP-15",
+        "TC-DUP-16",
+        "TC-DUP-18",
+        "TC-DUP-19"
+      ],
+      "residual_risk": null,
+      "risk_acceptor": null
+    }
+  ],
+  "tc_risk_map": {
+    "TC-DET-01": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-DET-04": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-DET-05": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-DET-11": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-DET-34": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-MCH-78": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-MCH-83": [
+      "RISK-MONEY-CALC"
+    ],
+    "TC-QRY-16": [
+      "RISK-PERM"
+    ],
+    "TC-QRY-17": [
+      "RISK-PERM"
+    ],
+    "TC-SYS-01": [
+      "RISK-PERM"
+    ],
+    "TC-QRY-24": [
+      "RISK-PERM"
+    ],
+    "TC-QRY-25": [
+      "RISK-PERM"
+    ],
+    "TC-MCH-16": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-17": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-18": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-19": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-20": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-21": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-22": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-23": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-24": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-25": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-26": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-27": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-28": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-29": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-30": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-31": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-32": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-33": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-34": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-35": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-36": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-37": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-38": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-39": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-40": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-41": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-42": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-43": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-44": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-45": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-46": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-47": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-48": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-49": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-50": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-51": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-52": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-53": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-54": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-55": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-56": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-57": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-61": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-62": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-63": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-64": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-69": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-70": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-71": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-72": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-73": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-74": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-75": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-76": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-77": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-79": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-89": [
+      "RISK-MATCH"
+    ],
+    "TC-MCH-01": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-02": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-03": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-04": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-05": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-06": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-07": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-08": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-09": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-10": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-11": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-12": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-13": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-14": [
+      "RISK-API-VALID"
+    ],
+    "TC-MCH-15": [
+      "RISK-API-VALID"
+    ],
+    "TC-IMP-01": [
+      "RISK-IMPORT"
+    ],
+    "TC-IMP-02": [
+      "RISK-IMPORT"
+    ],
+    "TC-OPS-01": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-02": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-03": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-05": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-06": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-08": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-09": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-11": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-13": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-14": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-16": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-17": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-18": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-19": [
+      "RISK-CRUD"
+    ],
+    "TC-OPS-20": [
+      "RISK-CRUD"
+    ],
+    "TC-EXP-01": [
+      "RISK-QUERY"
+    ],
+    "TC-EXP-02": [
+      "RISK-QUERY"
+    ],
+    "TC-EXP-03": [
+      "RISK-QUERY"
+    ],
+    "TC-EXP-04": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-01": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-03": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-04": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-05": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-06": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-07": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-08": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-09": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-10": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-11": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-12": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-13": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-20": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-22": [
+      "RISK-QUERY"
+    ],
+    "TC-QRY-23": [
+      "RISK-QUERY"
+    ],
+    "TC-EXP-06": [
+      "RISK-QUERY"
+    ],
+    "TC-EXP-08": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-02": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-03": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-04": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-05": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-06": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-07": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-08": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-09": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-12": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-14": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-17": [
+      "RISK-QUERY"
+    ],
+    "TC-DUP-20": [
+      "RISK-QUERY"
+    ],
+    "TC-ADD-01": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-02": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-03": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-04": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-05": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-06": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-07": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-08": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-09": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-10": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-11": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-12": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-13": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-14": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-15": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-16": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-17": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-18": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-19": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-20": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-21": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-22": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-23": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-24": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-25": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-26": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-27": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-28": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-29": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-30": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-31": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-32": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-33": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-34": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-35": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-36": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-37": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-38": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-39": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-40": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-41": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-42": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-43": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-44": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-45": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-46": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-47": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-48": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-49": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-50": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-51": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-52": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-53": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-54": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-55": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-16": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-45": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-07": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-39": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-38": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-15": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-08": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-12": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-14": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-37": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-35": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-31": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-24": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-09": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-33": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-29": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-20": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-19": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-30": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-03": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-32": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-44": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-40": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-41": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-21": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-25": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-06": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-43": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-22": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-27": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-26": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-10": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-18": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-36": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-13": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-02": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-28": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-17": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-DET-23": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-ADD-56": [
+      "RISK-FIELD-BASIC"
+    ],
+    "TC-MCH-65": [
+      "RISK-GIS-FALLBACK"
+    ],
+    "TC-MCH-66": [
+      "RISK-GIS-FALLBACK"
+    ],
+    "TC-MCH-67": [
+      "RISK-GIS-FALLBACK"
+    ],
+    "TC-MCH-68": [
+      "RISK-GIS-FALLBACK"
+    ],
+    "TC-SYS-02": [
+      "RISK-UI"
+    ],
+    "TC-SYS-03": [
+      "RISK-UI"
+    ],
+    "TC-SYS-04": [
+      "RISK-UI"
+    ],
+    "TC-SYS-05": [
+      "RISK-UI"
+    ],
+    "TC-SYS-06": [
+      "RISK-UI"
+    ],
+    "TC-SYS-07": [
+      "RISK-UI"
+    ],
+    "TC-SYS-08": [
+      "RISK-UI"
+    ],
+    "TC-OPS-04": [
+      "RISK-OBS"
+    ],
+    "TC-OPS-15": [
+      "RISK-OBS"
+    ],
+    "TC-SYS-11": [
+      "RISK-OBS"
+    ],
+    "TC-MCH-58": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-59": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-60": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-80": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-81": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-84": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-85": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-MCH-86": [
+      "RISK-MATCH-P1"
+    ],
+    "TC-SYS-09": [
+      "RISK-PERM-P1"
+    ],
+    "TC-SYS-10": [
+      "RISK-PERM-P1"
+    ],
+    "TC-IMP-03": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-04": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-05": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-06": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-07": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-08": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-09": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-IMP-10": [
+      "RISK-IMPORT-P1"
+    ],
+    "TC-OPS-07": [
+      "RISK-CRUD-P2"
+    ],
+    "TC-OPS-10": [
+      "RISK-CRUD-P2"
+    ],
+    "TC-OPS-12": [
+      "RISK-CRUD-P2"
+    ],
+    "TC-EXP-05": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-QRY-02": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-QRY-14": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-QRY-15": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-QRY-18": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-QRY-19": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-EXP-07": [
+      "RISK-QUERY-P2"
+    ],
+    "TC-DET-42": [
+      "RISK-FIELD-BASIC-P2"
+    ],
+    "TC-QRY-21": [
+      "RISK-FIELD-BASIC-P2"
+    ],
+    "TC-MCH-82": [
+      "RISK-MONEY-CALC-P1"
+    ],
+    "TC-DET-46": [
+      "RISK-MONEY-CALC-P1"
+    ],
+    "TC-MCH-87": [
+      "RISK-API-VALID-P1"
+    ],
+    "TC-MCH-88": [
+      "RISK-API-VALID-P1"
+    ],
+    "TC-MCH-90": [
+      "RISK-MATCH-P2"
+    ],
+    "TC-DUP-01": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-10": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-11": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-13": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-15": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-16": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-18": [
+      "RISK-DUP"
+    ],
+    "TC-DUP-19": [
+      "RISK-DUP"
+    ]
+  },
+  "readiness": {
+    "status": "awaiting_environment",
+    "note": "页面类待后台环境与账号；接口类待报价查询接口联调环境"
+  },
+  "execution_sets": {
+    "smoke": {
+      "description": "P0 主链路冒烟集",
+      "tc_ids": [
+        "TC-DET-01",
+        "TC-DET-04",
+        "TC-DET-05",
+        "TC-DET-06",
+        "TC-DET-07",
+        "TC-DET-08",
+        "TC-DET-11",
+        "TC-DET-34",
+        "TC-OPS-08",
+        "TC-OPS-14",
+        "TC-IMP-01",
+        "TC-IMP-02",
+        "TC-QRY-16",
+        "TC-QRY-17",
+        "TC-QRY-24",
+        "TC-QRY-25",
+        "TC-MCH-01",
+        "TC-MCH-02",
+        "TC-MCH-03",
+        "TC-MCH-04",
+        "TC-MCH-05",
+        "TC-MCH-06",
+        "TC-MCH-07",
+        "TC-MCH-08",
+        "TC-MCH-09",
+        "TC-MCH-10",
+        "TC-MCH-11",
+        "TC-MCH-12",
+        "TC-MCH-13",
+        "TC-MCH-14",
+        "TC-MCH-15",
+        "TC-MCH-16",
+        "TC-MCH-17",
+        "TC-MCH-18",
+        "TC-MCH-19",
+        "TC-MCH-20",
+        "TC-MCH-21",
+        "TC-MCH-22",
+        "TC-MCH-23",
+        "TC-MCH-24",
+        "TC-MCH-25",
+        "TC-MCH-26",
+        "TC-MCH-27",
+        "TC-MCH-28",
+        "TC-MCH-29",
+        "TC-MCH-30",
+        "TC-MCH-31",
+        "TC-MCH-32",
+        "TC-MCH-33",
+        "TC-MCH-34",
+        "TC-MCH-35",
+        "TC-MCH-36",
+        "TC-MCH-37",
+        "TC-MCH-38",
+        "TC-MCH-39",
+        "TC-MCH-40",
+        "TC-MCH-41",
+        "TC-MCH-42",
+        "TC-MCH-43",
+        "TC-MCH-44",
+        "TC-MCH-45",
+        "TC-MCH-46",
+        "TC-MCH-47",
+        "TC-MCH-48",
+        "TC-MCH-49",
+        "TC-MCH-50",
+        "TC-MCH-51",
+        "TC-MCH-52",
+        "TC-MCH-53",
+        "TC-MCH-54",
+        "TC-MCH-55",
+        "TC-MCH-56",
+        "TC-MCH-57",
+        "TC-MCH-61",
+        "TC-MCH-62",
+        "TC-MCH-63",
+        "TC-MCH-64",
+        "TC-MCH-69",
+        "TC-MCH-70",
+        "TC-MCH-71",
+        "TC-MCH-72",
+        "TC-MCH-73",
+        "TC-MCH-74",
+        "TC-MCH-75",
+        "TC-MCH-76",
+        "TC-MCH-77",
+        "TC-MCH-78",
+        "TC-MCH-79",
+        "TC-MCH-83",
+        "TC-MCH-89",
+        "TC-SYS-01",
+        "TC-DUP-01",
+        "TC-DUP-10",
+        "TC-DUP-11",
+        "TC-DUP-13",
+        "TC-DUP-15",
+        "TC-DUP-16",
+        "TC-DUP-18",
+        "TC-DUP-19"
+      ]
+    },
+    "full": {
+      "description": "全量执行集",
+      "tc_ids": [
+        "TC-ADD-01",
+        "TC-ADD-02",
+        "TC-ADD-03",
+        "TC-ADD-04",
+        "TC-ADD-05",
+        "TC-ADD-06",
+        "TC-ADD-07",
+        "TC-ADD-08",
+        "TC-ADD-09",
+        "TC-ADD-10",
+        "TC-ADD-11",
+        "TC-ADD-12",
+        "TC-ADD-13",
+        "TC-ADD-14",
+        "TC-ADD-15",
+        "TC-ADD-16",
+        "TC-ADD-17",
+        "TC-ADD-18",
+        "TC-ADD-19",
+        "TC-ADD-20",
+        "TC-ADD-21",
+        "TC-ADD-22",
+        "TC-ADD-23",
+        "TC-ADD-24",
+        "TC-ADD-25",
+        "TC-ADD-26",
+        "TC-ADD-27",
+        "TC-ADD-28",
+        "TC-ADD-29",
+        "TC-ADD-30",
+        "TC-ADD-31",
+        "TC-ADD-32",
+        "TC-ADD-33",
+        "TC-ADD-34",
+        "TC-ADD-35",
+        "TC-ADD-36",
+        "TC-ADD-37",
+        "TC-ADD-38",
+        "TC-ADD-39",
+        "TC-ADD-40",
+        "TC-ADD-41",
+        "TC-ADD-42",
+        "TC-ADD-43",
+        "TC-ADD-44",
+        "TC-ADD-45",
+        "TC-ADD-46",
+        "TC-ADD-47",
+        "TC-ADD-48",
+        "TC-ADD-49",
+        "TC-ADD-50",
+        "TC-ADD-51",
+        "TC-ADD-52",
+        "TC-ADD-53",
+        "TC-ADD-54",
+        "TC-ADD-55",
+        "TC-ADD-56",
+        "TC-DET-01",
+        "TC-DET-02",
+        "TC-DET-03",
+        "TC-DET-04",
+        "TC-DET-05",
+        "TC-DET-06",
+        "TC-DET-07",
+        "TC-DET-08",
+        "TC-DET-09",
+        "TC-DET-10",
+        "TC-DET-11",
+        "TC-DET-12",
+        "TC-DET-13",
+        "TC-DET-14",
+        "TC-DET-15",
+        "TC-DET-16",
+        "TC-DET-17",
+        "TC-DET-18",
+        "TC-DET-19",
+        "TC-DET-20",
+        "TC-DET-21",
+        "TC-DET-22",
+        "TC-DET-23",
+        "TC-DET-24",
+        "TC-DET-25",
+        "TC-DET-26",
+        "TC-DET-27",
+        "TC-DET-28",
+        "TC-DET-29",
+        "TC-DET-30",
+        "TC-DET-31",
+        "TC-DET-32",
+        "TC-DET-33",
+        "TC-DET-34",
+        "TC-DET-35",
+        "TC-DET-36",
+        "TC-DET-37",
+        "TC-DET-38",
+        "TC-DET-39",
+        "TC-DET-40",
+        "TC-DET-41",
+        "TC-DET-42",
+        "TC-DET-43",
+        "TC-DET-44",
+        "TC-DET-45",
+        "TC-DET-46",
+        "TC-OPS-01",
+        "TC-OPS-02",
+        "TC-OPS-03",
+        "TC-OPS-04",
+        "TC-OPS-05",
+        "TC-OPS-06",
+        "TC-OPS-07",
+        "TC-OPS-08",
+        "TC-OPS-09",
+        "TC-OPS-10",
+        "TC-OPS-11",
+        "TC-OPS-12",
+        "TC-OPS-13",
+        "TC-OPS-14",
+        "TC-OPS-15",
+        "TC-OPS-16",
+        "TC-OPS-17",
+        "TC-OPS-18",
+        "TC-OPS-19",
+        "TC-OPS-20",
+        "TC-IMP-01",
+        "TC-IMP-02",
+        "TC-IMP-03",
+        "TC-IMP-04",
+        "TC-IMP-05",
+        "TC-IMP-06",
+        "TC-IMP-07",
+        "TC-IMP-08",
+        "TC-IMP-09",
+        "TC-IMP-10",
+        "TC-EXP-01",
+        "TC-EXP-02",
+        "TC-EXP-03",
+        "TC-EXP-04",
+        "TC-EXP-05",
+        "TC-EXP-06",
+        "TC-EXP-07",
+        "TC-EXP-08",
+        "TC-QRY-01",
+        "TC-QRY-02",
+        "TC-QRY-03",
+        "TC-QRY-04",
+        "TC-QRY-05",
+        "TC-QRY-06",
+        "TC-QRY-07",
+        "TC-QRY-08",
+        "TC-QRY-09",
+        "TC-QRY-10",
+        "TC-QRY-11",
+        "TC-QRY-12",
+        "TC-QRY-13",
+        "TC-QRY-14",
+        "TC-QRY-15",
+        "TC-QRY-16",
+        "TC-QRY-17",
+        "TC-QRY-18",
+        "TC-QRY-19",
+        "TC-QRY-20",
+        "TC-QRY-21",
+        "TC-QRY-22",
+        "TC-QRY-23",
+        "TC-QRY-24",
+        "TC-QRY-25",
+        "TC-MCH-01",
+        "TC-MCH-02",
+        "TC-MCH-03",
+        "TC-MCH-04",
+        "TC-MCH-05",
+        "TC-MCH-06",
+        "TC-MCH-07",
+        "TC-MCH-08",
+        "TC-MCH-09",
+        "TC-MCH-10",
+        "TC-MCH-11",
+        "TC-MCH-12",
+        "TC-MCH-13",
+        "TC-MCH-14",
+        "TC-MCH-15",
+        "TC-MCH-16",
+        "TC-MCH-17",
+        "TC-MCH-18",
+        "TC-MCH-19",
+        "TC-MCH-20",
+        "TC-MCH-21",
+        "TC-MCH-22",
+        "TC-MCH-23",
+        "TC-MCH-24",
+        "TC-MCH-25",
+        "TC-MCH-26",
+        "TC-MCH-27",
+        "TC-MCH-28",
+        "TC-MCH-29",
+        "TC-MCH-30",
+        "TC-MCH-31",
+        "TC-MCH-32",
+        "TC-MCH-33",
+        "TC-MCH-34",
+        "TC-MCH-35",
+        "TC-MCH-36",
+        "TC-MCH-37",
+        "TC-MCH-38",
+        "TC-MCH-39",
+        "TC-MCH-40",
+        "TC-MCH-41",
+        "TC-MCH-42",
+        "TC-MCH-43",
+        "TC-MCH-44",
+        "TC-MCH-45",
+        "TC-MCH-46",
+        "TC-MCH-47",
+        "TC-MCH-48",
+        "TC-MCH-49",
+        "TC-MCH-50",
+        "TC-MCH-51",
+        "TC-MCH-52",
+        "TC-MCH-53",
+        "TC-MCH-54",
+        "TC-MCH-55",
+        "TC-MCH-56",
+        "TC-MCH-57",
+        "TC-MCH-58",
+        "TC-MCH-59",
+        "TC-MCH-60",
+        "TC-MCH-61",
+        "TC-MCH-62",
+        "TC-MCH-63",
+        "TC-MCH-64",
+        "TC-MCH-65",
+        "TC-MCH-66",
+        "TC-MCH-67",
+        "TC-MCH-68",
+        "TC-MCH-69",
+        "TC-MCH-70",
+        "TC-MCH-71",
+        "TC-MCH-72",
+        "TC-MCH-73",
+        "TC-MCH-74",
+        "TC-MCH-75",
+        "TC-MCH-76",
+        "TC-MCH-77",
+        "TC-MCH-78",
+        "TC-MCH-79",
+        "TC-MCH-80",
+        "TC-MCH-81",
+        "TC-MCH-82",
+        "TC-MCH-83",
+        "TC-MCH-84",
+        "TC-MCH-85",
+        "TC-MCH-86",
+        "TC-MCH-87",
+        "TC-MCH-88",
+        "TC-MCH-89",
+        "TC-MCH-90",
+        "TC-SYS-01",
+        "TC-SYS-02",
+        "TC-SYS-03",
+        "TC-SYS-04",
+        "TC-SYS-05",
+        "TC-SYS-06",
+        "TC-SYS-07",
+        "TC-SYS-08",
+        "TC-SYS-09",
+        "TC-SYS-10",
+        "TC-SYS-11",
+        "TC-DUP-01",
+        "TC-DUP-02",
+        "TC-DUP-03",
+        "TC-DUP-04",
+        "TC-DUP-05",
+        "TC-DUP-06",
+        "TC-DUP-07",
+        "TC-DUP-08",
+        "TC-DUP-09",
+        "TC-DUP-10",
+        "TC-DUP-11",
+        "TC-DUP-12",
+        "TC-DUP-13",
+        "TC-DUP-14",
+        "TC-DUP-15",
+        "TC-DUP-16",
+        "TC-DUP-17",
+        "TC-DUP-18",
+        "TC-DUP-19",
+        "TC-DUP-20"
+      ]
+    }
+  },
+  "execution_plan": {
+    "selected_set": "smoke",
+    "rationale": "P0 主链路先行冒烟，环境就绪后切 full",
+    "owner": "测试组",
+    "planned_tc_ids": [
+      "TC-DET-01",
+      "TC-DET-04",
+      "TC-DET-05",
+      "TC-DET-06",
+      "TC-DET-07",
+      "TC-DET-08",
+      "TC-DET-11",
+      "TC-DET-34",
+      "TC-OPS-08",
+      "TC-OPS-14",
+      "TC-IMP-01",
+      "TC-IMP-02",
+      "TC-QRY-16",
+      "TC-QRY-17",
+      "TC-QRY-24",
+      "TC-QRY-25",
+      "TC-MCH-01",
+      "TC-MCH-02",
+      "TC-MCH-03",
+      "TC-MCH-04",
+      "TC-MCH-05",
+      "TC-MCH-06",
+      "TC-MCH-07",
+      "TC-MCH-08",
+      "TC-MCH-09",
+      "TC-MCH-10",
+      "TC-MCH-11",
+      "TC-MCH-12",
+      "TC-MCH-13",
+      "TC-MCH-14",
+      "TC-MCH-15",
+      "TC-MCH-16",
+      "TC-MCH-17",
+      "TC-MCH-18",
+      "TC-MCH-19",
+      "TC-MCH-20",
+      "TC-MCH-21",
+      "TC-MCH-22",
+      "TC-MCH-23",
+      "TC-MCH-24",
+      "TC-MCH-25",
+      "TC-MCH-26",
+      "TC-MCH-27",
+      "TC-MCH-28",
+      "TC-MCH-29",
+      "TC-MCH-30",
+      "TC-MCH-31",
+      "TC-MCH-32",
+      "TC-MCH-33",
+      "TC-MCH-34",
+      "TC-MCH-35",
+      "TC-MCH-36",
+      "TC-MCH-37",
+      "TC-MCH-38",
+      "TC-MCH-39",
+      "TC-MCH-40",
+      "TC-MCH-41",
+      "TC-MCH-42",
+      "TC-MCH-43",
+      "TC-MCH-44",
+      "TC-MCH-45",
+      "TC-MCH-46",
+      "TC-MCH-47",
+      "TC-MCH-48",
+      "TC-MCH-49",
+      "TC-MCH-50",
+      "TC-MCH-51",
+      "TC-MCH-52",
+      "TC-MCH-53",
+      "TC-MCH-54",
+      "TC-MCH-55",
+      "TC-MCH-56",
+      "TC-MCH-57",
+      "TC-MCH-61",
+      "TC-MCH-62",
+      "TC-MCH-63",
+      "TC-MCH-64",
+      "TC-MCH-69",
+      "TC-MCH-70",
+      "TC-MCH-71",
+      "TC-MCH-72",
+      "TC-MCH-73",
+      "TC-MCH-74",
+      "TC-MCH-75",
+      "TC-MCH-76",
+      "TC-MCH-77",
+      "TC-MCH-78",
+      "TC-MCH-79",
+      "TC-MCH-83",
+      "TC-MCH-89",
+      "TC-SYS-01",
+      "TC-DUP-01",
+      "TC-DUP-10",
+      "TC-DUP-11",
+      "TC-DUP-13",
+      "TC-DUP-15",
+      "TC-DUP-16",
+      "TC-DUP-18",
+      "TC-DUP-19"
+    ]
+  }
+}
