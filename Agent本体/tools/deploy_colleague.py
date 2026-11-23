@@ -251,7 +251,7 @@ def main():
     if not PKG.is_dir():
         red(f"目录结构不像同事包/克隆仓（{PKG} 不存在）——解压完整 zip 或完整克隆后再跑")
         sys.exit(1)
-    if IS_CLONE and ROOT.resolve().as_posix().lower() == "d:/zcodetest" and not args.force:
+    if IS_CLONE and ROOT.resolve().as_posix().lower() == "/Users/kimfang/WorkBuddy/ai测试agent" and not args.force:
         red("这是发起人正本机（D:\\ZCodetest）——克隆通道部署在此机禁跑（--force 才放行）")
         sys.exit(1)
     print(f"  [OK ] 部署根 = {ROOT}" + ("〔git 克隆通道：三包根=克隆根〕" if IS_CLONE else "")
@@ -330,7 +330,7 @@ def main():
                            '  "jt_login": "", "jt_login_2": "", "pm_login": "", "db_pwqsdb": "", "weknora": ""\n}\n', encoding="utf-8")
             ok("agent-secrets.json 空骨架（兜底键集）")
 
-    # ── 3. 路径换算（整包内嵌 D:/ZCodetest → 当前根；migrate_paths 自带备份+幂等）──
+    # ── 3. 路径换算（整包内嵌 /Users/kimfang/WorkBuddy/ai测试agent → 当前根；migrate_paths 自带备份+幂等）──
     print("── 路径换算 ──")
     mp = HERE / "migrate_paths.py"
     r = subprocess.run([sys.executable, str(mp), str(ROOT).replace("\\", "/"), "--apply"],
@@ -364,9 +364,9 @@ def main():
         except Exception:
             continue
         if IS_MAC:
-            s2 = s.replace("D:\\ZCodetest", root_fwd).replace("D:/ZCodetest", root_fwd)
+            s2 = s.replace("D:\\ZCodetest", root_fwd).replace("/Users/kimfang/WorkBuddy/ai测试agent", root_fwd)
         else:
-            s2 = s.replace("D:\\ZCodetest", root_win).replace("D:/ZCodetest", root_fwd)
+            s2 = s.replace("D:\\ZCodetest", root_win).replace("/Users/kimfang/WorkBuddy/ai测试agent", root_fwd)
         if s2 != s:
             md.write_text(s2, encoding="utf-8")
             n += 1

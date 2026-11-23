@@ -11,8 +11,8 @@
   ③ python ../公司包/param_check.py --check        # 机检应回全绿（迁移别名已登记，按别名换算）
 
 换算范围：agentqa_test + jt_chrome 下 .py/.js/.cjs/.ps1/.json/.sh/.bat 文本件中的三种写法
-  D:\\ZCodetest / D:/ZCodetest / D:\\\\ZCodetest（同形保留：正斜杠→正斜杠、反斜杠→反斜杠），
-  并在 agent-company.json 的 路径迁移别名 登记 "D:/ZCodetest" → 新根。
+  D:\\ZCodetest / /Users/kimfang/WorkBuddy/ai测试agent / D:\\\\ZCodetest（同形保留：正斜杠→正斜杠、反斜杠→反斜杠），
+  并在 agent-company.json 的 路径迁移别名 登记 "/Users/kimfang/WorkBuddy/ai测试agent" → 新根。
 不碰：需求用例库/标准体系等文档资产（历史件保持原样，别名机制兜底显示）、agent-secrets.json（凭证红线）。
 已知边界：用户名类路径（C:\\Users\\<发起人>）不换算 —— 核心件已改动态解析，剩余两处 mem_*_1109.py
   属发起人记忆库事故件，不属同事可用件。
@@ -36,7 +36,7 @@ EXTS = {".py", ".js", ".cjs", ".mjs", ".ps1", ".json", ".sh", ".bat", ".command"
 SKIP_NAMES = {"node_modules", "__pycache__", ".git", "dist", "locks", ".playwright-cli"}
 SKIP_FILES = {"agent-secrets.json", "migrate_paths.py",   # 凭证红线；本工具自身（防自替换破坏别名登记）
               "deploy_colleague.py"}                       # 部署器自身（内嵌 D:\ZCodetest 替换源串，被换即自我破坏——Mac 首验 R2 实锤）
-OLD_FWD = "D:/ZCodetest"
+OLD_FWD = "/Users/kimfang/WorkBuddy/ai测试agent"
 
 # ── 包内布局 v2（2026-11-17 用户拍板"解压后=agentqa_test+说明件"）──
 # 工作区正本形态 → 同事包内形态：三资产从部署根收进三包（标准体系/执行工具→公司包；工具链→手艺包05）
@@ -45,10 +45,9 @@ SHARED_LAYOUT = AGENT_ROOT / "pathfilter_layout.json"
 _LAYOUT_CFG = json.loads(SHARED_LAYOUT.read_text(encoding="utf-8"))
 LAYOUT_MAP = [tuple(pair) for pair in _LAYOUT_CFG["layout_map"]]
 _ROOT_FORMS = ["D:/ZCodetest", "D:\\ZCodetest", "D:\\\\ZCodetest", "d:/ZCodetest", "d:\\ZCodetest", "d:\\\\ZCodetest"]
-
 # 三种字节形态（正/双反/单反）× 盘符大小写两种，替换后同形保留
 FORMS = [
-    ("D:/ZCodetest", "{fwd}"),
+    ("/Users/kimfang/WorkBuddy/ai测试agent", "{fwd}"),
     ("D:\\\\ZCodetest", "{dbl}"),
     ("D:\\ZCodetest", "{sgl}"),
     ("d:/ZCodetest", "{fwd}"),
@@ -72,7 +71,7 @@ def main():
     if not root_ok(new_fwd):
         sys.exit(f"[RED] 新根路径异常：{new_fwd}")
     if new_fwd.lower() == OLD_FWD.lower():
-        print("[OK] 新根与包占位根相同（D:/ZCodetest），无需路径换算")
+        print("[OK] 新根与包占位根相同（/Users/kimfang/WorkBuddy/ai测试agent），无需路径换算")
         return
     if new_fwd.startswith("/"):
         # Mac/POSIX 新根：三种旧写法（正斜杠/双反/单反）一律换为正斜杠形态——目标系统只认这个
@@ -104,7 +103,7 @@ def main():
 
     total = sum(sum(c.values()) for _, c in plan)
     print(f"扫描 {scanned} 文本件，命中 {len(plan)} 文件 / {total} 处路径引用")
-    print(f"换算：D:/ZCodetest → {new_fwd}（三种写法同形保留）")
+    print(f"换算：/Users/kimfang/WorkBuddy/ai测试agent → {new_fwd}（三种写法同形保留）")
     for p, c in sorted(plan, key=lambda x: -sum(x[1].values()))[:20]:
         mark = "/".join(f"{k}x{v}" for k, v in c.items() if v)
         print(f"  {p.relative_to(WORKSPACE)}  [{mark}]")
@@ -129,8 +128,8 @@ def main():
         # ① 布局映射（长前缀优先）：旧根+旧子路径（三写法）→ 旧根占位+新子路径（归一正斜杠根，②步再整体换新根）
         for old_sub, new_sub in LAYOUT_MAP:
             for rf in _ROOT_FORMS:
-                raw = raw.replace(rf + "/" + old_sub, "D:/ZCodetest/" + new_sub)
-                raw = raw.replace(rf + "\\" + old_sub.replace("/", "\\"), "D:/ZCodetest/" + new_sub)
+                raw = raw.replace(rf + "/" + old_sub, "/Users/kimfang/WorkBuddy/ai测试agent/" + new_sub)
+                raw = raw.replace(rf + "\\" + old_sub.replace("/", "\\"), "/Users/kimfang/WorkBuddy/ai测试agent/" + new_sub)
         # ② 根替换；Mac/POSIX 目标把命中绝对路径所在行的反斜杠统一为正斜杠，避免 /Users/...\子路径 混合路径。
         for form, tpl in FORMS:
             raw = raw.replace(form, tpl.format(**repl))
@@ -150,7 +149,7 @@ def main():
         alias = cfg.setdefault("路径迁移别名", {})
         # 布局映射别名先登记（param_check 首命中即换算：长键必须排在根键之前）
         for old_sub, new_sub in LAYOUT_MAP:
-            alias[f"D:/ZCodetest/{old_sub}"] = f"{new_fwd}/{new_sub}"
+            alias[f"/Users/kimfang/WorkBuddy/ai测试agent/{old_sub}"] = f"{new_fwd}/{new_sub}"
         alias[OLD_FWD] = new_fwd
         cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"迁移别名已登记：根+布局映射{len(LAYOUT_MAP)}条（{cfg_path.name}）")
