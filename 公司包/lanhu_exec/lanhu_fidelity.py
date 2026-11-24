@@ -58,13 +58,34 @@ def load_source(src_file: Path):
     return lines
 
 
+MM_ENTITY = re.compile(r"#(38|34|60|62|124);")  # G91：流程图标签里的数字实体（#34;=引号 等），核对前还原
+
+
 def load_doc_blocks(md_file: Path):
     """文档正文块：剔除图片/引用/清单符号/表格骨架，表格按单元格拆块"""
     blocks, cells, garb = [], [], []
+    in_fence, fence_lang = False, ""
     for no, raw in enumerate(md_file.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
         if GARBAGE_RE.search(raw):
             garb.append((no, GARBAGE_RE.search(raw).group(0), raw.strip()[:40]))
         s = raw.strip()
+        # G91：围栏代码块——mermaid 流程图块只取"带引号的标签"作为文字块（节点文字、连线标注=蓝湖原文，逐个溯源）；
+        # 语法行（flowchart / n0 --> n1）不是正文，不参与比对；其他围栏内容跳过。不先处理的话语法行会被当"自撰"误判
+        if s.startswith("```"):
+            if not in_fence:
+                in_fence, fence_lang = True, s[3:].strip().lower()
+            else:
+                in_fence, fence_lang = False, ""
+            continue
+        if in_fence:
+            if fence_lang == "mermaid":
+                for lab in re.findall(r'"([^"]*)"', s):
+                    lab = MM_ENTITY.sub(lambda m: chr(int(m.group(1))), lab)
+                    for part in re.split(r"<br\s*/?>", lab):
+                        part = part.strip()
+                        if part:
+                            blocks.append((no, part))
+            continue
         if not s or s.startswith(("![", "> ", "<!--", "|--")) or ".png" in s or "_images" in s:
             continue
         if re.match(r"^#{0,6}\s*蓝湖需求（.*保真版）", s):   # 采集器自产文档标题行（脚手架，非正文）

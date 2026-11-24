@@ -8,6 +8,8 @@ lanhu_verify.py - 蓝湖需求文档重写后强制校验（标准方法 v1 / R6
   2. MD 表格逐表 `|` 计数一致；--fix 时按表头列数自动补齐尾部空单元格
   3. --keys 文件：关键内容必须命中（每行一个关键词）
   4. --olds 文件：旧错误/拍扁残留必须清零（每行一个，命中报 RESIDUAL）
+  5. G91 流程图块：``` 围栏成对；mermaid 块内只允许流程图语法行；流程图块数 == 流程图渲染_*.png 张数；
+     @@…@@ 占位标记不得残留（--no-render-ok 可放宽"块数==渲染图数"）
 
 用法:
   python lanhu_verify.py <doc.md> <imgdir> [--keys 关键词.txt] [--olds 残留.txt] [--fix]
@@ -27,10 +29,38 @@ def main():
     ap.add_argument("--keys", default="")
     ap.add_argument("--olds", default="")
     ap.add_argument("--fix", action="store_true")
+    ap.add_argument("--no-render-ok", action="store_true", help="G91：允许流程图块没有渲染图（无渲染库的环境只出源码时用）")
     a = ap.parse_args()
 
     doc = open(a.doc, encoding="utf-8").read()
     base = os.path.dirname(a.doc)
+
+    # 0. G91：围栏代码块（```mermaid 流程图源码）结构校验
+    #    ① 围栏必须成对 ② 块内只允许流程图语法行（防残留清理/拼接把语法行删改坏）③ 流程图块数 == 渲染图数
+    vlines = doc.splitlines()
+    fence_open, fence_lang, fence_bad, mermaid_blocks, mermaid_bad = False, "", [], 0, []
+    NODE = re.compile(r'^\s*n\d+(\["[^"]*"\]|\{"[^"]*"\}|\("[^"]*"\))\s*$')
+    EDGE = re.compile(r'^\s*n\d+ -->(\|"[^"]*"\|)? n\d+\s*$')
+    HEADLINE = re.compile(r'^flowchart (LR|RL|TD|BT)\s*$')
+    in_mermaid, blk_no = False, 0
+    for ln in vlines:
+        st = ln.strip()
+        if st.startswith("```"):
+            if not fence_open:
+                fence_open, fence_lang = True, st[3:].strip().lower()
+                if fence_lang == "mermaid":
+                    mermaid_blocks += 1
+                    in_mermaid, blk_no = True, mermaid_blocks
+            else:
+                fence_open, fence_lang, in_mermaid = False, "", False
+            continue
+        if in_mermaid and st and not (HEADLINE.match(st) or NODE.match(st) or EDGE.match(st)):
+            mermaid_bad.append("块%d: %s" % (blk_no, st[:50]))
+    if fence_open:
+        fence_bad.append("围栏未闭合（```mermaid 开了没关）")
+    renders = sorted(f for f in (os.listdir(a.imgdir) if os.path.isdir(a.imgdir) else []) if f.startswith("流程图渲染_") and f.lower().endswith(".png"))
+    print("MERMAID blocks", mermaid_blocks, "renders", len(renders), "fence_bad", fence_bad, "bad_lines", mermaid_bad[:4])
+    markers = [ln.strip()[:40] for ln in vlines if re.match(r'^@@[A-Z]+:\d+@@\s*$', ln.strip())]
 
     # 1. 图片引用 <-> 文件
     imgs = re.findall(r'!\[.*?\]\((.+?)\)', doc)
@@ -108,6 +138,15 @@ def main():
         hard.append("关键词未命中 %d 个: %s" % (len(key_fail), key_fail[:3]))
     if old_residual:
         hard.append("旧残留未清零 %d 处: %s" % (len(old_residual), old_residual[:3]))
+    # 6. G91：流程图块结构硬闸门——围栏坏/语法行坏/块数与渲染图数不符/占位标记残留，任一即红
+    if fence_bad:
+        hard.append("流程图围栏问题: %s" % fence_bad)
+    if mermaid_bad:
+        hard.append("流程图块内语法行异常 %d 处: %s" % (len(mermaid_bad), mermaid_bad[:3]))
+    if not a.no_render_ok and mermaid_blocks != len(renders):
+        hard.append("流程图块 %d 个 ≠ 渲染图 %d 张（每个流程图块须有对应的 流程图渲染_*.png；确无渲染库的环境可加 --no-render-ok）" % (mermaid_blocks, len(renders)))
+    if markers:
+        hard.append("占位标记残留 %d 处（采集器未替换成图片引用）: %s" % (len(markers), markers[:3]))
     if hard:
         print("VERIFY FAIL:")
         for h in hard:

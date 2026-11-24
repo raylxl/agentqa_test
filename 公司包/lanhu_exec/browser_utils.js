@@ -742,7 +742,14 @@ async function extractLanhuContent(frame) {
         }
         if (rects.filter(r => r.kind === 'line').length >= 2) {
           // —— 图示（流程图等）：节点+连接线；文字只保阅读序，结构由截图承担 ——
-          const dg = { top: bb.y - 10, bottom: bb.b + 10, left: bb.x - 10, right: bb.r + 10, items: [] };
+          const dg = { top: bb.y - 10, bottom: bb.b + 10, left: bb.x - 10, right: bb.r + 10, items: [],
+            // G91：拓扑重建用的几何明细（纯字段）——节点框 / 线段 / 箭头小图；图片件带 src
+            //（采集器据此取 SVG 源码：Axure 原生连接器导出的箭头小图里带整条连线路径）
+            geo: {
+              cells: rects.filter(r => r.kind === 'cell').map(c => ({ x: c.x, y: c.y, w: c.w, h: c.h, tag: c.el.tagName, radius: c.el.tagName === 'DIV' ? getComputedStyle(c.el).borderTopLeftRadius : '', src: c.el.currentSrc || c.el.src || '' })),
+              lines: rects.filter(r => r.kind === 'line').map(c => ({ x: c.x, y: c.y, w: c.w, h: c.h })),
+              dots: rects.filter(r => r.kind === 'dot').map(c => ({ x: c.x, y: c.y, w: c.w, h: c.h, src: c.el.currentSrc || c.el.src || '' }))
+            } };
           // 文字按"矩形相交"划入（分支标签常压在包围盒外沿，如流程图顶部的"查询日期存在…"）；章节标题类文字不划入
           for (const t of textElements) {
             if (t._consumed) continue;
@@ -1070,7 +1077,7 @@ async function extractLanhuContent(frame) {
 
     // G86：几何块（表格/图示）并入块序列（按画布 y 稳定排序，原块相对序不变）
     for (const tb of geo.tables) if (tb.mdLines) blocks.push({ type: 'table', top: tb.top, bottom: tb.bottom, mdLines: tb.mdLines, bandIdx: typeof tb.bandIdx === 'number' ? tb.bandIdx : -1 });
-    for (const dg of geo.diagrams) blocks.push({ type: 'text', top: dg.top, bottom: dg.bottom, lines: dg.lines, geo: true });
+    geo.diagrams.forEach((dg, fi) => blocks.push({ type: 'text', top: dg.top, bottom: dg.bottom, lines: dg.lines, geo: true, flow: fi })); // flow=图示序号：采集器据此把该块文字换成 Mermaid
     blocks.sort((a, b) => a.top - b.top);
 
     // 第4步：浮层/弹窗内容块精确内联
@@ -1151,7 +1158,7 @@ async function extractLanhuContent(frame) {
     // G76：parts=块级 {top,bottom,text}（浮层内联重排后的最终块序）——collect 按画布 y 把图内联到对应文字块之间
     const parts = blocks
       .filter(b => (b.type === 'table' ? b.mdLines : b.lines).length)
-      .map(b => ({ type: b.type, top: b.top, bottom: b.bottom, text: (b.type === 'table' ? b.mdLines : b.lines).join('\n') }));
+      .map(b => ({ type: b.type, top: b.top, bottom: b.bottom, text: (b.type === 'table' ? b.mdLines : b.lines).join('\n'), flow: b.flow }));
     const outputParts = [];
     for (const b of blocks) {
       const ls = b.type === 'table' ? b.mdLines : b.lines;
@@ -1164,7 +1171,9 @@ async function extractLanhuContent(frame) {
     // G86：纯字段汇总（供对账器同源取数 / 忠实闸供源）——不带元素引用
     const extra = {
       tables: geo.tables.map(tb => ({ top: tb.top, bottom: tb.bottom, left: tb.left, right: tb.right, headerCells: tb.headerCells, firstDataRowCells: tb.firstDataRowCells, dataRows: tb.dataRows })),
-      diagrams: geo.diagrams.map(dg => ({ top: dg.top, bottom: dg.bottom, left: dg.left, right: dg.right, texts: dg.lines.length })),
+      // G91：diagrams 带 geo（节点框/线段/箭头几何）与图内文字件矩形——采集器据此重建拓扑出 Mermaid；对账器同源复核
+      diagrams: geo.diagrams.map(dg => ({ top: dg.top, bottom: dg.bottom, left: dg.left, right: dg.right, texts: dg.lines.length, geo: dg.geo,
+        items: dg.items.map(t => ({ x: t.left, y: t.top, w: t.width, h: t.height, text: t.text })) })),
       texts: textElements.map(t => ({ t: t.text, y: t.top, x: t.left, w: t.width })),
       consumed: textElements.filter(t => t._consumed).map(t => ({ t: t.text, y: t.top, x: t.left })),
       hidden: textElements.filter(t => t._hidden).map(t => ({ t: t.text, y: t.top, x: t.left })),

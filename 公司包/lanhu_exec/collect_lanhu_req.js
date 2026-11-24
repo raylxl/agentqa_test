@@ -37,6 +37,12 @@ const {
   connectBrowser, findContentFrame, Logger, scrollToBottom, extractLanhuContent,
   getLanhuPages, robustClickMenu
 } = require('./browser_utils.js');
+const { rebuildFlow } = require('./lanhu_flowmermaid.js');
+
+// G91：流程图渲染库（mermaid npm 包里的浏览器单文件版，MIT，见 vendor/README_mermaid.txt）。
+// 缺这个文件时流程图只出 Mermaid 源码、不出渲染图（采集照常，闸门只记数）。
+const MERMAID_JS = path.join(__dirname, 'vendor', 'mermaid.min.js');
+const FENCE = '```';
 
 // 文件名安全化（菜单名含 / ？ : 等在 Windows 非法；未传 --name 时的兜底输出用）
 function safeFileBase(A) {
@@ -276,8 +282,52 @@ async function cropPopup(frame, page, feBox, cluster, imgDir, baseName, secName,
   return { file, ref: `![${secName}_弹窗${n}](${baseName}_images/${file})` };
 }
 
+// G91：Mermaid 源码 → PNG（2 倍图）。在同一浏览器上下文新开 about:blank 页、注入渲染库，拍完即关页。
+// 兼作 Mermaid 语法的"可渲染"验证：渲染不出来就不把这段源码写进文档（该图退回"截图 + 逐行节点文字"）。
+// 返回 'ok' | 'fail' | 'novendor'
+async function renderMermaid(context, jsPath, id, src, pngPath, logger) {
+  if (!fs.existsSync(jsPath)) return 'novendor';
+  let rp = null;
+  try {
+    rp = await context.newPage();
+    await rp.goto('about:blank');
+    await rp.addScriptTag({ path: jsPath });
+    const svg = await rp.evaluate(async (a) => {
+      mermaid.initialize({
+        startOnLoad: false, securityLevel: 'strict', theme: 'base',
+        flowchart: { curve: 'linear', htmlLabels: true, nodeSpacing: 46, rankSpacing: 75, padding: 10 },
+        themeVariables: { fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif', fontSize: '14px', primaryColor: '#ffffff', primaryTextColor: '#222222',
+          primaryBorderColor: '#666666', lineColor: '#00bfbf', secondaryColor: '#f5f5f5', tertiaryColor: '#ffffff', clusterBkg: '#ffffff' }
+      });
+      const r = await mermaid.render(a.id, a.src);
+      return r.svg;
+    }, { id, src });
+    await rp.setContent('<!doctype html><html><body style="margin:0;background:#fff;padding:16px;overflow:hidden">' + svg + '</body></html>');
+    const bb = await rp.evaluate(() => {
+      const s = document.querySelector('svg'); const v = s.viewBox.baseVal;
+      s.setAttribute('width', Math.ceil(v.width)); s.setAttribute('height', Math.ceil(v.height)); s.style.maxWidth = 'none';
+      const r = s.getBoundingClientRect();
+      return { w: Math.ceil(r.width), h: Math.ceil(r.height) };
+    });
+    const cdp = await context.newCDPSession(rp);
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: bb.w + 120, height: bb.h + 120, deviceScaleFactor: 2, mobile: false });
+    await rp.evaluate(() => document.fonts.ready);
+    await rp.waitForTimeout(300);
+    await rp.screenshot({ path: pngPath, clip: { x: 0, y: 0, width: bb.w + 32, height: bb.h + 32 }, timeout: 25000 });
+    return 'ok';
+  } catch (e) {
+    logger.warn('流程图渲染失败: ' + String((e && e.message) || e).split('\n')[0].slice(0, 140));
+    try { if (fs.existsSync(pngPath)) fs.unlinkSync(pngPath); } catch (e2) {}
+    return 'fail';
+  } finally { if (rp) { try { await rp.close(); } catch (e) {} } }
+}
+
 // markdown 级界面残留清理（精确，不误删真实内容）
 function cleanResidue(md) {
+  // G91：围栏代码块（```mermaid 流程图源码等）整体保护——下面的残留清理规则只针对正文行，
+  // 围栏内的语法行（如带"未审核 审核通过 审核驳回"枚举词的连线标注）碰上就会被整行删掉，把流程图删残
+  const fences = [];
+  md = md.replace(/```[^\n]*\n[\s\S]*?\n```/g, (m) => { fences.push(m); return '\u0000FENCE' + (fences.length - 1) + '\u0000'; });
   const lines = md.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
@@ -315,6 +365,7 @@ function cleanResidue(md) {
   s = s.replace(/^(\s*\|[\s:|-]+\|\s*)\n\s*(\|[\s:|-]+\|)\s*$/gm, '$1');
   s = s.replace(/\n{3,}/g, '\n\n');
   s = s.replace(/(优化点[一二三][^\n]*?)(?=\d、[基本信息查询数据导入历史使用考核])/g, '$1\n');
+  s = s.replace(/\u0000FENCE(\d+)\u0000/g, (_, i) => fences[+i]); // G91：还原围栏块
   return s.trim() + '\n';
 }
 
@@ -359,6 +410,13 @@ function acceptanceGate(A, manifest, logger) {
   else {
     report.push(`  · 图示截图数: 实际=${manifest.diagramShots} 自动期望=${manifest.diagrams}（须全部截到）`);
     if ((manifest.diagrams || 0) !== (manifest.diagramShots || 0)) fails.push(`图示截图数 ${manifest.diagramShots} ≠ 几何识别图示数 ${manifest.diagrams}（存在未截图的流程图/图示，禁止声称完成）`);
+  }
+  // G91：每张图示必有去向（换成流程图源码 / 退回逐行文字 / 拓扑未采信），三者之和须等于图示数
+  {
+    const em = manifest.flowEmitted || 0, nv = manifest.flowNoVendor || 0, fb = manifest.flowFallback || 0, un = manifest.flowUntrusted || 0;
+    report.push(`  · 流程图去向: 源码+渲染图=${em} 只出源码(缺渲染库)=${nv} 退回逐行文字=${fb} 拓扑未采信=${un} 图示数=${manifest.diagrams}`);
+    if (em + nv + fb + un !== (manifest.diagrams || 0)) fails.push(`流程图去向合计 ${em + nv + fb + un} ≠ 图示数 ${manifest.diagrams}（有图示既没出流程图也没走既定降级，禁止声称完成）`);
+    if (nv) report.push('  · 提示: 缺 vendor/mermaid.min.js，流程图只出了源码、没出渲染图');
   }
   if (e.sections >= 0) check('章节数', manifest.sections, e.sections);
   if (e.hidden >= 0) check('隐藏面板图', manifest.hiddenImgs, e.hidden);
@@ -452,6 +510,31 @@ function acceptanceGate(A, manifest, logger) {
       fs.writeFileSync(path.join(cacheDir, 'leaves_text.txt'), ex.sourceLines.join('\n') + '\n', 'utf-8');
       logger.info(`忠实闸源已落: collect_cache/${safeMenu}/…（${ex.sourceLines.length} 行）`);
     } catch (e) { logger.warn('忠实闸源落盘失败(不影响采集): ' + e.message); }
+  }
+
+  // G91：流程图还原为流程图（Mermaid）——蓝湖上画的是流程图，文档里也要以流程图样式展示（用户 2026-11-24 要求）。
+  // 拓扑由页面几何机器重建（Axure 连接器箭头的 SVG 里自带整条连线路径），不靠模型看图；
+  // 两套独立方法结果一致才采信，重建不出的保持"截图 + 逐行节点文字"。这里只做重建，
+  // 是否替换进正文等渲染验证通过后再定（见 G85 图示截图段）：渲染不出来就不写源码。
+  ex.diagrams = ex.diagrams || [];
+  if (ex.diagrams.length) {
+    const flowSvg = {};
+    const srcs = new Set();
+    ex.diagrams.forEach(d => { const g = d.geo || {}; [...(g.cells || []), ...(g.dots || [])].forEach(o => { if (o.src) srcs.add(o.src); }); });
+    for (const s of srcs) {
+      try { const resp = await page.context().request.get(s, { timeout: 15000 }); if (resp.ok()) flowSvg[s] = (await resp.body()).toString('utf-8').slice(0, 6000); } catch (e) {}
+    }
+    ex.diagrams.forEach((d, i) => {
+      const r = rebuildFlow(d, src => flowSvg[src]);
+      d.flow = r;
+      if (r.ok) {
+        logger.info(`流程图拓扑重建 #${i + 1}：${r.report.nodes} 节点 / ${r.report.arrows} 箭头 → ${r.report.methodA} 条连线，两法一致，流向 ${r.report.orient}`);
+        if (r.report.gaps.length) logger.info(`  端点留缝 ${JSON.stringify(r.report.gaps)}（产品挪过节点框、连线用线段补缝）`);
+      } else {
+        const why = r.report.skip || (r.report.bad.length ? r.report.bad[0].why : (!r.report.agree ? '两套方法结果不一致' : '连线数或方向不满足'));
+        logger.warn(`流程图拓扑重建 #${i + 1} 未采信（${why}）——该图保持截图 + 逐行节点文字`);
+      }
+    });
   }
   const inlineImgs = []; // G76：{top, ref} 全部图（画布图/查询条件带/弹窗裁剪/面板）按画布 y 内联到文字块之间
 
@@ -769,6 +852,8 @@ function acceptanceGate(A, manifest, logger) {
   // G85：axure 矢量图示（流程图：节点矩形+连接线+箭头）——文字层只保阅读序，结构（菱形/分支/连线）必须靠截图。
   // extract 按几何识别出 ex.diagrams（画布包围盒，frame 页顶坐标），这里按包围盒裁图；高出视口的竖切多条后竖拼一张。
   const diagramRefs = [];
+  // G91 计数：flowEmitted=换成 Mermaid 源码的图数；flowFallback=拓扑采信但渲染失败的图数（退回逐行文字）；flowNoVendor=缺渲染库只出源码的图数
+  let flowEmitted = 0, flowFallback = 0, flowNoVendor = 0;
   {
     const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 936);
     const cw = await liveFrame.evaluate(() => document.documentElement.clientWidth).catch(() => 1640);
@@ -817,6 +902,23 @@ function acceptanceGate(A, manifest, logger) {
       const useRef = fs.existsSync(path.join(imgDir, finalFile)) ? finalFile : strips[0];
       inlineImgs.push({ top: dg.top - 7, ref: `![流程图_${di + 1}](${baseName}_images/${useRef})` });
       diagramRefs.push(useRef);
+      // G91：拓扑采信的图示 → 先渲染验证（渲染图同时是给不支持 Mermaid 的阅读器/转 Word 用的那一层），
+      // 再把该图示的文字块从"逐行节点文字"换成"Mermaid 流程图源码 + 渲染图"；原图截图保留在上方。
+      // 没归到节点/连线上的文字（leftover）原样接在后面，不能因为出了流程图而丢。
+      if (dg.flow && dg.flow.ok) {
+        const rFile = stem.replace(/^流程图_/, '流程图渲染_') + '.png';
+        const st = await renderMermaid(page.context(), MERMAID_JS, 'g' + di, dg.flow.mermaid, path.join(imgDir, rFile), logger);
+        if (st === 'ok') { dg.rendered = rFile; logger.info(`流程图渲染 ${rFile}`); }
+        else if (st === 'fail') { dg.flow.ok = false; dg.flow.fallback = '渲染失败'; }
+        const pt = (ex.parts || []).find(p => p.flow === di);
+        if (dg.flow.ok && pt) {
+          const ls = [FENCE + 'mermaid', dg.flow.mermaid, FENCE];
+          if (dg.rendered) ls.push('', `![流程图渲染_${di + 1}](${baseName}_images/${dg.rendered})`);
+          if (dg.flow.leftover.length) ls.push('', ...dg.flow.leftover.map(t => t.replace(/[\r\n]+/g, ' ')));
+          pt.text = ls.join('\n');
+          if (dg.rendered) flowEmitted++; else flowNoVendor++;
+        } else if (!dg.flow.ok) flowFallback++;
+      }
     }
     await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   }
@@ -929,7 +1031,8 @@ function acceptanceGate(A, manifest, logger) {
     hiddenSection = '\n\n' + hiddenRefs.join('\n\n') + '\n';
   }
   let finalMd = ['# 蓝湖需求（文本保真版）— ' + A.menu, '',
-    '> 采集时间: ' + new Date().toISOString().slice(0, 10) + ' | 文本保真提取（DOM 文本）+ 全页图片扫描（相对路径 PNG）+ 弹窗坐标裁剪。', '',
+    '> 采集时间: ' + new Date().toISOString().slice(0, 10) + ' | 文本保真提取（DOM 文本）+ 全页图片扫描（相对路径 PNG）+ 弹窗坐标裁剪。'
+      + ((flowEmitted + flowNoVendor) ? ' 流程图：原图截图 + Mermaid 流程图源码（节点文字与蓝湖逐字一致，拓扑由页面几何重建）' + (flowEmitted ? ' + 渲染图。' : '。') : ''), '',
     body, hiddenSection
   ].join('\n');
 
@@ -962,8 +1065,8 @@ function acceptanceGate(A, manifest, logger) {
   checkSqueezedTable(finalMd, logger);
 
   fs.writeFileSync(path.join(outDir, baseName + '.md'), finalMd, 'utf-8');
-  const totalImgs = inlineImgs.length + hiddenRefs.length;
-  logger.info(`MD 生成: ${baseName}.md（正文 + 图片 ${totalImgs} 张 = 真实图 ${realImgsCount} + 弹窗 ${popupCrops} + 隐藏 ${hiddenN}）`);
+  const totalImgs = inlineImgs.length + hiddenRefs.length + flowEmitted; // flowEmitted=写在流程图块后的渲染图（不走 inlineImgs）
+  logger.info(`MD 生成: ${baseName}.md（正文 + 图片 ${totalImgs} 张 = 真实图 ${realImgsCount} + 弹窗 ${popupCrops} + 隐藏 ${hiddenN} + 流程图渲染 ${flowEmitted}）`);
 
   // —— 阶段4：后置验收闸门（硬阻断）——
   const manifest = {
@@ -976,6 +1079,9 @@ function acceptanceGate(A, manifest, logger) {
     popupCrops,
     diagrams: (ex.diagrams || []).length,
     diagramShots: diagramRefs.length,
+    // G91：每张图示必有去向——换成流程图源码 / 退回逐行文字 / 拓扑未采信，三者之和须等于图示数
+    flowEmitted, flowNoVendor, flowFallback,
+    flowUntrusted: (ex.diagrams || []).filter(d => !(d.flow && d.flow.ok) && !(d.flow && d.flow.fallback)).length,
     geoTables: (ex.tables || []).length,
     missedShots
   };

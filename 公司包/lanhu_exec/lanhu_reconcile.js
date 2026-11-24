@@ -10,6 +10,7 @@
  *  ⑤ images   图数量：文档画布图引用数 == 蓝湖画布大图数（含隐藏面板图；带截图/弹窗裁剪不计入）
  *  ⑥ diagrams 图示截图（G85）：几何识别出的流程图/图示（节点矩形+连接线），文档必须有等量的 流程图_ 截图
  *             ——文字层只保阅读序，无图=菱形/分支/连线结构丢失
+ *  ⑦ flow     流程图（G91）：可重建出流程图的图示须有等量 Mermaid 块；逐块节点/连线数 == 蓝湖节点/箭头数；标签逐字可溯源；有渲染库时须有等量渲染图
  *
  * 用法：node lanhu_reconcile.js <端口> --doc "<md绝对路径>" --menu "<树内菜单名>" [--min-chars 6] [--row-tol 2]
  */
@@ -19,6 +20,7 @@ const {
   scrollToBottom, findContentFrame, Logger, extractLanhuContent,
 } = require('./browser_utils');
 const { resolveLanhuUrl } = require('./config_loader');
+const { rebuildFlow, mmUnescape } = require('./lanhu_flowmermaid.js'); // G91：图示拓扑与采集器同一模块重建
 
 const norm = (s) => String(s || '').replace(/\s+/g, '');
 const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二三四五六七八九十]+[：:]/;
@@ -141,18 +143,32 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     live.tables = geoTabs.concat(rest).sort((a, b) => a.top - b.top);
   }
   if (exg && exg.diagrams) liveDiagrams = exg.diagrams.length;
+  // G91：图示拓扑同源重建（与采集器同一模块、同一批 SVG）——蓝湖上能重建出流程图的图示，文档里必须有对应的流程图块与渲染图。
+  const liveFlows = [];
+  if (exg && exg.diagrams && exg.diagrams.length) {
+    const flowSvg = {};
+    const srcs = new Set();
+    exg.diagrams.forEach(d => { const g = d.geo || {}; [...(g.cells || []), ...(g.dots || [])].forEach(o => { if (o.src) srcs.add(o.src); }); });
+    for (const s of srcs) {
+      try { const resp = await page.context().request.get(s, { timeout: 15000 }); if (resp.ok()) flowSvg[s] = (await resp.body()).toString('utf-8').slice(0, 6000); } catch (e) {}
+    }
+    exg.diagrams.forEach((d, i) => { const r = rebuildFlow(d, src => flowSvg[src]); if (r.ok) liveFlows.push({ idx: i, nodes: r.report.nodes, edges: r.report.methodA }); });
+  }
 
   if (opened) { try { await opened.close(); } catch (e) {} }
   await browser.close();
 
   // ── doc 模型 ──
   // G86：单元格内的 <br> 分行标记与 &#124; 转义竖线是呈现层记号——比对前还原（蓝湖侧一个多行文本件=文档侧 <br> 分行）
-  const raw = fs.readFileSync(docPath, 'utf-8').replace(/<br\s*\/?>/gi, '').replace(/&#124;/g, '|');
+  const raw = fs.readFileSync(docPath, 'utf-8').replace(/<br\s*\/?>/gi, '').replace(/&#124;/g, '|').replace(/#(38|34|60|62|124);/g, (_, n) => String.fromCharCode(Number(n))); // G91：流程图标签实体还原
   const docLines = raw.split('\n');
-  const docHeadings = [], docTables = [], docCanvasImgs = [], docBandImgs = [], docDiagramImgs = [];
+  const docHeadings = [], docTables = [], docCanvasImgs = [], docBandImgs = [], docDiagramImgs = [], docFlowRenders = [];
   let ti = null;
+  let inFence = false; // G91：围栏代码块内的行不参与标题/表格/图片解析
   for (const l of docLines) {
     const t = l.trim();
+    if (t.startsWith('```')) { inFence = !inFence; continue; }
+    if (inFence) { ti = null; continue; }
     if (t.startsWith('!')) { /* 图片引用 → 落入下方 image 分类 */ }
     else if (/^[|#>]/.test(t)) { /* 表行/标题行/引用行：不参与标题提取（表行落入下方表解析） */ }
     else if (HEAD_RE.test(t) && !/[、）、]\s*[0-9:{，]/.test(t) && !/），/.test(t)) { docHeadings.push(t); ti = null; continue; }
@@ -187,6 +203,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
       // G77：界面_（panel_state 面板截图）/查询条件_/表格全景_/弹窗裁剪/隐藏图 均非 live img 元素——不进画布图计数
       // G85（2026-11-24）：流程图_ 前缀=axure 矢量流程图区域截图（DOM 文本节点被拍扁后的视觉结构增补，非 live img）——同 G77 口径不计画布图对账
       if (/^流程图_/.test(f)) { docDiagramImgs.push(f); docBandImgs.push(f); } // G85：图示截图另计数（见 ⑥）
+      else if (/^流程图渲染_/.test(f)) { docFlowRenders.push(f); docBandImgs.push(f); } // G91：流程图渲染图另计数（见 ⑦）
       else if (/^界面_|^查询条件_|^表格全景_/.test(f) || /弹窗|隐藏图/.test(f)) docBandImgs.push(f);
       else if (/弹窗/.test(f)) { /* 弹窗裁剪不计画布图 */ }
       else docCanvasImgs.push(f);
@@ -205,16 +222,50 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   // ── ② extra ──
   const liveAllFull = live.texts.map(t => norm(t)).filter(Boolean).join('||');
   const extras = [];
-  for (const l0 of docLines) {
-    const l = l0.trim();
-    if (!l || /^[#>|!]/.test(l) || l.startsWith('|') || l.startsWith('<')) continue;
-    const nl = norm(l);
-    if (nl.length < minChars) continue;
-    if (liveAllFull.includes(nl)) continue;
-    const segs = l.split(/\s+/).map(x => norm(x)).filter(x => x.length >= 2);
-    if (segs.length) { const hit = segs.filter(sg => liveAllFull.includes(sg)).length; if (hit * 2 >= segs.length) continue; }
-    extras.push(l.slice(0, 60));
+  {
+    let inf = false; // G91：围栏内的行不走正文溯源（流程图块在下面按标签逐个溯源）
+    for (const l0 of docLines) {
+      const l = l0.trim();
+      if (l.startsWith('```')) { inf = !inf; continue; }
+      if (inf) continue;
+      if (!l || /^[#>|!]/.test(l) || l.startsWith('|') || l.startsWith('<')) continue;
+      const nl = norm(l);
+      if (nl.length < minChars) continue;
+      if (liveAllFull.includes(nl)) continue;
+      const segs = l.split(/\s+/).map(x => norm(x)).filter(x => x.length >= 2);
+      if (segs.length) { const hit = segs.filter(sg => liveAllFull.includes(sg)).length; if (hit * 2 >= segs.length) continue; }
+      extras.push(l.slice(0, 60));
+    }
   }
+  // G91：流程图块——每块记节点数/连线数，并取出全部标签（节点文字、连线标注；数字实体还原）。
+  // 标签必须逐字来自蓝湖文字（采集器只许搬运、不许改写），与正文行的整行溯源分开算
+  const docMermaid = [];
+  {
+    let inf = false, cur = null;
+    for (const l0 of fs.readFileSync(docPath, 'utf-8').split('\n')) {
+      const s = l0.trim();
+      if (s.startsWith('```')) {
+        if (!inf) { inf = true; cur = s.slice(3).trim().toLowerCase() === 'mermaid' ? { nodes: 0, edges: 0, labels: [] } : null; if (cur) docMermaid.push(cur); }
+        else { inf = false; cur = null; }
+        continue;
+      }
+      if (!inf || !cur) continue;
+      if (/^n\d+\s*-->/.test(s)) cur.edges++;
+      else if (/^n\d+[(\[({]/.test(s)) cur.nodes++;
+      for (const m of s.matchAll(/"([^"]*)"/g)) cur.labels.push(mmUnescape(m[1]));
+    }
+  }
+  const liveAll = live.texts.map(t => norm(t)).filter(Boolean);
+  const flowLabelMiss = []; // 流程图标签在蓝湖文字里找不到的
+  // 溯源判据：标签整体（去掉 <br> 分行记号后）== 蓝湖某个文字件 —— 对应"一个多行文字件整块成了连线标注"；
+  // 或标签按 <br> 拆开的每一段都 == 蓝湖某个文字件 —— 对应"一个节点/一条连线挂了多个文字件"
+  const liveSet = new Set(liveAll);
+  docMermaid.forEach((b, k) => b.labels.forEach((lb) => {
+    const whole = norm(lb.replace(/<br\s*\/?>/gi, ''));
+    const parts = lb.split(/<br\s*\/?>/i).map(x => norm(x.trim())).filter(Boolean);
+    const ok = (whole && liveSet.has(whole)) || (parts.length && parts.every(x => liveSet.has(x)));
+    if (!ok) flowLabelMiss.push('块' + (k + 1) + ': ' + lb.replace(/<br\s*\/?>/gi, ' ').slice(0, 30));
+  }));
 
   // ── ③ headings 序（G80：live 标题常与正文粘连在同一 _text 节点（"…所有公司 一、通用提醒"）——
   //    每节点只取第一处标题行，且标题必须处于行首或行尾的粘连位（中段截断行丢弃） ──
@@ -331,6 +382,15 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
 
   // ── ⑥ 图示截图：几何识别出的流程图/图示，文档必须有等量截图（无图=结构丢失，v1 四道闸门全绿却拍扁的堵口） ──
   const diagramIssue = liveDiagrams !== docDiagramImgs.length ? { liveDiagrams, docDiagrams: docDiagramImgs.length } : null;
+  // ── ⑦ 流程图（G91）：蓝湖上可重建出流程图的图示，文档里须有等量的流程图块；逐块节点数/连线数 == 蓝湖节点数/箭头数；
+  //    标签全部可溯源；本机有渲染库时还须有等量渲染图 ──
+  const liveFlowN = liveFlows.length;
+  const flowIssues = [];
+  if (docMermaid.length !== liveFlowN) flowIssues.push({ kind: '流程图块数', live: liveFlowN, doc: docMermaid.length });
+  docMermaid.forEach((b, k) => { const lf = liveFlows[k]; if (lf && (b.nodes !== lf.nodes || b.edges !== lf.edges)) flowIssues.push({ kind: '节点/连线数', live: lf.nodes + '/' + lf.edges, doc: b.nodes + '/' + b.edges }); });
+  if (flowLabelMiss.length) flowIssues.push({ kind: '流程图标签未溯源', count: flowLabelMiss.length, top: flowLabelMiss.slice(0, 5) });
+  const hasVendor = fs.existsSync(require('path').join(__dirname, 'vendor', 'mermaid.min.js'));
+  if (hasVendor && liveFlowN && docFlowRenders.length !== liveFlowN) flowIssues.push({ kind: '渲染图数', live: liveFlowN, doc: docFlowRenders.length });
 
   const result = {
     menu, doc: docPath,
@@ -343,8 +403,9 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     bands: docBandImgs.length,
     diagrams: diagramIssue || { live: liveDiagrams, doc: docDiagramImgs.length, ok: true },
     hiddenCellTexts: hiddenKeys.size,
+    flow: flowIssues.length ? { live: liveFlowN, mermaidBlocks: docMermaid.length, renders: docFlowRenders.length, issues: flowIssues } : { live: liveFlowN, mermaidBlocks: docMermaid.length, renders: docFlowRenders.length, ok: true },
   };
-  const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue;
+  const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue || flowIssues.length > 0;
   result.VERDICT = red ? 'RED' : 'GREEN';
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = red ? 1 : 0;
