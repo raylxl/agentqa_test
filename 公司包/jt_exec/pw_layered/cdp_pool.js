@@ -24,9 +24,11 @@ function findChrome() {
   return hit;
 }
 function findDeployRoot() {
+  // 2026-11-24 Mac 克隆目录名为 aiagentqa_test（非发起机 agentqa_test）——兼容两种，否则数据目录误落仓库内 jt_exec/
+  const isRoot = n => n === 'agentqa_test' || n === 'aiagentqa_test';
   let d=__dirname;
   while (true) {
-    if (path.basename(d)==='agentqa_test') return path.dirname(d);
+    if (isRoot(path.basename(d))) return path.dirname(d);
     const up=path.dirname(d); if (up===d) return path.dirname(__dirname); d=up;
   }
 }
@@ -63,6 +65,10 @@ function launch(port) {
     `--user-data-dir=${path.join(DEPLOY_ROOT, '.chrome-cdp-' + port)}`,
     '--no-first-run', '--no-default-browser-check', '--ignore-certificate-errors',
     '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable,HttpsFirstModeV2ForEngagedSites',
+    // 2026-11-24 Mac 实测：Chrome 自身 sandbox 在 WorkBuddy 进程树内初始化失败（Operation not permitted）
+    // → Network service / GPU 进程连环崩 → newPage 报 Target crashed。--no-sandbox 后稳定开页。
+    // 仅在 CHROME_NO_SANDBOX=1 或父进程受限时生效；发起机 Windows 默认不受影响。
+    ...(process.env.CHROME_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
     '--headless=new', '--disable-gpu', '--window-size=1920,1080',
   ];
   spawn(CHROME, args, { detached: true, stdio: 'ignore' }).unref();
