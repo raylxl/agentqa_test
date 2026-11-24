@@ -76,11 +76,12 @@ description: 执行反馈闭环——含执行收尾后的 SYS/DEF/IMP/CHG 四�
 
 ```bash
 # --profile 按业务线选：external-price（默认）/ customer-bill（对客账单）/ settle-record（结算交易记录）；新域先在 md_to_changeset.py 的 PROFILES 加档
-GW=/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library
-python3 $GW/schemas/md_to_changeset.py --dir "<最终分章目录>" --profile <profile名> --scope-file "<理解说明绝对路径>"  # 生成变更单+证据链到 changes/active/，绝不写真本
-python3 $GW/case_library.py merge $GW/changes/active/CHG-xxx.yaml                       # 人工核对审批记录后，才由人执行合并
-python3 $GW/case_library.py stats                                                        # 对账：源/SQLite/FTS 三数一致
-python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/.总用例库_用例清单.ref/build.py  # 刷新 Excel 派生视图
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；禁止把占位符或相对路径直接交给 shell
+LIB="{paths.Agent本体}/tools/case_library.py"
+python -X utf8 "$LIB" bridge --dir "<最终分章目录>" --profile <profile名> --scope-file "<理解说明绝对路径>"  # 生成变更单+证据链到 changes/active/，绝不写真本
+python -X utf8 "$LIB" gateway merge changes/active/CHG-xxx.yaml                         # 人工核对审批记录后，才由人执行合并
+python -X utf8 "$LIB" gateway stats                                                     # 对账：源/SQLite/FTS 三数一致
+python -X utf8 "$LIB" excel                                                             # 刷新 Excel 派生视图
 ```
 
 - **四轴 scope 传导（2026-11-23 接入）**：格式桥 `--scope-file` 传本需求《需求理解说明》绝对路径，沉淀自动带出 qa-loop 答疑拍板的租户/客户范围（对齐主数据）；产品版本主数据未立项恒 `PENDING_SCOPE`，不传则全部降级 `PENDING_SCOPE`、绝不默认 ALL。缺此参数会得到空 scope（2026-11-23 结算交易记录 37 条曾因此回填）。

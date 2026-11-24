@@ -59,9 +59,9 @@ python ../usecase-pipeline/scripts/assemble.py --dir "<分章目录>" --out "<�
 - **绝不在此写 `changes/active/` 或 `cases/`**：AI 不自助生成正式变更单、不写真本（一期 §5 铁律）。
 
 ```bash
-# 绝对路径全文，禁止缩写为相对路径（2026-11-20 实测会误判网关不存在）
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；禁止把占位符或相对路径直接交给 shell
 # --profile 按业务线选：external-price（默认，外部参考价）/ customer-bill（对客账单）；新域先在 md_to_changeset.py 的 PROFILES 加档
-python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/schemas/md_to_changeset.py \
+python -X utf8 "{paths.Agent本体}/tools/case_library.py" bridge \
   --dir "<本轮分章目录>" --profile <profile名> --dry-run   # 只预判，不写盘
 ```
 

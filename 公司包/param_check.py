@@ -13,6 +13,11 @@ import json
 import argparse
 from pathlib import Path
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 HERE = Path(__file__).resolve().parent
 SNAPSHOT = HERE / "param_snapshot.json"
 CONFIG = HERE / "agent-company.json"
@@ -35,6 +40,8 @@ def _target_base():
 
 BASE = _target_base()
 SKILL_DIR = BASE / "skills"
+TOTAL_LIBRARY_PROXY = BASE / "tools" / "case_library.py"
+RETIRED_TOTAL_LIBRARY_ROOT = "/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library"
 # 十个流程技能 + 三个组装族脚本 + 归档脚本
 TARGETS = {
     "skills/requirement-qa-loop/SKILL.md": None,
@@ -160,7 +167,21 @@ def main():
         if rel not in current and not (BASE / rel).exists():
             red.append((rel, "【文件缺失】"))
 
-    print(f"[CHECK] 快照{sum(len(v) for v in snap.values())}值 | 现存字面量{len(cur_all)} | 配置值{len(cfg_vals)}+前缀{len(cfg_prefixes)}")
+    # 总库接线防回退：活跃技能不得残留异机库根；代理必须随 Agent 本体提供。
+    stale_total_library = []
+    for rel in TARGETS:
+        p = BASE / rel
+        if p.exists() and RETIRED_TOTAL_LIBRARY_ROOT in p.read_text(encoding="utf-8", errors="replace"):
+            stale_total_library.append(rel)
+    if stale_total_library:
+        for rel in stale_total_library:
+            print(f"  [RED-总库异机路径残留] {rel} :: {RETIRED_TOTAL_LIBRARY_ROOT}")
+        red.extend([(rel, RETIRED_TOTAL_LIBRARY_ROOT) for rel in stale_total_library])
+    if not TOTAL_LIBRARY_PROXY.exists():
+        print(f"  [RED-总库代理缺失] {TOTAL_LIBRARY_PROXY}")
+        red.append(("Agent本体/tools/case_library.py", "【文件缺失】"))
+
+    print(f"[CHECK] 快照{sum(len(v) for v in snap.values())}值 | 现存字面量{len(cur_all)} | 配置值{len(cfg_vals)}+前缀{len(cfg_prefixes)} | 总库代理{'OK' if TOTAL_LIBRARY_PROXY.exists() else '缺失'}")
     if missing_paths:
         for p in missing_paths:
             print(f"  [RED-配置路径不存在] {p}")

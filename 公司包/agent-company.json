@@ -298,6 +298,7 @@
     "D:/ZCodetest/手艺包": "D:/ZCodetest/agentqa_test/手艺包",
     "D:/ZCodetest/Agent本体": "D:/ZCodetest/agentqa_test/Agent本体",
     "D:/ZCodetest/公司包": "D:/ZCodetest/agentqa_test/公司包",
-    "C:/Users/wangzhijun/.zcode/cli/hooks": "D:/ZCodetest/agentqa_test/Agent本体/hooks"
+    "C:/Users/wangzhijun/.zcode/cli/hooks": "D:/ZCodetest/agentqa_test/Agent本体/hooks",
+    "/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library": "D:/ZCodetest/total-case-library"
   }
 }

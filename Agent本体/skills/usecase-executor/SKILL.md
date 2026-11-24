@@ -100,8 +100,8 @@ description: 用例 AI 执行——按执行操作细则和治理计划执行已
    ① **账本落定**（全部状态写回账本 json/jsonl）；
    ①b **总库回写（2026-11-23 接入）**：账本落定后，把本轮执行结果回写一份到总用例库的 `executions/` 账本——用绝对路径全文（禁缩写为相对路径，实测会误判路径不存在）：
    ```bash
-   GW=/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library
-   python3 $GW/schemas/write_execution.py --ledger "<本轮ledger.json>" --change-set <本轮变更单号> --requirement "<需求ID>" --source "<环境/菜单/run_id>" --commit
+   # 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；禁止把占位符或相对路径直接交给 shell
+   python -X utf8 "{paths.Agent本体}/tools/case_library.py" execution --ledger "<本轮ledger.json>" --change-set <本轮变更单号> --requirement "<需求ID>" --source "<环境/菜单/run_id>" --commit
    ```
    - **必传 `--requirement`**：不同需求各自用 `TC-COL-01` 这类短编号、全局撞号（实测 `TC-QRY-01` 命中3条）；按需求 ID 过滤 `case.requirement_ids` 才能精准映射到总库流水号。不传则撞号的条自动降级跳过。
    - **只写 `executions/`**：脚本靠 `legacy_ids` 把 agent 私有编号映射成总库 `case_id`，四态如实透传（PASS/BLOCKED/OBSERVE/FAIL），**收口处置照录、脚本不擅自把 BLOCKED/OBSERVE 改成 PASS**；绝不碰 `cases/` 正本。

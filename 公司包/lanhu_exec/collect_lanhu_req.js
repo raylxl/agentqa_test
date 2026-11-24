@@ -68,7 +68,7 @@ function parseArgs(argv) {
 
 // 解析 --expect "popups=4,imgs=0,sections=2,hidden=1" → {popups:-1,...}
 function parseExpect(s) {
-  const e = { popups: -1, imgs: -1, sections: -1, hidden: -1 };
+  const e = { popups: -1, imgs: -1, sections: -1, hidden: -1, diagrams: -1 };
   if (!s) return e;
   for (const part of s.split(',')) {
     const [k, v] = part.split('=');
@@ -323,8 +323,10 @@ function checkSqueezedTable(md, logger) {
   const lines = md.split('\n').filter(l => l.trim().startsWith('|'));
   if (lines.length < 2) return;
   const cols = (l) => (l.match(/\|/g) || []).length - 1;
-  const headerCols = cols(lines[0]);
+  let headerCols = cols(lines[0]);
   for (let i = 1; i < lines.length; i++) {
+    if (i + 1 < lines.length && /^[\s|:-]+$/.test(lines[i + 1])) { headerCols = cols(lines[i]); continue; } // 表头行（其后紧跟分隔行）=新表起点，各表各比
+    if (/^[\s|:-]+$/.test(lines[i])) continue; // 分隔行
     const c = cols(lines[i]);
     if (headerCols > 0 && c > headerCols * 1.6) {
       logger.warn('⚠️ 疑似挤行表格（第' + (i + 1) + '行单元格数 ' + c + ' 远超表头 ' + headerCols + '），若为「导入模版」等示例表，请运行 probe_template_table.js 精确抠格重写');
@@ -352,6 +354,12 @@ function acceptanceGate(A, manifest, logger) {
     if (manifest.popupCrops !== manifest.popupClusters) fails.push(`弹窗截图数 ${manifest.popupCrops} ≠ 检测到弹窗簇 ${manifest.popupClusters}（存在裁剪失败的弹窗，禁止声称完成）`);
   }
   if (e.imgs >= 0) check('真实图片数', manifest.realImgs, e.imgs);
+  // G85：几何识别出的图示必须全部截到图（漏截=文字层拍扁而无结构图，税务信息维护 v1 实证）
+  if (e.diagrams >= 0) check('图示截图数', manifest.diagramShots, e.diagrams);
+  else {
+    report.push(`  · 图示截图数: 实际=${manifest.diagramShots} 自动期望=${manifest.diagrams}（须全部截到）`);
+    if ((manifest.diagrams || 0) !== (manifest.diagramShots || 0)) fails.push(`图示截图数 ${manifest.diagramShots} ≠ 几何识别图示数 ${manifest.diagrams}（存在未截图的流程图/图示，禁止声称完成）`);
+  }
   if (e.sections >= 0) check('章节数', manifest.sections, e.sections);
   if (e.hidden >= 0) check('隐藏面板图', manifest.hiddenImgs, e.hidden);
 
@@ -432,6 +440,19 @@ function acceptanceGate(A, manifest, logger) {
   // 1) 正文（已验证保真，含浮层最近锚点内联）
   const ex = await extractLanhuContent(liveFrame);
   let md = ex.md;
+
+  // G90：给第四道闸（lanhu_fidelity 文字忠实）供源——leaves_text.txt 此前只由旧路线 B 脚本落，
+  // 现行路线 A 不写缓存，忠实闸实际在拿旧缓存（甚至无源）比对。这里落"本次采集所见"的可见文字与控件值。
+  // 目录命名与路线 B 一致（collect_cache/<菜单名去非法字符>/<时间戳>/），两路线互认。
+  if (ex.sourceLines && ex.sourceLines.length) {
+    try {
+      const safeMenu = (A.menu || 'menu').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
+      const cacheDir = path.join(__dirname, 'out', 'collect_cache', safeMenu, new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19));
+      fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(path.join(cacheDir, 'leaves_text.txt'), ex.sourceLines.join('\n') + '\n', 'utf-8');
+      logger.info(`忠实闸源已落: collect_cache/${safeMenu}/…（${ex.sourceLines.length} 行）`);
+    } catch (e) { logger.warn('忠实闸源落盘失败(不影响采集): ' + e.message); }
+  }
   const inlineImgs = []; // G76：{top, ref} 全部图（画布图/查询条件带/弹窗裁剪/面板）按画布 y 内联到文字块之间
 
   // G69：查询条件带截图 + G75：mockup 面板截图（每弹窗一张完整图）——必须在任何滚动前截（extract 坐标=当刻视口）
@@ -441,7 +462,7 @@ function acceptanceGate(A, manifest, logger) {
   const bandShots = [];
   const panelShots = []; // G75：[{file, top, title}] 面板截图清单（阶段2按章节插入）
   let feBox = null;
-  if ((ex.bands && ex.bands.length) || (ex.panels && ex.panels.length)) {
+  if ((ex.bands && ex.bands.length) || (ex.panels && ex.panels.length) || (ex.diagrams && ex.diagrams.length)) {
     fs.mkdirSync(imgDir, { recursive: true });
     const fe = await liveFrame.frameElement().catch(() => null);
     feBox = fe ? await fe.boundingBox() : null;
@@ -524,8 +545,45 @@ function acceptanceGate(A, manifest, logger) {
         const h = await liveFrame.$(`[data-lanhu-panel="${pi}"]`).catch(() => null);
         const el = h || null;
         if (el) {
-          const ok = await el.screenshot({ path: path.join(imgDir, f), timeout: 30000 }).then(() => true)
-            .catch(e => { logger.warn(`面板元素截图失败 ${f}: ` + e.message.slice(0, 60)); return false; });
+          // G89：横向可滚动的面板（列表 mockup 的"列表明细"可视 959 宽、内容 3718 宽）——元素截图只拍得到可视部分，
+          // 右侧十余列永远拍不到；iframe 外的内容也拍不到（"撑开面板"实测右半空白）。做法：面板按步横向滚动逐条截图，
+          // 再按各自的滚动位置拼成整表一张（至多 8 条）。
+          const strips = []; // {file, x}
+          if ((pn.scrollW || 0) > (pn.clientW || 0) + 60 && (pn.scrollW || 0) <= 8000) {
+            const step = Math.max(200, (pn.clientW || 0) - 40);
+            for (let target = 0; strips.length < 8; target += step) {
+              const sl = await el.evaluate((p, tx) => { p.scrollLeft = tx; return p.scrollLeft; }, target).catch(() => null);
+              if (sl === null || (strips.length && sl <= strips[strips.length - 1].x)) break; // 滚不动了
+              await page.waitForTimeout(150);
+              const sf = f.replace(/\.png$/, `_条${strips.length + 1}.png`);
+              const okS = await el.screenshot({ path: path.join(imgDir, sf), timeout: 30000 }).then(() => true)
+                .catch(() => false);
+              if (!okS) break;
+              strips.push({ file: sf, x: sl });
+              if (sl + (pn.clientW || 0) >= (pn.scrollW || 0) - 2) break; // 已滚到内容右缘
+            }
+            await el.evaluate((p) => { p.scrollLeft = 0; }).catch(() => {});
+          }
+          let ok = false;
+          if (strips.length > 1) {
+            const { execFileSync } = require('child_process');
+            const dropStrips = (keepIdx) => strips.forEach((s, k) => { if (k !== keepIdx) { try { fs.unlinkSync(path.join(imgDir, s.file)); } catch (e) {} } });
+            try {
+              execFileSync(process.platform === 'win32' ? 'python' : 'python3',
+                [path.join(__dirname, 'stitch_at.py'), path.join(imgDir, f), `--bottom-crop=${Math.max(0, (pn.bottom - pn.top) - (pn.clientH || 0))}`, ...strips.map(s => `${s.x}:${s.file}`)], { timeout: 60000 }); // 裁掉各条底部的横向滚动条带
+              ok = fs.existsSync(path.join(imgDir, f));
+              if (ok) { dropStrips(-1); logger.info(`面板横滚拼接 ${f}（${strips.length} 条）`); }
+            } catch (e) {
+              logger.warn('面板横滚拼接失败(只留首条): ' + String(e.message).slice(0, 80));
+              try { fs.renameSync(path.join(imgDir, strips[0].file), path.join(imgDir, f)); ok = true; } catch (e2) {}
+              dropStrips(-1);
+            }
+          } else if (strips.length === 1) {
+            fs.renameSync(path.join(imgDir, strips[0].file), path.join(imgDir, f)); ok = true;
+          } else {
+            ok = await el.screenshot({ path: path.join(imgDir, f), timeout: 30000 }).then(() => true)
+              .catch(e => { logger.warn(`面板元素截图失败 ${f}: ` + e.message.slice(0, 60)); return false; });
+          }
           if (ok) {
             const fsx = require('fs');
             try {
@@ -708,6 +766,61 @@ function acceptanceGate(A, manifest, logger) {
     logger.info(`截图 ${file} top=${im.top} → ${secName}`);
   }
 
+  // G85：axure 矢量图示（流程图：节点矩形+连接线+箭头）——文字层只保阅读序，结构（菱形/分支/连线）必须靠截图。
+  // extract 按几何识别出 ex.diagrams（画布包围盒，frame 页顶坐标），这里按包围盒裁图；高出视口的竖切多条后竖拼一张。
+  const diagramRefs = [];
+  {
+    const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 936);
+    const cw = await liveFrame.evaluate(() => document.documentElement.clientWidth).catch(() => 1640);
+    const diagCounters = {};
+    for (let di = 0; di < (ex.diagrams || []).length; di++) {
+      const dg = ex.diagrams[di];
+      const secIdx = sectionIndexOf(dg.top + 12);
+      const secName = secIdx < 0 ? '前置' : sectionShort(heads[secIdx].text);
+      diagCounters[secIdx] = (diagCounters[secIdx] || 0) + 1;
+      const stem = `流程图_${secName}_图${diagCounters[secIdx]}`;
+      const strips = [];
+      const PAD = 6; // 图示包围盒在 extract 侧已含标签外沿 4px，这里只留小边（大留白会把上方标题的半截字带进图）
+      const x0 = Math.max(0, Math.round(dg.left - PAD)), x1 = Math.min(cw - 4, Math.round(dg.right + PAD));
+      const w = x1 - x0, yEnd = Math.round(dg.bottom + PAD);
+      let y = Math.max(0, Math.round(dg.top - PAD)), guard = 0;
+      if (w >= 60 && yEnd - y >= 30) {
+        while (y < yEnd && guard++ < 16) {
+          await liveFrame.evaluate((yy) => window.scrollTo(0, Math.max(0, yy - 40)), y).catch(() => {});
+          await page.waitForTimeout(220);
+          const cs = await liveFrame.evaluate(() => (window.scrollY || document.documentElement.scrollTop || 0)).catch(() => 0);
+          const a = Math.max(y, cs + 2), b = Math.min(yEnd, cs + vh - 2); // 以实际滚动量重算本条起止（页底滚动会被夹住）
+          if (b - a < 8) break;
+          const f = `${stem}_条${strips.length + 1}.png`;
+          try {
+            await page.screenshot({ path: path.join(imgDir, f), clip: { x: feBox.x + x0, y: feBox.y + (a - cs), width: w, height: b - a }, timeout: 25000 });
+            strips.push(f);
+            logger.info(`图示截图 ${f}（${w}x${b - a}，画布 y ${a}~${b}）`);
+          } catch (e) { logger.warn('图示截图失败: ' + e.message.split('\n')[0]); break; }
+          y = b;
+        }
+      }
+      if (!strips.length) {
+        missedShots.push({ file: stem + '.png', index: -1, top: dg.top, kind: 'diagram' });
+        logger.error('图示截图未落地，跳过引用写入: ' + stem);
+        continue;
+      }
+      const finalFile = `${stem}.png`;
+      if (strips.length === 1) fs.renameSync(path.join(imgDir, strips[0]), path.join(imgDir, finalFile));
+      else {
+        const { execFileSync } = require('child_process');
+        try {
+          execFileSync(process.platform === 'win32' ? 'python' : 'python3', [path.join(__dirname, 'stitch_strips.py'), path.join(imgDir, finalFile), ...strips.map(s => path.join(imgDir, s))], { timeout: 60000 });
+          logger.info(`图示竖拼完成 ${finalFile}（${strips.length} 条）`);
+        } catch (e) { logger.warn('图示竖拼失败(保留分条，只引首条): ' + String(e.message).slice(0, 80)); }
+      }
+      const useRef = fs.existsSync(path.join(imgDir, finalFile)) ? finalFile : strips[0];
+      inlineImgs.push({ top: dg.top - 7, ref: `![流程图_${di + 1}](${baseName}_images/${useRef})` });
+      diagramRefs.push(useRef);
+    }
+    await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+  }
+
   // 2b) 弹窗坐标裁剪（fhf 类 axure 控件组合弹窗；默认 auto，可 off / spec:path）
   let popupCrops = 0;
   const popupRefs = []; // {key, ref}
@@ -861,6 +974,9 @@ function acceptanceGate(A, manifest, logger) {
     hiddenImgs: hiddenN,
     popupClusters: specPopups ? specPopups.length : cls.popupClusters,
     popupCrops,
+    diagrams: (ex.diagrams || []).length,
+    diagramShots: diagramRefs.length,
+    geoTables: (ex.tables || []).length,
     missedShots
   };
   if (missedShots.length > 0 && !A.noGate) {
