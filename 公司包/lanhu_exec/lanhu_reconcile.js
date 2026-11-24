@@ -10,7 +10,8 @@
  *  ⑤ images   图数量：文档画布图引用数 == 蓝湖画布大图数（含隐藏面板图；带截图/弹窗裁剪不计入）
  *  ⑥ diagrams 图示截图（G85）：几何识别出的流程图/图示（节点矩形+连接线），文档必须有等量的 流程图_ 截图
  *             ——文字层只保阅读序，无图=菱形/分支/连线结构丢失
- *  ⑦ flow     流程图（G91）：可重建出流程图的图示须有等量 Mermaid 块；逐块节点/连线数 == 蓝湖节点/箭头数；标签逐字可溯源；有渲染库时须有等量渲染图
+ *  ⑦ flow     流程图（G91/G92）：可重建出流程图的图示须有等量结构块（Mermaid，置于 HTML 注释内不可见）；逐块节点/连线数 == 蓝湖节点/箭头数；
+ *             标签逐字可溯源；有渲染库时须有等量渲染图；结构文字以可见代码块出现=违反展示原则（红）
  *
  * 用法：node lanhu_reconcile.js <端口> --doc "<md绝对路径>" --menu "<树内菜单名>" [--min-chars 6] [--row-tol 2]
  */
@@ -165,8 +166,11 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const docHeadings = [], docTables = [], docCanvasImgs = [], docBandImgs = [], docDiagramImgs = [], docFlowRenders = [];
   let ti = null;
   let inFence = false; // G91：围栏代码块内的行不参与标题/表格/图片解析
+  let inComment = false; // G92：HTML 注释段（流程图结构块在此）不参与解析
   for (const l of docLines) {
     const t = l.trim();
+    if (!inComment && t.startsWith('<!--')) inComment = true;
+    if (inComment) { if (t.includes('-->')) inComment = false; ti = null; continue; }
     if (t.startsWith('```')) { inFence = !inFence; continue; }
     if (inFence) { ti = null; continue; }
     if (t.startsWith('!')) { /* 图片引用 → 落入下方 image 分类 */ }
@@ -223,9 +227,11 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const liveAllFull = live.texts.map(t => norm(t)).filter(Boolean).join('||');
   const extras = [];
   {
-    let inf = false; // G91：围栏内的行不走正文溯源（流程图块在下面按标签逐个溯源）
+    let inf = false, inc = false; // G91/G92：围栏内、HTML 注释内的行不走正文溯源（流程图块在下面按标签逐个溯源）
     for (const l0 of docLines) {
       const l = l0.trim();
+      if (!inc && l.startsWith('<!--')) inc = true;
+      if (inc) { if (l.includes('-->')) inc = false; continue; }
       if (l.startsWith('```')) { inf = !inf; continue; }
       if (inf) continue;
       if (!l || /^[#>|!]/.test(l) || l.startsWith('|') || l.startsWith('<')) continue;
@@ -239,18 +245,25 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   }
   // G91：流程图块——每块记节点数/连线数，并取出全部标签（节点文字、连线标注；数字实体还原）。
   // 标签必须逐字来自蓝湖文字（采集器只许搬运、不许改写），与正文行的整行溯源分开算
-  const docMermaid = [];
+  const docMermaid = []; // 每块 {nodes, edges, labels, visible}；按文档中出现序
   {
-    let inf = false, cur = null;
-    for (const l0 of fs.readFileSync(docPath, 'utf-8').split('\n')) {
+    const src = fs.readFileSync(docPath, 'utf-8').split('\n');
+    let kind = null, cur = null; // kind: 'hidden'（HTML 注释内的结构块，现行形态）| 'fenced'（可见代码块，违反展示原则）
+    for (const l0 of src) {
       const s = l0.trim();
-      if (s.startsWith('```')) {
-        if (!inf) { inf = true; cur = s.slice(3).trim().toLowerCase() === 'mermaid' ? { nodes: 0, edges: 0, labels: [] } : null; if (cur) docMermaid.push(cur); }
-        else { inf = false; cur = null; }
+      if (!kind && s.startsWith('<!--')) {
+        if (s.includes('流程图结构')) { kind = 'hidden'; docMermaid.push(cur = { nodes: 0, edges: 0, labels: [], visible: false }); }
+        else continue; // 其他 HTML 注释不在本检查范围
         continue;
       }
-      if (!inf || !cur) continue;
-      if (/^n\d+\s*-->/.test(s)) cur.edges++;
+      if (!kind && s.startsWith('```')) {
+        if (s.slice(3).trim().toLowerCase() === 'mermaid') { kind = 'fenced'; docMermaid.push(cur = { nodes: 0, edges: 0, labels: [], visible: true }); }
+        continue;
+      }
+      if (!kind || !cur) continue;
+      if (kind === 'hidden' && s === '-->') { kind = null; cur = null; continue; }
+      if (kind === 'fenced' && s.startsWith('```')) { kind = null; cur = null; continue; }
+      if (/^n\d+\s*(-->|==>)/.test(s)) cur.edges++; // ==> 注释块现行写法；--> 旧的可见代码块写法
       else if (/^n\d+[(\[({]/.test(s)) cur.nodes++;
       for (const m of s.matchAll(/"([^"]*)"/g)) cur.labels.push(mmUnescape(m[1]));
     }
@@ -387,6 +400,8 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const liveFlowN = liveFlows.length;
   const flowIssues = [];
   if (docMermaid.length !== liveFlowN) flowIssues.push({ kind: '流程图块数', live: liveFlowN, doc: docMermaid.length });
+  const visibleFlow = docMermaid.filter(b => b.visible).length; // G92：结构文字可见=违反展示原则
+  if (visibleFlow) flowIssues.push({ kind: '可见的流程图代码块', doc: visibleFlow });
   docMermaid.forEach((b, k) => { const lf = liveFlows[k]; if (lf && (b.nodes !== lf.nodes || b.edges !== lf.edges)) flowIssues.push({ kind: '节点/连线数', live: lf.nodes + '/' + lf.edges, doc: b.nodes + '/' + b.edges }); });
   if (flowLabelMiss.length) flowIssues.push({ kind: '流程图标签未溯源', count: flowLabelMiss.length, top: flowLabelMiss.slice(0, 5) });
   const hasVendor = fs.existsSync(require('path').join(__dirname, 'vendor', 'mermaid.min.js'));
@@ -403,7 +418,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     bands: docBandImgs.length,
     diagrams: diagramIssue || { live: liveDiagrams, doc: docDiagramImgs.length, ok: true },
     hiddenCellTexts: hiddenKeys.size,
-    flow: flowIssues.length ? { live: liveFlowN, mermaidBlocks: docMermaid.length, renders: docFlowRenders.length, issues: flowIssues } : { live: liveFlowN, mermaidBlocks: docMermaid.length, renders: docFlowRenders.length, ok: true },
+    flow: flowIssues.length ? { live: liveFlowN, flowBlocks: docMermaid.length, visible: visibleFlow, renders: docFlowRenders.length, issues: flowIssues } : { live: liveFlowN, flowBlocks: docMermaid.length, visible: 0, renders: docFlowRenders.length, ok: true },
   };
   const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue || flowIssues.length > 0;
   result.VERDICT = red ? 'RED' : 'GREEN';

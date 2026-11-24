@@ -37,7 +37,7 @@ const {
   connectBrowser, findContentFrame, Logger, scrollToBottom, extractLanhuContent,
   getLanhuPages, robustClickMenu
 } = require('./browser_utils.js');
-const { rebuildFlow } = require('./lanhu_flowmermaid.js');
+const { rebuildFlow, hiddenSource, cdpShot2x } = require('./lanhu_flowmermaid.js');
 
 // G91：流程图渲染库（mermaid npm 包里的浏览器单文件版，MIT，见 vendor/README_mermaid.txt）。
 // 缺这个文件时流程图只出 Mermaid 源码、不出渲染图（采集照常，闸门只记数）。
@@ -313,7 +313,8 @@ async function renderMermaid(context, jsPath, id, src, pngPath, logger) {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: bb.w + 120, height: bb.h + 120, deviceScaleFactor: 2, mobile: false });
     await rp.evaluate(() => document.fonts.ready);
     await rp.waitForTimeout(300);
-    await rp.screenshot({ path: pngPath, clip: { x: 0, y: 0, width: bb.w + 32, height: bb.h + 32 }, timeout: 25000 });
+    // G92：2 倍像素——走 CDP 直拍（page.screenshot 会归一成 1 倍像素尺寸）
+    await cdpShot2x(cdp, { x: 0, y: 0, width: bb.w + 32, height: bb.h + 32 }, pngPath);
     return 'ok';
   } catch (e) {
     logger.warn('流程图渲染失败: ' + String((e && e.message) || e).split('\n')[0].slice(0, 140));
@@ -328,6 +329,8 @@ function cleanResidue(md) {
   // 围栏内的语法行（如带"未审核 审核通过 审核驳回"枚举词的连线标注）碰上就会被整行删掉，把流程图删残
   const fences = [];
   md = md.replace(/```[^\n]*\n[\s\S]*?\n```/g, (m) => { fences.push(m); return '\u0000FENCE' + (fences.length - 1) + '\u0000'; });
+  // G92：流程图结构块（HTML 注释内的 Mermaid）同样整体保护
+  md = md.replace(/<!-- 流程图结构[\s\S]*?\n-->/g, (m) => { fences.push(m); return '\u0000FENCE' + (fences.length - 1) + '\u0000'; });
   const lines = md.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
@@ -852,12 +855,27 @@ function acceptanceGate(A, manifest, logger) {
   // G85：axure 矢量图示（流程图：节点矩形+连接线+箭头）——文字层只保阅读序，结构（菱形/分支/连线）必须靠截图。
   // extract 按几何识别出 ex.diagrams（画布包围盒，frame 页顶坐标），这里按包围盒裁图；高出视口的竖切多条后竖拼一张。
   const diagramRefs = [];
-  // G91 计数：flowEmitted=换成 Mermaid 源码的图数；flowFallback=拓扑采信但渲染失败的图数（退回逐行文字）；flowNoVendor=缺渲染库只出源码的图数
+  // G91 计数：flowEmitted=出了流程图（结构块+渲染图）的图数；flowFallback=拓扑采信但渲染失败的图数（退回逐行文字）；flowNoVendor=缺渲染库只出结构块的图数
   let flowEmitted = 0, flowFallback = 0, flowNoVendor = 0;
   {
     const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 936);
     const cw = await liveFrame.evaluate(() => document.documentElement.clientWidth).catch(() => 1640);
     const diagCounters = {};
+    // G92：图示截图按 2 倍像素密度拍——蓝湖流程图多为细线小字，1 倍图放大后发虚。
+    // 只改像素密度、不改视口尺寸（版面不动），拍完还原。
+    let cdp2x = null;
+    if ((ex.diagrams || []).length) {
+      try {
+        const vp = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+        cdp2x = await page.context().newCDPSession(page);
+        await cdp2x.send('Emulation.setDeviceMetricsOverride', { width: vp.width, height: vp.height, deviceScaleFactor: 2, mobile: false });
+        await page.waitForTimeout(400);
+      } catch (e) {
+        logger.warn('2 倍像素密度设置失败（按 1 倍拍）: ' + String((e && e.message) || e).slice(0, 80));
+        if (cdp2x) { try { await cdp2x.detach(); } catch (e2) {} }
+        cdp2x = null;
+      }
+    }
     for (let di = 0; di < (ex.diagrams || []).length; di++) {
       const dg = ex.diagrams[di];
       const secIdx = sectionIndexOf(dg.top + 12);
@@ -878,9 +896,10 @@ function acceptanceGate(A, manifest, logger) {
           if (b - a < 8) break;
           const f = `${stem}_条${strips.length + 1}.png`;
           try {
-            await page.screenshot({ path: path.join(imgDir, f), clip: { x: feBox.x + x0, y: feBox.y + (a - cs), width: w, height: b - a }, timeout: 25000 });
+            if (cdp2x) await cdpShot2x(cdp2x, { x: feBox.x + x0, y: feBox.y + (a - cs), width: w, height: b - a }, path.join(imgDir, f)); // G92：2 倍像素
+            else await page.screenshot({ path: path.join(imgDir, f), clip: { x: feBox.x + x0, y: feBox.y + (a - cs), width: w, height: b - a }, timeout: 25000 });
             strips.push(f);
-            logger.info(`图示截图 ${f}（${w}x${b - a}，画布 y ${a}~${b}）`);
+            logger.info(`图示截图 ${f}（版面 ${w}x${b - a}${cdp2x ? '，2 倍像素' : ''}，画布 y ${a}~${b}）`);
           } catch (e) { logger.warn('图示截图失败: ' + e.message.split('\n')[0]); break; }
           y = b;
         }
@@ -902,8 +921,10 @@ function acceptanceGate(A, manifest, logger) {
       const useRef = fs.existsSync(path.join(imgDir, finalFile)) ? finalFile : strips[0];
       inlineImgs.push({ top: dg.top - 7, ref: `![流程图_${di + 1}](${baseName}_images/${useRef})` });
       diagramRefs.push(useRef);
-      // G91：拓扑采信的图示 → 先渲染验证（渲染图同时是给不支持 Mermaid 的阅读器/转 Word 用的那一层），
-      // 再把该图示的文字块从"逐行节点文字"换成"Mermaid 流程图源码 + 渲染图"；原图截图保留在上方。
+      // G91：拓扑采信的图示 → 先渲染验证，再把该图示的文字块从"逐行节点文字"换成"重绘的流程图 + 结构文字"；原图截图保留在上方。
+      // G92（用户拍板展示原则：蓝湖怎么展示，文档就怎么展示；任何工具打开都要看得到流程图）：
+      //   文档里只展示图——重绘流程图是图片，任何阅读器都显示；结构文字（Mermaid）放进 HTML 注释，人看不到、读文档的技能读得到。
+      //   不再用可见的代码块：支持 Mermaid 的工具会把它再渲染一遍（流程图出现两次），不支持的工具会显示一段蓝湖上没有的代码。
       // 没归到节点/连线上的文字（leftover）原样接在后面，不能因为出了流程图而丢。
       if (dg.flow && dg.flow.ok) {
         const rFile = stem.replace(/^流程图_/, '流程图渲染_') + '.png';
@@ -912,8 +933,11 @@ function acceptanceGate(A, manifest, logger) {
         else if (st === 'fail') { dg.flow.ok = false; dg.flow.fallback = '渲染失败'; }
         const pt = (ex.parts || []).find(p => p.flow === di);
         if (dg.flow.ok && pt) {
-          const ls = [FENCE + 'mermaid', dg.flow.mermaid, FENCE];
-          if (dg.rendered) ls.push('', `![流程图渲染_${di + 1}](${baseName}_images/${dg.rendered})`);
+          const ls = [];
+          if (dg.rendered) ls.push(`![流程图渲染_${di + 1}](${baseName}_images/${dg.rendered})`, '');
+          const hs = hiddenSource(dg.flow.mermaid);
+          if (hs.ok) ls.push(hs.text);
+          else ls.push(FENCE + 'mermaid', dg.flow.mermaid, FENCE); // 极罕见：标签文字里带 "-->"，注释放不下，退回可见代码块
           if (dg.flow.leftover.length) ls.push('', ...dg.flow.leftover.map(t => t.replace(/[\r\n]+/g, ' ')));
           pt.text = ls.join('\n');
           if (dg.rendered) flowEmitted++; else flowNoVendor++;
@@ -921,6 +945,10 @@ function acceptanceGate(A, manifest, logger) {
       }
     }
     await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    if (cdp2x) { // G92：还原像素密度
+      try { await cdp2x.send('Emulation.clearDeviceMetricsOverride'); } catch (e) {}
+      try { await cdp2x.detach(); } catch (e) {}
+    }
   }
 
   // 2b) 弹窗坐标裁剪（fhf 类 axure 控件组合弹窗；默认 auto，可 off / spec:path）
@@ -1032,7 +1060,7 @@ function acceptanceGate(A, manifest, logger) {
   }
   let finalMd = ['# 蓝湖需求（文本保真版）— ' + A.menu, '',
     '> 采集时间: ' + new Date().toISOString().slice(0, 10) + ' | 文本保真提取（DOM 文本）+ 全页图片扫描（相对路径 PNG）+ 弹窗坐标裁剪。'
-      + ((flowEmitted + flowNoVendor) ? ' 流程图：原图截图 + Mermaid 流程图源码（节点文字与蓝湖逐字一致，拓扑由页面几何重建）' + (flowEmitted ? ' + 渲染图。' : '。') : ''), '',
+      + ((flowEmitted + flowNoVendor) ? ' 流程图：原图截图 + 重绘流程图（结构文字以 Mermaid 存于文档注释内，供下游技能读取；节点文字与蓝湖逐字一致，拓扑由页面几何重建）' + (flowEmitted ? '。' : '（本机缺渲染库，未出重绘图）。') : ''), '',
     body, hiddenSection
   ].join('\n');
 

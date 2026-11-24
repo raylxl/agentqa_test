@@ -65,12 +65,30 @@ def load_doc_blocks(md_file: Path):
     """文档正文块：剔除图片/引用/清单符号/表格骨架，表格按单元格拆块"""
     blocks, cells, garb = [], [], []
     in_fence, fence_lang = False, ""
+    in_comment, in_flow = False, False
     for no, raw in enumerate(md_file.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
         if GARBAGE_RE.search(raw):
             garb.append((no, GARBAGE_RE.search(raw).group(0), raw.strip()[:40]))
         s = raw.strip()
-        # G91：围栏代码块——mermaid 流程图块只取"带引号的标签"作为文字块（节点文字、连线标注=蓝湖原文，逐个溯源）；
-        # 语法行（flowchart / n0 --> n1）不是正文，不参与比对；其他围栏内容跳过。不先处理的话语法行会被当"自撰"误判
+        # G91/G92：流程图结构块（Mermaid）只取"带引号的标签"作为文字块（节点文字、连线标注=蓝湖原文，逐个溯源）；
+        # 语法行（flowchart / n0 ==> n1）不是正文，不参与比对——不先处理的话语法行会被当"自撰"误判。
+        # G92 起结构块放在 HTML 注释内（人看不到）：<!-- 流程图结构 … -->；其他 HTML 注释整段跳过。
+        def _flow_labels(line):
+            for lab in re.findall(r'"([^"]*)"', line):
+                lab = MM_ENTITY.sub(lambda m: chr(int(m.group(1))), lab)
+                for part in re.split(r"<br\s*/?>", lab):
+                    part = part.strip()
+                    if part:
+                        blocks.append((no, part))
+        if not in_comment and s.startswith("<!--"):
+            in_comment, in_flow = True, ("流程图结构" in s)
+            continue
+        if in_comment:
+            if "-->" in s:
+                in_comment, in_flow = False, False
+            elif in_flow:
+                _flow_labels(s)
+            continue
         if s.startswith("```"):
             if not in_fence:
                 in_fence, fence_lang = True, s[3:].strip().lower()
@@ -79,12 +97,7 @@ def load_doc_blocks(md_file: Path):
             continue
         if in_fence:
             if fence_lang == "mermaid":
-                for lab in re.findall(r'"([^"]*)"', s):
-                    lab = MM_ENTITY.sub(lambda m: chr(int(m.group(1))), lab)
-                    for part in re.split(r"<br\s*/?>", lab):
-                        part = part.strip()
-                        if part:
-                            blocks.append((no, part))
+                _flow_labels(s)
             continue
         if not s or s.startswith(("![", "> ", "<!--", "|--")) or ".png" in s or "_images" in s:
             continue
