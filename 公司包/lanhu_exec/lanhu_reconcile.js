@@ -10,8 +10,8 @@
  *  ⑤ images   图数量：文档画布图引用数 == 蓝湖画布大图数（含隐藏面板图；带截图/弹窗裁剪不计入）
  *  ⑥ diagrams 图示截图（G85）：几何识别出的流程图/图示（节点矩形+连接线），文档必须有等量的 流程图_ 截图
  *             ——文字层只保阅读序，无图=菱形/分支/连线结构丢失
- *  ⑦ flow     流程图（G91/G92）：可重建出流程图的图示须有等量结构块（Mermaid，置于 HTML 注释内不可见）；逐块节点/连线数 == 蓝湖节点/箭头数；
- *             标签逐字可溯源；有渲染库时须有等量渲染图；结构文字以可见代码块出现=违反展示原则（红）
+ *  ⑦ flow     流程图（G91/G93）：可重建出流程图的图示须有等量 ```mermaid 代码块（阅读器直接显示为流程图）；逐块节点/连线数 == 蓝湖节点/箭头数；
+ *             标签逐字可溯源；有渲染库时须有等量渲染图；源码被藏进 HTML 注释=用户看不到流程图（红）
  *
  * 用法：node lanhu_reconcile.js <端口> --doc "<md绝对路径>" --menu "<树内菜单名>" [--min-chars 6] [--row-tol 2]
  */
@@ -248,7 +248,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const docMermaid = []; // 每块 {nodes, edges, labels, visible}；按文档中出现序
   {
     const src = fs.readFileSync(docPath, 'utf-8').split('\n');
-    let kind = null, cur = null; // kind: 'hidden'（HTML 注释内的结构块，现行形态）| 'fenced'（可见代码块，违反展示原则）
+    let kind = null, cur = null; // kind: 'fenced'（```mermaid 代码块，现行形态）| 'hidden'（源码被藏进 HTML 注释——判红，照常记节点/连线/标签）
     for (const l0 of src) {
       const s = l0.trim();
       if (!kind && s.startsWith('<!--')) {
@@ -263,7 +263,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
       if (!kind || !cur) continue;
       if (kind === 'hidden' && s === '-->') { kind = null; cur = null; continue; }
       if (kind === 'fenced' && s.startsWith('```')) { kind = null; cur = null; continue; }
-      if (/^n\d+\s*(-->|==>)/.test(s)) cur.edges++; // ==> 注释块现行写法；--> 旧的可见代码块写法
+      if (/^n\d+\s*(-->|==>)/.test(s)) cur.edges++; // ==> 藏注释写法（已废）；--> 现行可见代码块写法
       else if (/^n\d+[(\[({]/.test(s)) cur.nodes++;
       for (const m of s.matchAll(/"([^"]*)"/g)) cur.labels.push(mmUnescape(m[1]));
     }
@@ -400,8 +400,11 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const liveFlowN = liveFlows.length;
   const flowIssues = [];
   if (docMermaid.length !== liveFlowN) flowIssues.push({ kind: '流程图块数', live: liveFlowN, doc: docMermaid.length });
-  const visibleFlow = docMermaid.filter(b => b.visible).length; // G92：结构文字可见=违反展示原则
-  if (visibleFlow) flowIssues.push({ kind: '可见的流程图代码块', doc: visibleFlow });
+  const visibleFlow = docMermaid.filter(b => b.visible).length;
+  // G93（2026-11-24 用户实证“流程图没了，还没上次展示的好”）：源码必须是可见的 ```mermaid 代码块——用户阅读器把它画成流程图；
+  // 藏进 HTML 注释=用户看不到流程图（v5 实证被驳）
+  const hiddenFlow = docMermaid.length - visibleFlow;
+  if (hiddenFlow) flowIssues.push({ kind: '流程图源码被藏进注释（用户看不到流程图）', doc: hiddenFlow });
   docMermaid.forEach((b, k) => { const lf = liveFlows[k]; if (lf && (b.nodes !== lf.nodes || b.edges !== lf.edges)) flowIssues.push({ kind: '节点/连线数', live: lf.nodes + '/' + lf.edges, doc: b.nodes + '/' + b.edges }); });
   if (flowLabelMiss.length) flowIssues.push({ kind: '流程图标签未溯源', count: flowLabelMiss.length, top: flowLabelMiss.slice(0, 5) });
   const hasVendor = fs.existsSync(require('path').join(__dirname, 'vendor', 'mermaid.min.js'));
@@ -418,7 +421,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     bands: docBandImgs.length,
     diagrams: diagramIssue || { live: liveDiagrams, doc: docDiagramImgs.length, ok: true },
     hiddenCellTexts: hiddenKeys.size,
-    flow: flowIssues.length ? { live: liveFlowN, flowBlocks: docMermaid.length, visible: visibleFlow, renders: docFlowRenders.length, issues: flowIssues } : { live: liveFlowN, flowBlocks: docMermaid.length, visible: 0, renders: docFlowRenders.length, ok: true },
+    flow: flowIssues.length ? { live: liveFlowN, flowBlocks: docMermaid.length, hidden: hiddenFlow, renders: docFlowRenders.length, issues: flowIssues } : { live: liveFlowN, flowBlocks: docMermaid.length, hidden: 0, renders: docFlowRenders.length, ok: true },
   };
   const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue || flowIssues.length > 0;
   result.VERDICT = red ? 'RED' : 'GREEN';

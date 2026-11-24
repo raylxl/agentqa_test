@@ -70,9 +70,10 @@ def load_doc_blocks(md_file: Path):
         if GARBAGE_RE.search(raw):
             garb.append((no, GARBAGE_RE.search(raw).group(0), raw.strip()[:40]))
         s = raw.strip()
-        # G91/G92：流程图结构块（Mermaid）只取"带引号的标签"作为文字块（节点文字、连线标注=蓝湖原文，逐个溯源）；
-        # 语法行（flowchart / n0 ==> n1）不是正文，不参与比对——不先处理的话语法行会被当"自撰"误判。
-        # G92 起结构块放在 HTML 注释内（人看不到）：<!-- 流程图结构 … -->；其他 HTML 注释整段跳过。
+        # G91/G93：流程图块（```mermaid 代码块，可见）只取"带引号的标签"作为文字块（节点文字、连线标注=蓝湖原文，逐个溯源）；
+        # 语法行（flowchart / n0 --> n1）不是正文，不参与比对——不先处理的话语法行会被当"自撰"误判。
+        # 注释分支只为核对 v1.1 的旧形态（源码曾被放进 <!-- 流程图结构 … -->，已废：用户阅读器里流程图整块消失）；
+        # 其他 HTML 注释整段跳过。
         def _flow_labels(line):
             for lab in re.findall(r'"([^"]*)"', line):
                 lab = MM_ENTITY.sub(lambda m: chr(int(m.group(1))), lab)

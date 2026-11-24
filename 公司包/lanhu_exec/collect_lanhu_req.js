@@ -37,7 +37,7 @@ const {
   connectBrowser, findContentFrame, Logger, scrollToBottom, extractLanhuContent,
   getLanhuPages, robustClickMenu
 } = require('./browser_utils.js');
-const { rebuildFlow, hiddenSource, cdpShot2x } = require('./lanhu_flowmermaid.js');
+const { rebuildFlow, cdpShot2x } = require('./lanhu_flowmermaid.js');
 
 // G91：流程图渲染库（mermaid npm 包里的浏览器单文件版，MIT，见 vendor/README_mermaid.txt）。
 // 缺这个文件时流程图只出 Mermaid 源码、不出渲染图（采集照常，闸门只记数）。
@@ -329,8 +329,6 @@ function cleanResidue(md) {
   // 围栏内的语法行（如带"未审核 审核通过 审核驳回"枚举词的连线标注）碰上就会被整行删掉，把流程图删残
   const fences = [];
   md = md.replace(/```[^\n]*\n[\s\S]*?\n```/g, (m) => { fences.push(m); return '\u0000FENCE' + (fences.length - 1) + '\u0000'; });
-  // G92：流程图结构块（HTML 注释内的 Mermaid）同样整体保护
-  md = md.replace(/<!-- 流程图结构[\s\S]*?\n-->/g, (m) => { fences.push(m); return '\u0000FENCE' + (fences.length - 1) + '\u0000'; });
   const lines = md.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
@@ -414,10 +412,10 @@ function acceptanceGate(A, manifest, logger) {
     report.push(`  · 图示截图数: 实际=${manifest.diagramShots} 自动期望=${manifest.diagrams}（须全部截到）`);
     if ((manifest.diagrams || 0) !== (manifest.diagramShots || 0)) fails.push(`图示截图数 ${manifest.diagramShots} ≠ 几何识别图示数 ${manifest.diagrams}（存在未截图的流程图/图示，禁止声称完成）`);
   }
-  // G91：每张图示必有去向（换成流程图源码 / 退回逐行文字 / 拓扑未采信），三者之和须等于图示数
+  // G91：每张图示必有去向（换成流程图块 / 退回逐行文字 / 拓扑未采信），四数之和须等于图示数
   {
     const em = manifest.flowEmitted || 0, nv = manifest.flowNoVendor || 0, fb = manifest.flowFallback || 0, un = manifest.flowUntrusted || 0;
-    report.push(`  · 流程图去向: 源码+渲染图=${em} 只出源码(缺渲染库)=${nv} 退回逐行文字=${fb} 拓扑未采信=${un} 图示数=${manifest.diagrams}`);
+    report.push(`  · 流程图去向: 源码块+渲染图=${em} 只出源码块(缺渲染库)=${nv} 退回逐行文字=${fb} 拓扑未采信=${un} 图示数=${manifest.diagrams}`);
     if (em + nv + fb + un !== (manifest.diagrams || 0)) fails.push(`流程图去向合计 ${em + nv + fb + un} ≠ 图示数 ${manifest.diagrams}（有图示既没出流程图也没走既定降级，禁止声称完成）`);
     if (nv) report.push('  · 提示: 缺 vendor/mermaid.min.js，流程图只出了源码、没出渲染图');
   }
@@ -921,10 +919,11 @@ function acceptanceGate(A, manifest, logger) {
       const useRef = fs.existsSync(path.join(imgDir, finalFile)) ? finalFile : strips[0];
       inlineImgs.push({ top: dg.top - 7, ref: `![流程图_${di + 1}](${baseName}_images/${useRef})` });
       diagramRefs.push(useRef);
-      // G91：拓扑采信的图示 → 先渲染验证，再把该图示的文字块从"逐行节点文字"换成"重绘的流程图 + 结构文字"；原图截图保留在上方。
-      // G92（用户拍板展示原则：蓝湖怎么展示，文档就怎么展示；任何工具打开都要看得到流程图）：
-      //   文档里只展示图——重绘流程图是图片，任何阅读器都显示；结构文字（Mermaid）放进 HTML 注释，人看不到、读文档的技能读得到。
-      //   不再用可见的代码块：支持 Mermaid 的工具会把它再渲染一遍（流程图出现两次），不支持的工具会显示一段蓝湖上没有的代码。
+      // G91：拓扑采信的图示 → 先渲染验证，再把该图示的文字块从"逐行节点文字"换成"Mermaid 流程图源码 + 渲染图"；原图截图保留在上方。
+      // G93（2026-11-24 用户实证："流程图没了，还没上次展示的好"）：源码块必须可见——
+      //   用户在 ZCode 客户端里读文档，客户端把 ```mermaid 代码块直接画成流程图，这才是用户眼里的"流程图"；
+      //   v5 按我对"蓝湖怎么展示就怎么展示"的理解把源码藏进 HTML 注释，客户端里流程图整块消失，被驳。
+      //   渲染图是图片，给不支持 Mermaid 的阅读器/转 Word 用（"兼容各种工具打开"），两层并存。
       // 没归到节点/连线上的文字（leftover）原样接在后面，不能因为出了流程图而丢。
       if (dg.flow && dg.flow.ok) {
         const rFile = stem.replace(/^流程图_/, '流程图渲染_') + '.png';
@@ -933,11 +932,8 @@ function acceptanceGate(A, manifest, logger) {
         else if (st === 'fail') { dg.flow.ok = false; dg.flow.fallback = '渲染失败'; }
         const pt = (ex.parts || []).find(p => p.flow === di);
         if (dg.flow.ok && pt) {
-          const ls = [];
-          if (dg.rendered) ls.push(`![流程图渲染_${di + 1}](${baseName}_images/${dg.rendered})`, '');
-          const hs = hiddenSource(dg.flow.mermaid);
-          if (hs.ok) ls.push(hs.text);
-          else ls.push(FENCE + 'mermaid', dg.flow.mermaid, FENCE); // 极罕见：标签文字里带 "-->"，注释放不下，退回可见代码块
+          const ls = [FENCE + 'mermaid', dg.flow.mermaid, FENCE];
+          if (dg.rendered) ls.push('', `![流程图渲染_${di + 1}](${baseName}_images/${dg.rendered})`);
           if (dg.flow.leftover.length) ls.push('', ...dg.flow.leftover.map(t => t.replace(/[\r\n]+/g, ' ')));
           pt.text = ls.join('\n');
           if (dg.rendered) flowEmitted++; else flowNoVendor++;
@@ -1060,7 +1056,7 @@ function acceptanceGate(A, manifest, logger) {
   }
   let finalMd = ['# 蓝湖需求（文本保真版）— ' + A.menu, '',
     '> 采集时间: ' + new Date().toISOString().slice(0, 10) + ' | 文本保真提取（DOM 文本）+ 全页图片扫描（相对路径 PNG）+ 弹窗坐标裁剪。'
-      + ((flowEmitted + flowNoVendor) ? ' 流程图：原图截图 + 重绘流程图（结构文字以 Mermaid 存于文档注释内，供下游技能读取；节点文字与蓝湖逐字一致，拓扑由页面几何重建）' + (flowEmitted ? '。' : '（本机缺渲染库，未出重绘图）。') : ''), '',
+      + ((flowEmitted + flowNoVendor) ? ' 流程图：原图截图 + 流程图（Mermaid 源码块，阅读器直接显示为流程图；节点文字与蓝湖逐字一致，拓扑由页面几何重建）' + (flowEmitted ? ' + 渲染图（给不支持流程图的阅读器用）。' : '（本机缺渲染库，未出渲染图）。') : ''), '',
     body, hiddenSection
   ].join('\n');
 

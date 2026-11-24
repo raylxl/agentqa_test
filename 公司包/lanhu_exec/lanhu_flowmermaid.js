@@ -218,24 +218,6 @@ function rebuildFlow(dg, svgOf) {
 }
 
 /**
- * 存进文档的"不可见结构块"（G92，2026-11-24 用户拍板展示原则：蓝湖怎么展示，文档就怎么展示，且任何工具打开都要看得到流程图）：
- *   文档里只展示图（原图截图 + 重绘流程图），结构文字放进 HTML 注释——人看不到，读文档的技能/模型读得到。
- *   注意 Mermaid 的箭头 `-->` 恰好是 HTML 注释的结束符，直接放进去会把注释提前关掉；
- *   存入时改写成 Mermaid 同样支持的粗箭头 `==>`（拓扑不变）。标签里若真含 `-->` 之类序列则不能入注释（返回 ok=false，调用方退回可见代码块）。
- */
-const FLOW_MARK = '流程图结构（Mermaid）';
-function hiddenSource(mermaid) {
-  const src = String(mermaid).replace(/\s+$/, '');
-  // 标签文字里带 "-->" 的：改写箭头会连标签一起改（节点文字就不逐字了）→ 不能入注释，由调用方退回可见代码块
-  //（逐个标签判，不能用 "[^"]*-->[^"]*" 一把抓——那会把前一个标签的收尾引号和后一个标签的起始引号配成一对，正常情况也误判）
-  const labels = src.match(/"[^"]*"/g) || [];
-  if (labels.some(x => /-->|--!>|<!--/.test(x))) return { ok: false };
-  const body = src.replace(/-->/g, '==>');
-  if (/-->|--!>|<!--/.test(body)) return { ok: false };
-  return { ok: true, text: '<!-- ' + FLOW_MARK + '\n' + body + '\n-->' };
-}
-
-/**
  * 2 倍像素截图（G92）：直接走 CDP Page.captureScreenshot——Playwright 的 page.screenshot 会把图归一成 1 倍像素尺寸，
  * 即使设备像素密度已设成 2（实测：同一区域 page.screenshot 200x100、CDP 直拍 400x200）。clip 用 CSS 像素坐标。
  */
@@ -244,4 +226,4 @@ async function cdpShot2x(cdp, clip, file) {
   fs2.writeFileSync(file, Buffer.from(r.data, 'base64'));
 }
 
-module.exports = { rebuildFlow, mmText, mmUnescape, hiddenSource, FLOW_MARK, cdpShot2x };
+module.exports = { rebuildFlow, mmText, mmUnescape, cdpShot2x };
