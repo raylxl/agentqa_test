@@ -48,3 +48,9 @@ _migrate_backup_*/
 公司包/jt_exec/review_*/
 公司包/jt_exec/routes_*/
 _exec_artifacts/downloads/
+# 2026-11-24 补：pw_layered 运行时产物（登录超时截图/失败截图含登录态；账本与网络流属执行证据非正本）
+公司包/jt_exec/pw_layered/shots/
+公司包/jt_exec/pw_layered/netlog/
+公司包/jt_exec/pw_layered/apicap/
+公司包/jt_exec/pw_layered/ledger.jsonl
+公司包/jt_exec/pw_layered/last_summary.json
