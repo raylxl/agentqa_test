@@ -17,7 +17,7 @@
     "执行工具": "D:/ZCodetest/jt_chrome",
     "接口执行根": "D:/ZCodetest/jt_chrome/pw_layered",
     "蓝湖工具": "D:/ZCodetest/agentqa_test/公司包/lanhu_exec",
-    "总用例库": "/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library"
+    "总用例库": "D:/ZCodetest/total-case-library"
   },
   "standards": {
     "L0_角色": "测试角色定位标准_v1.md",
