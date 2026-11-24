@@ -195,7 +195,9 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
 
   // ── ① miss ──
   const docNorm = norm(raw);
-  const targets = live.texts.filter(t => norm(t).length >= minChars);
+  // G87：隐形格里的文字（同一滚动容器内被后画的格子整列盖住，页面上看不见）不入核对目标——与采集器同源判定
+  const hiddenKeys = new Set(((exg && exg.hidden) || []).map(h => norm(h.t)));
+  const targets = live.texts.filter(t => norm(t).length >= minChars && !hiddenKeys.has(norm(t)));
   const missing = [];
   let covered = 0;
   for (const t of targets) { if (docNorm.includes(norm(t))) covered++; else missing.push(t.replace(/\s+/g, ' ').slice(0, 60)); }
@@ -340,6 +342,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     images: imgIssue || { liveImgs: liveImgCount, docCanvasImgs: docCanvasImgs.length, ok: true },
     bands: docBandImgs.length,
     diagrams: diagramIssue || { live: liveDiagrams, doc: docDiagramImgs.length, ok: true },
+    hiddenCellTexts: hiddenKeys.size,
   };
   const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue;
   result.VERDICT = red ? 'RED' : 'GREEN';
