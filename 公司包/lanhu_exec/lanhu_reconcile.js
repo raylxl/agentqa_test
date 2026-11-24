@@ -13,7 +13,7 @@
  *  ⑦ flow     流程图（G91/G93）：可重建出流程图的图示须有等量 ```mermaid 代码块（阅读器直接显示为流程图）；逐块节点/连线数 == 蓝湖节点/箭头数；
  *             标签逐字可溯源；有渲染库时须有等量渲染图；源码被藏进 HTML 注释=用户看不到流程图（红）
  *
- * 用法：node lanhu_reconcile.js <端口> --doc "<md绝对路径>" --menu "<树内菜单名>" [--min-chars 6] [--row-tol 2]
+ * 用法：node lanhu_reconcile.js <端口> --doc "<md绝对路径>" --menu "<树内菜单名>" [--min-chars 6] [--row-tol 2] [--dump <path>]
  */
 const fs = require('fs');
 const {
@@ -160,8 +160,11 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   await browser.close();
 
   // ── doc 模型 ──
-  // G86：单元格内的 <br> 分行标记与 &#124; 转义竖线是呈现层记号——比对前还原（蓝湖侧一个多行文本件=文档侧 <br> 分行）
-  const raw = fs.readFileSync(docPath, 'utf-8').replace(/<br\s*\/?>/gi, '').replace(/&#124;/g, '|').replace(/#(38|34|60|62|124);/g, (_, n) => String.fromCharCode(Number(n))); // G91：流程图标签实体还原
+  // G86：单元格内的 <br> 分行标记与 &#124; 转义竖线是呈现层记号——比对前还原（蓝湖侧一个多行文本件=文档侧 <br> 分行）。
+  // G96（2026-11-24 全量重采·报表准确性核对工具实证）：<br> 换成**空格**而不是删掉——格内上下两行
+  //   （"不要下单日喀则CS网点<br>不要下单那曲CS财务中心"）删掉换行会粘成一个词，与蓝湖侧分开的两件对不上（表头打分 0.43 误红）；
+  //   换成空格后按空白切词两侧一致。整串包含比对（norm 去空白）不受影响。
+  const raw = fs.readFileSync(docPath, 'utf-8').replace(/<br\s*\/?>/gi, ' ').replace(/&#124;/g, '|').replace(/#(38|34|60|62|124);/g, (_, n) => String.fromCharCode(Number(n))); // G91：流程图标签实体还原
   const docLines = raw.split('\n');
   const docHeadings = [], docTables = [], docCanvasImgs = [], docBandImgs = [], docDiagramImgs = [], docFlowRenders = [];
   let ti = null;
@@ -273,11 +276,27 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   // 溯源判据：标签整体（去掉 <br> 分行记号后）== 蓝湖某个文字件 —— 对应"一个多行文字件整块成了连线标注"；
   // 或标签按 <br> 拆开的每一段都 == 蓝湖某个文字件 —— 对应"一个节点/一条连线挂了多个文字件"
   const liveSet = new Set(liveAll);
+  // 判据 3（G93，全量重采 鲸小包运费 实证）：连线标注 = 单行文字件 + 多行文字件拼成（"操作：1" + "距离⏎⏎500km"）——
+  // 整体不等于任何一个文字件、按分行拆开的行也不等于（多行件在蓝湖侧是一个整体）。标注里的分行记号分不清是
+  // "件与件的拼接"还是"件内的换行"，所以改判：去掉分行记号后的整串，能切成若干段、每段都 == 蓝湖某个文字件 即可溯源
+  const segOk = (s) => {
+    if (!s) return false;
+    const okAt = new Array(s.length + 1).fill(false); okAt[0] = true;
+    for (let i = 0; i < s.length && !okAt[s.length]; i++) {
+      if (!okAt[i]) continue;
+      for (let j = i + 1; j <= s.length; j++) if (liveSet.has(s.slice(i, j))) okAt[j] = true;
+    }
+    return okAt[s.length];
+  };
   docMermaid.forEach((b, k) => b.labels.forEach((lb) => {
     const whole = norm(lb.replace(/<br\s*\/?>/gi, ''));
     const parts = lb.split(/<br\s*\/?>/i).map(x => norm(x.trim())).filter(Boolean);
-    const ok = (whole && liveSet.has(whole)) || (parts.length && parts.every(x => liveSet.has(x)));
-    if (!ok) flowLabelMiss.push('块' + (k + 1) + ': ' + lb.replace(/<br\s*\/?>/gi, ' ').slice(0, 30));
+    const ok = (whole && liveSet.has(whole)) || (parts.length && parts.every(x => liveSet.has(x)))
+      || segOk(whole); // 判据 3：混合标注
+    if (!ok) {
+      const miss = parts.filter(x => !liveSet.has(x));
+      flowLabelMiss.push('块' + (k + 1) + ': ' + lb.replace(/<br\s*\/?>/gi, ' ').slice(0, 30) + (miss.length ? '（未溯源：' + miss.slice(0, 3).join(' / ').slice(0, 40) + '）' : ''));
+    }
   }));
 
   // ── ③ headings 序（G80：live 标题常与正文粘连在同一 _text 节点（"…所有公司 一、通用提醒"）——
@@ -326,7 +345,8 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   }
 
   // ── ④ tables 结构（按序贪心匹配；G70c：多层表头用"表头∪首数据行"池比对） ──
-  const poolOf = (arrs) => { const s = new Set(); for (const a of arrs) for (const c of a) for (const x of String(c).split(/\s+/)) { const nx = norm(x); if (nx.length >= 2) s.add(nx); } return s; };
+  // G93：先去 <br> 再切词——live 首数据行带 <br>、doc 侧比对前已还原；长句无空格时整串成了一个词，两边对不上（对客报价 迭代表实证）
+  const poolOf = (arrs) => { const s = new Set(); for (const a of arrs) for (const c of a) for (const x of String(c).replace(/<br\s*\/?>/gi, ' ').split(/\s+/)) { const nx = norm(x); if (nx.length >= 2) s.add(nx); } return s; };
   // G77：内容溯源豁免——表结构差异若"doc 表全部单元格文本可溯源到 live 文本池"则降级为提示（形态差异非内容缺失）：
   // 多层表头怪物 doc 合并行 vs live 逐层行=行数不可比；panel_state 内表格 live 行分组可能不聚表=表头无匹配但内容在
   const tableNotes = [];
@@ -346,13 +366,18 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   for (let d = 0; d < docTables.length; d++) {
     const dPool = poolOf([docTables[d].headerCells, ...(docTables[d].dataCells || [])]);
     if (!dPool.size) { tableIssues.push({ kind: '空表头文档表', docHeader: docTables[d].headerCells.slice(0, 3).join('/') }); continue; }
+    // G93：表头逐字相同即配对——旧打分分母是文档整张表的词、分子只对蓝湖的"表头+首数据行"，
+    // 数据行多且是无空格长句时重合度被稀释到 0.5 以下，逐字一致的表被判"蓝湖表未入文档"（对客报价 迭代表实证）
+    const dHead = poolOf([docTables[d].headerCells]);
     let best = -1, bestScore = 0;
     for (let L = 0; L < live.tables.length; L++) {
       if (usedLive.has(L)) continue;
       if (L < (matches.length ? matches[matches.length - 1].live + 1 : 0)) continue; // 保序
       const lPool = poolOf([live.tables[L].headerCells, live.tables[L].firstDataRowCells || []]);
       let inter = 0; for (const x of dPool) if (lPool.has(x)) inter++;
-      const score = inter / dPool.size;
+      const lHead = poolOf([live.tables[L].headerCells]);
+      let hInter = 0; for (const x of dHead) if (lHead.has(x)) hInter++;
+      const score = Math.max(inter / dPool.size, dHead.size ? hInter / dHead.size : 0);
       if (score > bestScore) { bestScore = score; best = L; }
     }
     if (best >= 0 && bestScore >= 0.5) {
@@ -388,6 +413,8 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     tableIssues.push({ kind: '蓝湖表未入文档', liveHeader: hc.slice(0, 5).join('/') });
   }
 
+  // 排障（2026-11-24 全量重采）：--dump <path> 把表格匹配两侧的原始数据落盘（蓝湖几何表 / 文档表 / 匹配结果），红项定位用
+  if (A.dump) { try { fs.writeFileSync(A.dump, JSON.stringify({ menu, liveTables: live.tables, docTables, matches, tableIssues, tableNotes }, null, 1), 'utf-8'); } catch (e) { logger.warn('dump 失败: ' + e.message); } }
   // ── ⑤ 画布图数量 ──
   const liveImgCount = live.imgs.length;
   const imgIssue = liveImgCount !== docCanvasImgs.length
@@ -410,6 +437,34 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const hasVendor = fs.existsSync(require('path').join(__dirname, 'vendor', 'mermaid.min.js'));
   if (hasVendor && liveFlowN && docFlowRenders.length !== liveFlowN) flowIssues.push({ kind: '渲染图数', live: liveFlowN, doc: docFlowRenders.length });
 
+  // ── ⑧ 正文被吞进表格（G94，2026-11-24 全量重采·报价时效查询实证）──
+  // 页面上一大段正文是一个高 539px 的文本框，罩在下方一张 4 行小表上；采集器按"文字中心点落在哪个格子"归格，
+  // 把两大段正文（含"优化点一/优化点二"标题）塞进了小表的一个单元格。此前四道闸门全绿放行：
+  // 表头一致、行数一致、文字全部可溯源——没有一道检查看"单元格里的内容是否真属于这个格子"。
+  // 判据（独立于采集器的入格结果，只看页面事实 × 文档事实）：
+  //   对每张几何表的每个格子，页面上与该格相交、且高度 > 格高 3 倍的文字件 = "罩在表上的大文本框"；
+  //   它的文字若出现在文档对应表格的任一单元格里（且该单元格以表格行的形式存在）= 被吞 → 红。
+  //   采集器修复后大文本框走正文路径、不进单元格 → 不红；本检查因此可长期作为独立防线。
+  const swallowIssues = [];
+  {
+    const shapes = (exg && exg.tableShapes) || [];
+    // 文档侧：所有表格单元格原文（保留 <br>，去掉呈现层转义），按出现序
+    const docCellsRaw = [];
+    for (const tb of docTables) for (const row of (tb.dataCells || [])) for (const c of row) docCellsRaw.push(String(c));
+    for (const hc of docTables.map(tb => (tb.headerCells || []).join(' '))) docCellsRaw.push(String(hc));
+    const docNormCells = docCellsRaw.map(c => norm(c.replace(/<br\s*\/?>/gi, '').replace(/&#124;/g, '|')));
+    shapes.forEach((sh, ti) => {
+      for (const it of (sh.items || [])) {
+        const cellH = it.cellH || 0;
+        if (!cellH || it.h <= cellH * 3 + 2) continue;            // 不是"罩在表上的大文本框"
+        const key = norm(String(it.text || ''));
+        if (key.length < 4) continue;
+        const inCell = docNormCells.some(c => c.includes(key.slice(0, Math.min(key.length, 12))));
+        if (inCell) swallowIssues.push({ table: ti, text: String(it.text).slice(0, 24), itemH: it.h, cellH });
+      }
+    });
+  }
+
   const result = {
     menu, doc: docPath,
     coverage: targets.length ? +(covered / targets.length).toFixed(4) : null,
@@ -422,8 +477,9 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     diagrams: diagramIssue || { live: liveDiagrams, doc: docDiagramImgs.length, ok: true },
     hiddenCellTexts: hiddenKeys.size,
     flow: flowIssues.length ? { live: liveFlowN, flowBlocks: docMermaid.length, hidden: hiddenFlow, renders: docFlowRenders.length, issues: flowIssues } : { live: liveFlowN, flowBlocks: docMermaid.length, hidden: 0, renders: docFlowRenders.length, ok: true },
+    swallow: swallowIssues.length ? { count: swallowIssues.length, issues: swallowIssues.slice(0, 6) } : { count: 0, ok: true },
   };
-  const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue || flowIssues.length > 0;
+  const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue || flowIssues.length > 0 || swallowIssues.length > 0;
   result.VERDICT = red ? 'RED' : 'GREEN';
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = red ? 1 : 0;

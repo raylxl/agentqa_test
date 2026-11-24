@@ -707,6 +707,14 @@ async function extractLanhuContent(frame) {
             if (cov >= c.w * 0.9) hidden.add(c);
           }
           tb.hidden = hidden;
+          // G94（2026-11-24 全量重采·报价时效查询实证）：罩在表格上方的"巨型文本框"不得按中心点入格。
+          // 页面上一段 10 行的正文是一个高 539px、宽 1136px 的文本框（y=491~1030），把下方 y=709~829 的小表整个罩住；
+          // 它的中心点(y≈760)恰好落在某一格里，旧判据"中心点在格内即入格"把两大段正文塞进了那一格
+          //（文档里"优化点一…优化点二…"成了表格单元格的内容；旧法不按几何入格，无此问题——几何法引入的退化）。
+          // 判据（两条都须满足才入格）：①文字件高度 ≤ 格高的 3 倍（格内多行内容最多两三行；本例 18 倍）；
+          //                             ②文字件矩形的上下沿不出表格包围盒 ±一个格高（本例上沿高出 218px、下沿低出 200px）。
+          const fitsCell = (t, h) => t.height <= h.h * 3 + 2
+            && t.top >= bb.y - h.h - 2 && t.top + t.height <= bb.b + h.h + 2;
           const put = (t) => {
             const cx = t.left + t.width / 2, cy = t.top + t.height / 2;
             if (cx < bb.x - 1 || cx > bb.r + 1 || cy < bb.y - 1 || cy > bb.b + 1) return false;
@@ -731,6 +739,8 @@ async function extractLanhuContent(frame) {
               }
               if (!c0) { c0 = hit[0]; for (const h of hit) if (h.order > c0.order) c0 = h; }
             }
+            // G94：文字件须"装得进"它命中的格子（罩在表上的巨型文本框不算表内容，留给正文路径）
+            if (c0 && !t._g && !fitsCell(t, c0)) return false;
             t._cell = c0;
             tb.grid[nearestIdx(rowTop, c0.y)][nearestIdx(colLeft, c0.x)].push(t);
             return true;
@@ -824,10 +834,10 @@ async function extractLanhuContent(frame) {
         if (currentRow.length > 0) {
           rows.push({ top: currentRowTop, cells: currentRow });
         }
-        currentRow = [{ text: el.text, left: el.left }];
+        currentRow = [{ text: el.text, left: el.left, top: el.top, height: el.height }]; // top/height：G96 判断"同一行里的两件是并排还是上下叠放"用
         currentRowTop = el.top;
       } else {
-        currentRow.push({ text: el.text, left: el.left, right: el.left + el.width });
+        currentRow.push({ text: el.text, left: el.left, right: el.left + el.width, top: el.top, height: el.height });
       }
     });
     if (currentRow.length > 0) {
@@ -926,6 +936,9 @@ async function extractLanhuContent(frame) {
           flush();
           sub = { top: row.top, bottom: row.top + 25, lines: [] };
         }
+        // 注（2026-11-24）：曾在此处按"中心点 y 相近"把一个 row 再拆成多个视觉行，想解决行距小于聚行阈值时上下两行被并成一行；
+        // 实测正文路径里它只把查询条件工具栏拆成两行（分页器 y=306 与下拉框文字 y=320 是同一条工具栏），没有修到任何已知问题——已撤。
+        // 该问题实际都发生在表格路径（同一列里上下叠放的两件），见表格构建处的分行规则。
         sub.lines.push(rowText);
         sub.bottom = row.top + 25;
       }
@@ -987,6 +1000,7 @@ async function extractLanhuContent(frame) {
       // 构建表格数据
       let tableData = tableRows.map(row => {
         const rowData = new Array(colPositions.length).fill('');
+        const colLast = new Array(colPositions.length).fill(undefined); // G96：该列已放入的上一件（判断并排/叠放）
         row.cells.forEach(cell => {
           // G66c：axure 单元格 innerText 折行含换行，直接 join 会把一行拆成两行（税务信息维护迭代表实证）
           cell.text = cell.text.replace(/[\r\n]+/g, ' ').trim();
@@ -1001,10 +1015,22 @@ async function extractLanhuContent(frame) {
           });
           // 如果同一列已有内容，追加（处理同行多元素映射到同列的情况）
           if (rowData[colIndex]) {
-            rowData[colIndex] += ' ' + cell.text;
+            // G96（2026-11-24 全量重采·对客报价 4.28/11.30 实证）：同一列里"上下叠放"的两件是页面上的上下两行，须分行。
+            // 行分组按"y 相差 ≤25px 归一行"，行距 23px 的版式（"结算重量*单价…元/kg" 与 "首价…元/kg" 上下两组）
+            // 会被并成一行，两件落到同一列后旧法用空格接成一行——页面上本是两行。
+            // 判"叠放"看**顶边**：第二件的顶边比第一件低 15px 以上 = 另起一行，用 <br> 接（与几何表格内分行写法一致）。
+            // 实测顶边差：同一行并排的件 0~7（盒子高度可以不同，如日期框 y=892 与同格文字 y=899）→ 空格；
+            //            查询工具栏里分页器与下拉框文字 14 → 空格（同一条工具栏，保持原样）；
+            //            真正的上下两行 16~25（公式格 1751→1774、报表核对工具 539→564、最低收费行 4164→4187）→ <br>。
+            // 不拿中心点、不设高度条件：中心点会被盒子高度带偏（"最低收费…元"盒子高 51 只有一行字，中心点比上一行低 38px 是对的；
+            // 而按"两件都须单行高度"去保护矮标签旁的高文本框，会把这个合法的叠放挡在外面）。
+            const last = colLast[colIndex];
+            const stacked = last !== undefined && last.top !== undefined && cell.top !== undefined && cell.top - last.top > 15;
+            rowData[colIndex] += (stacked ? '<br>' : ' ') + cell.text;
           } else {
             rowData[colIndex] = cell.text;
           }
+          colLast[colIndex] = cell;
         });
         return rowData;
       });
@@ -1154,29 +1180,96 @@ async function extractLanhuContent(frame) {
       if (!moved) break;
     }
 
+    // G97（2026-11-24 全量重采·漏采审计实证）：「没人管的控件簇」也拍一张查询条件带截图。
+    // 现有查询条件带都以下方紧挨着的表格为锚点。两类控件因此既没文字也没截图（旧文档同样没有）：
+    //   ① 工具栏下面没有表格的页面（报价计算 7.14：5 个输入框 + 查询/重置，下方直接是正文——"查询 重置"被当按钮行清掉，又没有截图承载）；
+    //   ② 不在任何表格/面板/图示里的复选·单选选项（报表准确性核对工具 9.28 旧版 64 项、新版 5 项）。
+    // 做法：未被任何区域消费的可见表单控件，两两判"相邻"后用并查集连通成块（一块 ≥2 个控件才拍，零星单个不拍）：
+    //         相邻 = 垂直间隙 ≤130px 且 水平间隙 ≤450px（表单里同一行的输入框之间隔着字段标签，实测间隙 ~440px）。
+    //         报价计算 7.14 的整张输入表单（4 行 × 4 列，y 628~898）因此连成一块、出一张完整截图；
+    //         报表核对工具每个小节顶部的页签栏（"手工稽核/稽核规则"+"冷链快运/冷链云仓/冷链智运"）各自成块，小节之间间距 >600px 不相连。
+    //       （曾用"只往最后一个簇里合并"的单链聚类：多行多列的表单后面几行接不上前面的簇，被切成碎块、漏下十来个控件——已换。）
+    //       块内及下方 56px 内、横向范围内的按钮文字（查询/重置等）一并框入。介质忠实：控件 → 截图，不出文字（文字输出零变化）。
+    {
+      const sy = window.scrollY || 0;
+      const inRect = (t, r) => t.left + t.width / 2 >= r.left - 2 && t.left + t.width / 2 <= r.right + 2 && t.top + t.height / 2 >= r.top - 2 && t.top + t.height / 2 <= r.bottom + 2;
+      const regions = [
+        ...tableBands.map(b => ({ top: b.top, bottom: b.bottom, left: b.left, right: b.right })),
+        ...panels.map(p => ({ top: p.top - sy, bottom: p.bottom - sy, left: p.left, right: p.right })),
+        ...geo.tables.map(t => ({ top: t.top, bottom: t.bottom, left: t.left, right: t.right })),
+        ...geo.diagrams.map(d => ({ top: d.top, bottom: d.bottom, left: d.left, right: d.right })),
+      ];
+      const loose = inputItems.filter(t => !t._consumed && !t._hidden && !regions.some(r => inRect(t, r)))
+        .sort((a, b) => a.top - b.top || a.left - b.left);
+      const par = loose.map((_, i) => i);
+      const find = (i) => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+      for (let i = 0; i < loose.length; i++) for (let j = i + 1; j < loose.length; j++) {
+        const a = loose[i], b = loose[j];
+        const dy = Math.max(a.top - (b.top + b.height), b.top - (a.top + a.height), 0);
+        const dx = Math.max(a.left - (b.left + b.width), b.left - (a.left + a.width), 0);
+        if (dy <= 130 && dx <= 450) { const ri = find(i), rj = find(j); if (ri !== rj) par[ri] = rj; }
+      }
+      const byRoot = new Map();
+      loose.forEach((t, i) => {
+        const r = find(i);
+        if (!byRoot.has(r)) byRoot.set(r, { items: [], top: Infinity, bottom: -Infinity, left: Infinity, right: -Infinity });
+        const c = byRoot.get(r);
+        c.items.push(t);
+        c.top = Math.min(c.top, t.top); c.bottom = Math.max(c.bottom, t.top + t.height);
+        c.left = Math.min(c.left, t.left); c.right = Math.max(c.right, t.left + t.width);
+      });
+      const clusters = [...byRoot.values()].sort((a, b) => a.top - b.top || a.left - b.left);
+      const looseSingles = [];                                   // 零星单个控件（有意不拍）——登记备查，漏采审计据此豁免
+      for (const c of clusters) {
+        if (c.items.length < 2) { looseSingles.push({ t: c.items[0].text, y: c.items[0].top, x: c.items[0].left }); continue; }
+        let bottom = c.bottom;
+        for (const t of textElements) { // 簇内及下方 56px 内的按钮文字一并框入——这些行会被残留清理当按钮行删掉，须有截图承载
+          if (t._consumed) continue;
+          const cy = t.top + t.height / 2;
+          if (cy > c.top && cy <= c.bottom + 56 && t.left >= c.left - 20 && t.left <= c.right + 260) {
+            bottom = Math.max(bottom, t.top + t.height); c.left = Math.min(c.left, t.left); c.right = Math.max(c.right, t.left + t.width);
+          }
+        }
+        const bd = { top: c.top - 8, bottom: bottom + 8, left: c.left - 8, right: c.right + 8 };
+        bd.idx = tableBands.length; bd.anchors = []; bd.loose = true; bd.controls = c.items.length;
+        tableBands.push(bd);
+      }
+      geo.looseSingles = looseSingles;
+    }
+
     // 第5步：输出（带 bandIdx 的表块前插 @@TBAND:i@@ 标记——collect 据此替换为查询条件带截图）
     // G76：parts=块级 {top,bottom,text}（浮层内联重排后的最终块序）——collect 按画布 y 把图内联到对应文字块之间
     const parts = blocks
       .filter(b => (b.type === 'table' ? b.mdLines : b.lines).length)
       .map(b => ({ type: b.type, top: b.top, bottom: b.bottom, text: (b.type === 'table' ? b.mdLines : b.lines).join('\n'), flow: b.flow }));
     const outputParts = [];
+    // G97：控件簇截图的标记——落在"簇下方第一个块"之前（按画布位置插入；没有后续块的放末尾）
+    const loosePending = tableBands.filter(b => b.loose);
     for (const b of blocks) {
       const ls = b.type === 'table' ? b.mdLines : b.lines;
       if (ls.length) {
+        while (loosePending.length && loosePending[0].bottom <= b.top + 4) outputParts.push('@@TBAND:' + loosePending.shift().idx + '@@');
         if (b.type === 'table' && typeof b.bandIdx === 'number' && b.bandIdx >= 0) outputParts.push('@@TBAND:' + b.bandIdx + '@@');
         outputParts.push(ls.join('\n'));
       }
     }
+    for (const b of loosePending) outputParts.push('@@TBAND:' + b.idx + '@@');
 
     // G86：纯字段汇总（供对账器同源取数 / 忠实闸供源）——不带元素引用
     const extra = {
       tables: geo.tables.map(tb => ({ top: tb.top, bottom: tb.bottom, left: tb.left, right: tb.right, headerCells: tb.headerCells, firstDataRowCells: tb.firstDataRowCells, dataRows: tb.dataRows })),
+      // 诊断用（只读、纯字段）：每张几何表的格子矩形（视口坐标）与落入的文字件/控件值矩形——"正文被吞进表格"排障
+      tableShapes: geo.tables.map(tb => ({ top: tb.top, bottom: tb.bottom,
+        cells: [...new Set(tb.items.map(t => t._cell))].filter(Boolean).map(c => ({ x: c.x, y: c.y, w: c.w, h: c.h })),
+        items: tb.items.map(t => ({ x: t.left, y: t.top, w: t.width, h: t.height, text: String(t.text).slice(0, 24), cellY: t._cell ? t._cell.y : null, cellH: t._cell ? t._cell.h : null })) })),
       // G91：diagrams 带 geo（节点框/线段/箭头几何）与图内文字件矩形——采集器据此重建拓扑出 Mermaid；对账器同源复核
       diagrams: geo.diagrams.map(dg => ({ top: dg.top, bottom: dg.bottom, left: dg.left, right: dg.right, texts: dg.lines.length, geo: dg.geo,
         items: dg.items.map(t => ({ x: t.left, y: t.top, w: t.width, h: t.height, text: t.text })) })),
       texts: textElements.map(t => ({ t: t.text, y: t.top, x: t.left, w: t.width })),
       consumed: textElements.filter(t => t._consumed).map(t => ({ t: t.text, y: t.top, x: t.left })),
       hidden: textElements.filter(t => t._hidden).map(t => ({ t: t.text, y: t.top, x: t.left })),
+      hiddenInputs: inputItems.filter(t => t._hidden).map(t => ({ t: t.text, y: t.top, x: t.left })), // G97：被盖住看不见的控件值（漏采审计据此豁免）
+      looseSingles: geo.looseSingles || [],                                                            // G97：零星单个控件，有意不拍（漏采审计据此豁免）
       sourceLines: textElements.filter(t => !t._hidden).reduce((acc, t) => {
         String(t.text).split(/\n+/).map(s => s.trim()).filter(Boolean).forEach((ln, i) => acc.push(`${t.top + i * 16}|${t.left}|span|||${ln}`));
         return acc;
@@ -1187,15 +1280,18 @@ async function extractLanhuContent(frame) {
     if (tableRegions.length === 0 && geo.tables.length === 0 && geo.diagrams.length === 0) {
       const resultLines = [];
       let lastTop = -1;
+      const looseTail = tableBands.filter(b => b.loose); // G97：控件簇截图标记——落在簇下方第一个文字件之前，没有则放末尾
       textElements.forEach(el => {
         if (el._consumed) return; // G86：已入表格/图示的文字不重复输出
         if (uiFilterRegex.test(el.text)) return;
+        while (looseTail.length && el.top >= looseTail[0].bottom - 4) { resultLines.push('@@TBAND:' + looseTail.shift().idx + '@@', ''); lastTop = -1; }
         if (lastTop !== -1 && Math.abs(el.top - lastTop) > 10) {
           resultLines.push('');
         }
         resultLines.push(el.text);
         lastTop = el.top;
       });
+      for (const b of looseTail) resultLines.push('', '@@TBAND:' + b.idx + '@@');
 
       // 清理连续空行
       const cleanedLines = [];
@@ -1206,7 +1302,7 @@ async function extractLanhuContent(frame) {
         cleanedLines.push(line);
         lastLineEmpty = isEmpty;
       }
-      return Object.assign({ md: cleanedLines.join('\n'), bands: [] }, extra);
+      return Object.assign({ md: cleanedLines.join('\n'), bands: tableBands }, extra);
     }
 
     return Object.assign({ md: outputParts.join('\n\n'), bands: tableBands, panels, parts }, extra);

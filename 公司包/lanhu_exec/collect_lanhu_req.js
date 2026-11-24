@@ -421,6 +421,15 @@ function acceptanceGate(A, manifest, logger) {
   }
   if (e.sections >= 0) check('章节数', manifest.sections, e.sections);
   if (e.hidden >= 0) check('隐藏面板图', manifest.hiddenImgs, e.hidden);
+  // G95：正文非空——图片/图示/章节都对得上，但正文一个字没有（页面没渲染就采了），绝不能判 PASS 入库。
+  // 判据：去掉文档头、图片引用、表格骨架线后的正文字符数须 ≥ 20（空文档实测为 0；最小的真实菜单也有上百字）
+  {
+    const bodyChars = String(A.finalMd || '').split('\n')
+      .filter(l => !/^\s*$/.test(l) && !/^\s*!\[/.test(l) && !/^\|[:\-\s|]+\|\s*$/.test(l) && !/^#\s|^>\s*采集时间/.test(l))
+      .join('').replace(/\s+/g, '').length;
+    report.push(`  · 正文字符数: ${bodyChars}`);
+    if (bodyChars < 20) fails.push(`正文字符数 ${bodyChars} < 20——页面未渲染就采集，产出的是空文档，禁止声称完成`);
+  }
 
   logger.info('—— 验收闸门清单 ——');
   report.forEach(l => logger.info(l));
@@ -458,6 +467,26 @@ function acceptanceGate(A, manifest, logger) {
   // 点击后重找内容帧：axure 换页可能换 iframe，旧句柄滞留会滚/读错页（G64 配套）
   const frame2 = await findContentFrame(page, logger);
   const liveFrame = frame2 || frame;
+  // G95（2026-11-24 全量重采·配送价格实证）：点击菜单后 axure 页偶发不渲染（文档高停在视口高 936、可见文字件 0），
+  // 而一分钟后对账器访问同一菜单页面高 5539——是瞬时加载失败，不是页面无内容。旧流程照常往下采，产出 5 行 87 字的空文档，
+  // 且内置闸门全绿（闸门只查图片/图示/章节数，没有"正文非空"）。对策：等到"文档高超过视口高 或 出现可见文字件"再往下走，最多等 60 秒。
+  {
+    const vh = await liveFrame.evaluate(() => window.innerHeight).catch(() => 936);
+    let ok = false, last = '';
+    for (let i = 0; i < 30; i++) {
+      const s = await liveFrame.evaluate(() => ({
+        h: document.documentElement.scrollHeight, n: (() => { let c = 0; document.querySelectorAll('[id$="_text"]').forEach(el => { const t = (el.innerText || '').trim(); if (!t) return; const r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) c++; }); return c; })(),
+      })).catch(() => null);
+      last = s ? `文档高=${s.h} 可见文字件=${s.n}` : '取不到页面状态';
+      if (s && (s.h > vh + 40 || s.n > 0)) { ok = true; break; }
+      await page.waitForTimeout(2000);
+    }
+    if (!ok) {
+      logger.error(`G95 页面未渲染（等待 60 秒后仍为：${last}；视口高=${vh}）——疑似蓝湖访客态被拦或加载失败，中止采集，不出空文档`);
+      throw new Error('PAGE_NOT_RENDERED');
+    }
+    logger.info(`页面已渲染（${last}）`);
+  }
   await scrollToBottom(liveFrame, logger).catch(e => logger.warn('scroll warn: ' + e.message));
   await liveFrame.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   await page.waitForTimeout(500);
@@ -1087,6 +1116,7 @@ function acceptanceGate(A, manifest, logger) {
   finalMd = finalMd.replace(/\n{3,}/g, '\n\n');
 
   checkSqueezedTable(finalMd, logger);
+  A.finalMd = finalMd; // G95：验收闸门查"正文非空"用
 
   fs.writeFileSync(path.join(outDir, baseName + '.md'), finalMd, 'utf-8');
   const totalImgs = inlineImgs.length + hiddenRefs.length + flowEmitted; // flowEmitted=写在流程图块后的渲染图（不走 inlineImgs）
