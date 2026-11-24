@@ -558,7 +558,7 @@ async function scrollToBottom(frame, logger) {
 }
 
 async function extractLanhuContent(frame) {
-  return frame.evaluate(() => {
+  return frame.evaluate(async () => {
     const textElements = [];
     const allElements = document.querySelectorAll('[id$="_text"]');
 
@@ -573,7 +573,8 @@ async function extractLanhuContent(frame) {
             top: Math.round(rect.top),
             left: Math.round(rect.left),
             width: Math.round(rect.width),
-            height: Math.round(rect.height)
+            height: Math.round(rect.height),
+            _el: el // G86：元素引用（几何入格/遮挡识别用；返回前只取纯字段，不序列化）
           });
         }
       }
@@ -585,6 +586,174 @@ async function extractLanhuContent(frame) {
       if (Math.abs(topDiff) > 10) return topDiff;
       return a.left - b.left;
     });
+
+    // ══════════════════ G86 几何预扫描（2026-11-24 税务信息维护复盘）══════════════════
+    // 旧法只按文字坐标±阈值猜版面，四道闸门全绿却留下四类错：
+    //  ① 行距 20px 的联系人表（31 行）两行挤进一行（行距 < 行阈值 25）；
+    //  ② 迭代表（版本↔条目两列网格）散成文字，读起来"第4条属于 07.02"，实为 11.？（版本归属错位）；
+    //  ③ 流程图（节点矩形+连接线）被当成表格，菱形/分支/箭头全丢；
+    //  ④ 叠放格与控件值：列表"操作"列（冻结覆盖列）叠在"纳税人资质"列上——旧法把两个表头挤进一格、
+    //     行操作按钮（值在 input 上，不是文字件）整列丢失。
+    // 新法：先按几何识别"表格 / 图示"，其内文字按"中心点落在哪个格子"入表（叠放格取最上层）；
+    //       图内文字按阅读序逐条成行（结构以截图为准）；其余文字照旧走原流程（无几何件的页面零行为变化）。
+    const geo = { tables: [], diagrams: [] };
+    const inputItems = [];
+    try {
+      /* ---------- 1) 候选矩形：连接线 / 箭头头 / 单元格(节点) ---------- */
+      const shown = (el) => { try { if (el.checkVisibility) return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true, opacityProperty: true, visibilityProperty: true }); } catch (e) {} return true; };
+      const cand = [];
+      const ML = document.querySelectorAll('img,svg');
+      for (let i = 0; i < ML.length; i++) {
+        const el = ML[i], r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0 || !shown(el)) continue;
+        const mn = Math.min(r.width, r.height), mx = Math.max(r.width, r.height);
+        if (mn <= 14 && mx >= 24 && mx <= 1400) cand.push({ el, x: r.left, y: r.top, w: r.width, h: r.height, kind: 'line' });
+        else if (r.width >= 16 && r.width <= 32 && r.height >= 16 && r.height <= 32) cand.push({ el, x: r.left, y: r.top, w: r.width, h: r.height, kind: 'dot' });
+        else if (r.width >= 30 && r.width <= 900 && r.height >= 14 && r.height <= 140) cand.push({ el, x: r.left, y: r.top, w: r.width, h: r.height, kind: 'cell' });
+      }
+      {
+        // 带边框的形状件：axure 流程图节点/部分表格的外框是 div 描边而非图片；表单类控件框不算
+        const DL = document.querySelectorAll('[id$="_div"]');
+        for (let i = 0; i < DL.length; i++) {
+          const el = DL[i], r = el.getBoundingClientRect();
+          if (r.width < 30 || r.width > 900 || r.height < 14 || r.height > 140 || !shown(el)) continue;
+          const cs = getComputedStyle(el);
+          if (!(parseFloat(cs.borderTopWidth) > 0 && parseFloat(cs.borderLeftWidth) > 0 && cs.borderTopStyle !== 'none')) continue;
+          const rc = el.closest('.ax_default');
+          if (rc && /text_field|droplist|text_area|html_button|list_box|checkbox|radio_button/.test(rc.className)) continue;
+          cand.push({ el, x: r.left, y: r.top, w: r.width, h: r.height, kind: 'cell' });
+        }
+      }
+      // order=文档序（叠放时后者画在上层）
+      cand.sort((a, b) => a.el === b.el ? 0 : ((a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1));
+      cand.forEach((c, i) => { c.order = i; });
+
+      /* ---------- 2) 邻接聚类：贴合即同件（格↔格 1.5px 防相邻两表误并；线/箭头↔节点 14px 容箭头缝隙） ---------- */
+      const nC = cand.length, par = cand.map((_, i) => i);
+      const find = (i) => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+      for (let i = 0; i < nC; i++) {
+        for (let j = i + 1; j < nC; j++) {
+          const a = cand[i], b = cand[j];
+          const t = (a.kind !== 'cell' || b.kind !== 'cell') ? 14 : 1.5;
+          if (a.x - t < b.x + b.w && b.x - t < a.x + a.w && a.y - t < b.y + b.h && b.y - t < a.y + a.h) { const ri = find(i), rj = find(j); if (ri !== rj) par[ri] = rj; }
+        }
+      }
+
+      /* ---------- 3) G87 表单控件值（按钮/下拉选中项/占位/默认值）——"操作"列的按钮是 input，值不在文字件里 ---------- */
+      {
+        const FL = document.querySelectorAll('input,select,textarea,button');
+        for (const el of FL) {
+          const r = el.getBoundingClientRect();
+          if (r.width <= 0 || r.height <= 0) continue;
+          const ty = (el.type || '').toLowerCase();
+          if (el.tagName === 'INPUT' && (ty === 'checkbox' || ty === 'radio' || ty === 'hidden')) continue;
+          let t = '';
+          if (el.tagName === 'SELECT') t = el.selectedIndex >= 0 ? el.options[el.selectedIndex].text : '';
+          else t = el.value || el.placeholder || '';
+          t = (t || '').replace(/[\r\n]+/g, ' ').trim();
+          if (!t) continue;
+          inputItems.push({ text: t, top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height), _el: el });
+        }
+      }
+
+      /* ---------- 4) 组件分型 + 文字入格 ---------- */
+      const clusterVals = (vals, tol) => { const s = [...vals].sort((a, b) => a - b), out = []; for (const v of s) { if (!out.length || v - out[out.length - 1] > tol) out.push(v); } return out; };
+      const nearestIdx = (arr, v) => { let bi = 0, bd = Infinity; for (let i = 0; i < arr.length; i++) { const d = Math.abs(arr[i] - v); if (d < bd) { bd = d; bi = i; } } return bi; };
+      const comps = new Map();
+      for (let i = 0; i < nC; i++) { const r = find(i); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(cand[i]); }
+      for (const rects of comps.values()) {
+        const cells = rects.filter(r => r.kind === 'cell');
+        if (cells.length < 2) continue;
+        const rowTop = clusterVals(cells.map(c => c.y), 4);
+        const rowsArr = rowTop.map(() => []);
+        cells.forEach(c => rowsArr[nearestIdx(rowTop, c.y)].push(c));
+        let tiled = 0; // 行内格子首尾相接（无缝隙）= 铺砖行
+        for (const rs of rowsArr) {
+          rs.sort((a, b) => a.x - b.x);
+          let ok = rs.length >= 2;
+          for (let k = 1; k < rs.length; k++) if (rs[k].x > rs[k - 1].x + rs[k - 1].w + 4) { ok = false; break; }
+          if (ok) tiled++;
+        }
+        const bb = { x: Math.min(...rects.map(c => c.x)), y: Math.min(...rects.map(c => c.y)), r: Math.max(...rects.map(c => c.x + c.w)), b: Math.max(...rects.map(c => c.y + c.h)) };
+        if (tiled >= 2 && rowTop.length >= 2) {
+          // —— 表格：行列边界取自格子矩形，文字按中心点入格 ——
+          const colLeft = clusterVals(cells.map(c => c.x), 4);
+          const tb = { top: bb.y, bottom: bb.b, left: bb.x, right: bb.r, grid: rowTop.map(() => colLeft.map(() => [])), rowTop, colLeft, items: [] };
+          const put = (t) => {
+            const cx = t.left + t.width / 2, cy = t.top + t.height / 2;
+            if (cx < bb.x - 1 || cx > bb.r + 1 || cy < bb.y - 1 || cy > bb.b + 1) return false;
+            const hit = cells.filter(c => cx >= c.x - 1 && cx <= c.x + c.w + 1 && cy >= c.y - 1 && cy <= c.y + c.h + 1);
+            if (!hit.length) return false;
+            // 叠放格（如冻结在右侧的"操作"列盖住可横向滚动出来的"纳税人资质"列，税务信息维护实证）：
+            // 与格同宽的文本框按"左右沿贴合度"归格（各归各列）；窄件（按钮等）归文档序最靠后=最上层的格
+            let c0 = null, bestFit = Infinity;
+            for (const h of hit) {
+              if (t.width < h.w * 0.6) continue;
+              const fit = Math.abs(h.x - t.left) + Math.abs(h.x + h.w - (t.left + t.width));
+              if (fit < bestFit) { bestFit = fit; c0 = h; }
+            }
+            if (!c0) { c0 = hit[0]; for (const h of hit) if (h.order > c0.order) c0 = h; }
+            tb.grid[nearestIdx(rowTop, c0.y)][nearestIdx(colLeft, c0.x)].push(t);
+            return true;
+          };
+          for (const t of textElements) { if (t._consumed) continue; if (put(t)) { t._consumed = true; tb.items.push(t); } }
+          for (const t of inputItems) { if (t._consumed) continue; if (put(t)) { t._consumed = true; tb.items.push(t); } }
+          geo.tables.push(tb);
+          continue;
+        }
+        if (rects.filter(r => r.kind === 'line').length >= 2) {
+          // —— 图示（流程图等）：节点+连接线；文字只保阅读序，结构由截图承担 ——
+          const dg = { top: bb.y - 10, bottom: bb.b + 10, left: bb.x - 10, right: bb.r + 10, items: [] };
+          // 文字按"矩形相交"划入（分支标签常压在包围盒外沿，如流程图顶部的"查询日期存在…"）；章节标题类文字不划入
+          for (const t of textElements) {
+            if (t._consumed) continue;
+            if (/^[一二三四五六七八九十]+[、）、]|^优化点[一二三四五六七八九十]+[：:]/.test(t.text.trim())) continue;
+            if (t.left < dg.right && t.left + t.width > dg.left && t.top < dg.bottom && t.top + t.height > dg.top) { t._consumed = true; dg.items.push(t); }
+          }
+          // 包围盒把划入的文字标签一并框住（标签可高出线条区 30px+）——截图范围以此为准，固定留白会切掉标签首行
+          for (const it of dg.items) {
+            dg.top = Math.min(dg.top, it.top - 4); dg.bottom = Math.max(dg.bottom, it.top + it.height + 4);
+            dg.left = Math.min(dg.left, it.left - 4); dg.right = Math.max(dg.right, it.left + it.width + 4);
+          }
+          geo.diagrams.push(dg);
+        }
+      }
+      geo.tables.sort((a, b) => a.top - b.top); // 组件按发现序（并查集根）排列，这里回到画布序
+      geo.diagrams.sort((a, b) => a.top - b.top);
+
+      /* ---------- 6) 成表 / 成图 ---------- */
+      const escCell = (s) => s.replace(/\|/g, '&#124;');
+      const cellText = (cell) => {
+        const s = cell.slice().sort((a, b) => a.top - b.top || a.left - b.left);
+        const grp = []; let cur = null, cy = 0;
+        for (const t of s) { const y = t.top + t.height / 2; if (cur && Math.abs(y - cy) <= 8) cur.push(t); else { cur = [t]; cy = y; grp.push(cur); } }
+        // 控件内的显式换行保留为 <br>（不能留裸换行——会把 MD 表格行拆断，G66c）；同格多件按上下行、再按左右
+        const one = (t) => String(t.text).split(/\n+/).map(s => s.trim()).filter(Boolean).map(escCell).join('<br>');
+        return grp.map(g => g.sort((a, b) => a.left - b.left).map(one).join(' ')).join('<br>');
+      };
+      for (let i = geo.tables.length - 1; i >= 0; i--) {
+        const tb = geo.tables[i];
+        const rowsTxt = tb.grid.map(r => r.map(cellText));
+        const keepCol = rowsTxt[0].map((_, c) => rowsTxt.some(r => r[c]));      // 去全空列（勾选框列/被整列盖住的旧列）
+        const rows2 = rowsTxt.map(r => r.filter((_, c) => keepCol[c])).filter(r => r.some(Boolean)); // 去全空行
+        if (rows2.length < 2) { // 不足"表头+1 行数据"不成表：文字归还旧法
+          tb.items.forEach(t => { delete t._consumed; });
+          geo.tables.splice(i, 1);
+          continue;
+        }
+        tb.mdLines = ['| ' + rows2[0].join(' | ') + ' |', '| ' + rows2[0].map(() => '---').join(' | ') + ' |'].concat(rows2.slice(1).map(r => '| ' + r.join(' | ') + ' |'));
+        tb.headerCells = rows2[0].filter(Boolean);
+        tb.firstDataRowCells = rows2[1] ? rows2[1].filter(Boolean) : [];
+        tb.dataRows = rows2.length - 1;
+      }
+      for (const dg of geo.diagrams) {
+        dg.lines = dg.items.slice().sort((a, b) => a.top - b.top || a.left - b.left).map(t => t.text.replace(/[\r\n]+/g, ' '));
+      }
+    } catch (e) {
+      // 几何预扫描异常=退化旧行为（文字全部归还），不影响主流程
+      textElements.forEach(t => { delete t._consumed; });
+      geo.tables.length = 0; geo.diagrams.length = 0;
+    }
 
     // 完整的UI元素过滤正则
     const uiFilterRegex = /^(img|arrow|folder|search|button|input|icon|确定|取消|关闭|保存|提交|返回|上一步|下一步|ESC|即可退出演示模式|额，好像没有权限|知道啦|移出团队通知|你已被|移出当前团队，你可创建新的团队|创建团队|🎉|知道了|正在加载|Created with Sketch\.|sheji2|wenzi2|暂无搜索结果|more_vert|chevron_right|上传产品文档|团队共享|上传文件|支持 Word|Axure 文档上传|下载蓝湖客户端|添加文档链接|支持添加任意网页链接|在区域内点击|财务需求\d+\.rp)$/i;
@@ -600,6 +769,7 @@ async function extractLanhuContent(frame) {
     let currentRowTop = -1;
 
     textElements.forEach(el => {
+      if (el._consumed) return; // G86：已入表格/图示的文字不再参与行分组
       if (uiFilterRegex.test(el.text)) return;
 
       if (currentRowTop === -1 || Math.abs(el.top - currentRowTop) > ROW_THRESHOLD) {
@@ -631,11 +801,14 @@ async function extractLanhuContent(frame) {
           if (r.left >= p.left - 2 && r.right <= p.right + 2 && r.top + sy0 >= p.top - 2 && r.bottom + sy0 <= p.bottom + 2) return; // 嵌套跳过
         }
         let title = '';
-        for (const t of textElements) {
+        // G89：面板名优先取动态面板的产品命名（data-label，如"列表明细"），退回旧法"顶部首个短文字"（会取到"序号"这类表头字）
+        const pl = el.parentElement && el.parentElement.getAttribute('data-label');
+        if (pl && pl.trim() && !/^State\s*\d*$|^状态|^面板$/.test(pl.trim())) title = pl.trim().slice(0, 16);
+        if (!title) for (const t of textElements) {
           const tt = t.text.trim();
           if (t.left >= r.left - 4 && t.left < r.right && t.top >= r.top - 4 && t.top < r.top + 60 && tt.length >= 2 && tt.length <= 16) { title = tt; break; }
         }
-        panels.push({ top: Math.round(r.top + sy0), left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom + sy0), title: title || '面板' });
+        panels.push({ top: Math.round(r.top + sy0), left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom + sy0), title: title || '面板', scrollW: el.scrollWidth, clientW: el.clientWidth, scrollH: el.scrollHeight, clientH: el.clientHeight });
       });
       panels.sort((a, b) => a.top - b.top);
     }
@@ -685,6 +858,20 @@ async function extractLanhuContent(frame) {
         const row = rows[i];
         const rowText = row.cells.map(c => c.text).join(' ');
         if (!rowText.trim()) continue;
+        // G88：同一行有 ≥2 个"多行文本件"（左右两栏并排的说明）→ 逐格分段输出。
+        // 旧法空格拼接会把右栏标题粘到左栏末句后面（税务信息维护"…识别结果支持人工修改。 2）存在审核通过记录…"实证）。
+        const multi = row.cells.filter(c => c.text.split(/\n+/).map(s => s.trim()).filter(Boolean).length >= 2);
+        if (row.cells.length >= 2 && multi.length >= 2) {
+          for (const c of row.cells) {
+            const ls = []; let gap = false; // 控件内的段落空行保留（连续多个压成一个），与单栏多行文本件的呈现一致
+            for (const s0 of c.text.split('\n')) { const s = s0.trim(); if (!s) { if (ls.length) gap = true; continue; } if (gap) ls.push(''); gap = false; ls.push(s); }
+            if (!ls.length) continue;
+            flush();
+            sub = { top: row.top, bottom: row.top + 25, lines: ls };
+          }
+          flush();
+          continue;
+        }
         if (!sub || row.top - sub.bottom > TEXT_GAP) {
           flush();
           sub = { top: row.top, bottom: row.top + 25, lines: [] };
@@ -806,6 +993,43 @@ async function extractLanhuContent(frame) {
     // 表格区域之后的文本行
     if (lastRowEnd < rows.length) pushTextRows(lastRowEnd, rows.length);
 
+    // G86：几何表/图示的查询条件带——表头上方的表单控件与按钮行（控件值不在文字件里，旧法带从"查询/重置"文字行起算，
+    // 截不到上面的查询条件行——税务信息维护实证：带顶 1798，而首行查询控件在 1695）。遇正文行即止，最高 420px。
+    {
+      const BTN = /^(查询|重置|查\s*询|重\s*置|新\s*增|删\s*除|导\s*入|导\s*出|搜\s*索|展开|收起|批量[^\n。；，]{0,8}|设置|复制|筛选)$/;
+      for (const tb of geo.tables) {
+        const above = []; // 表头上方 420px 内、横向范围附近的文字件与表单控件，自下而上扫
+        const addC = (t, isInput) => {
+          if (t._consumed || t.top >= tb.top - 4 || t.top + t.height <= tb.top - 420) return;
+          if (t.left < tb.left - 80 || t.left > tb.left + Math.min(tb.right - tb.left, 1400) + 200) return;
+          const s = t.text.trim();
+          above.push({ y: t.top, left: t.left, right: t.left + t.width, txt: s, btn: BTN.test(s), input: isInput });
+        };
+        for (const t of textElements) addC(t, false);
+        for (const t of inputItems) addC(t, true);
+        above.sort((a, b) => b.y - a.y);
+        let top = null, left = Infinity, right = -Infinity, nCtl = 0, nForm = 0, signal = false;
+        for (const c of above) {
+          if (!(c.input || c.btn || c.txt.length <= 6)) break; // 正文行=带的边界
+          top = c.y; left = Math.min(left, c.left); right = Math.max(right, c.right); nCtl++;
+          if (c.input) nForm++;
+          if (c.btn) signal = true;
+        }
+        // 须有查询类信号或 ≥2 个表单控件才认"查询条件带"（防把表上方普通短行卷进来）
+        if (!nCtl || !(signal || nForm >= 2)) continue;
+        const bd = { top, bottom: tb.top, left, right };
+        bd.idx = tableBands.length;
+        bd.anchors = tb.headerCells ? tb.headerCells.filter(x => x.length <= 14).slice(0, 4) : [];
+        tableBands.push(bd);
+        tb.bandIdx = bd.idx;
+      }
+    }
+
+    // G86：几何块（表格/图示）并入块序列（按画布 y 稳定排序，原块相对序不变）
+    for (const tb of geo.tables) if (tb.mdLines) blocks.push({ type: 'table', top: tb.top, bottom: tb.bottom, mdLines: tb.mdLines, bandIdx: typeof tb.bandIdx === 'number' ? tb.bandIdx : -1 });
+    for (const dg of geo.diagrams) blocks.push({ type: 'text', top: dg.top, bottom: dg.bottom, lines: dg.lines, geo: true });
+    blocks.sort((a, b) => a.top - b.top);
+
     // 第4步：浮层/弹窗内容块精确内联
     // 背景：axure 画布上弹窗 mockup 画在正文下方，按画布顺序提取会被追加到章节末尾。
     // 策略：与前一块垂直间隙 > TEXT_GAP 的块视为浮层候选；取候选块内 ≤10 字的短标题行，
@@ -822,6 +1046,8 @@ async function extractLanhuContent(frame) {
         //（"使用记录"在优化点二"3、使用记录"处命中→标签被搬到中部、原表前反空，货量考核实证）。
         // 表格留在画布原位=视觉忠实；浮层内联只对纯文字块生效。
         if (cand.type === 'table') continue;
+        // G86：图示块（流程图节点标签）禁搬——标签是图形的一部分，画布位即其位
+        if (cand.geo) continue;
         // G68b：紧邻后随表格块的短文本块=表格标签行（如"使用记录"），同样禁搬——它属于那张表
         const nextBlk = blocks[i + 1];
         if (nextBlk && nextBlk.type === 'table' && nextBlk.top - cand.bottom <= TEXT_GAP) continue;
@@ -838,7 +1064,7 @@ async function extractLanhuContent(frame) {
           const kw = kw0.trim();
           const hits = [];
           for (let j = 0; j < blocks.length; j++) {
-            if (blocks[j] === cand) continue;
+            if (blocks[j] === cand || blocks[j].geo) continue; // G86：图示块内的标签不作锚点（"其它机构""开始"等短词会误命中）
             const ls = blocks[j].type === 'table' ? blocks[j].mdLines : blocks[j].lines;
             ls.forEach((l, li) => { if (l.includes(kw)) hits.push({ blockIdx: j, lineIdx: li }); });
           }
@@ -892,11 +1118,24 @@ async function extractLanhuContent(frame) {
       }
     }
 
+    // G86：纯字段汇总（供对账器同源取数 / 忠实闸供源）——不带元素引用
+    const extra = {
+      tables: geo.tables.map(tb => ({ top: tb.top, bottom: tb.bottom, left: tb.left, right: tb.right, headerCells: tb.headerCells, firstDataRowCells: tb.firstDataRowCells, dataRows: tb.dataRows })),
+      diagrams: geo.diagrams.map(dg => ({ top: dg.top, bottom: dg.bottom, left: dg.left, right: dg.right, texts: dg.lines.length })),
+      texts: textElements.map(t => ({ t: t.text, y: t.top, x: t.left, w: t.width })),
+      consumed: textElements.filter(t => t._consumed).map(t => ({ t: t.text, y: t.top, x: t.left })),
+      sourceLines: textElements.reduce((acc, t) => {
+        String(t.text).split(/\n+/).map(s => s.trim()).filter(Boolean).forEach((ln, i) => acc.push(`${t.top + i * 16}|${t.left}|span|||${ln}`));
+        return acc;
+      }, []).concat(inputItems.map(t => `${t.top}|${t.left}|input|||${t.text}`))
+    };
+
     // 如果没有识别到表格区域，按普通文本输出
-    if (tableRegions.length === 0) {
+    if (tableRegions.length === 0 && geo.tables.length === 0 && geo.diagrams.length === 0) {
       const resultLines = [];
       let lastTop = -1;
       textElements.forEach(el => {
+        if (el._consumed) return; // G86：已入表格/图示的文字不重复输出
         if (uiFilterRegex.test(el.text)) return;
         if (lastTop !== -1 && Math.abs(el.top - lastTop) > 10) {
           resultLines.push('');
@@ -914,10 +1153,10 @@ async function extractLanhuContent(frame) {
         cleanedLines.push(line);
         lastLineEmpty = isEmpty;
       }
-      return { md: cleanedLines.join('\n'), bands: [] };
+      return Object.assign({ md: cleanedLines.join('\n'), bands: [] }, extra);
     }
 
-    return { md: outputParts.join('\n\n'), bands: tableBands, panels, parts };
+    return Object.assign({ md: outputParts.join('\n\n'), bands: tableBands, panels, parts }, extra);
   });
 }
 

@@ -23,8 +23,8 @@ description: 用例设计稿质疑门禁——按 L1 设计方法与覆盖正本
 §0 之后、五类手段之前，调总库核对两件"五类手段看不到"的事——**库层面**的重复与关系完整性。五类手段"均不依赖外部数据"，本段是唯一依赖总库的一只眼，二者互补、不替换：
 
 ```bash
-# 绝对路径全文，禁止缩写成相对路径/目录名（2026-11-20 orchestrator 实测相对路径会误判"网关不存在"而降级）
-python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py search --keyword "<本轮用例标题核心词>" --no-status-filter --limit 30
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；禁止把占位符或相对路径直接交给 shell
+python -X utf8 "{paths.Agent本体}/tools/case_library.py" gateway search --keyword "<本轮用例标题核心词>" --no-status-filter --limit 30
 ```
 
 - **查重**：本轮成册用例标题/核心词命中总库已有 ACTIVE 用例 → 违例清单标"疑似重复，候选 case_id=…"，呈报是否复用而非另造；确属不同场景的写明区分依据后放行（不机械判重）。

@@ -60,7 +60,7 @@ def load_source(src_file: Path):
 
 def load_doc_blocks(md_file: Path):
     """文档正文块：剔除图片/引用/清单符号/表格骨架，表格按单元格拆块"""
-    blocks, garb = [], []
+    blocks, cells, garb = [], [], []
     for no, raw in enumerate(md_file.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
         if GARBAGE_RE.search(raw):
             garb.append((no, GARBAGE_RE.search(raw).group(0), raw.strip()[:40]))
@@ -76,10 +76,11 @@ def load_doc_blocks(md_file: Path):
             for cell in s.strip("|").split("|"):
                 c = cell.strip()
                 if c and not re.fullmatch(r"[:\-\s]*", c):
-                    blocks.append((no, c))
+                    # G86：格内分行标记 <br> 还原为空格——单元格是"多个原子值（文字件/按钮值/下拉项）按格拼成"的块
+                    cells.append((no, re.sub(r"<br\s*/?>", " ", c)))
         elif s:
             blocks.append((no, s))
-    return blocks, garb
+    return blocks, cells, garb
 
 
 def main():
@@ -102,7 +103,10 @@ def main():
     if a.src:
         src_file = Path(a.src)
     else:
-        menu_dir = Path(a.cache) / a.menu
+        # 菜单名含 / ? 等字符时须与采集侧同一套目录名归一（路线 B 与路线 A G90 均按此落盘）
+        bad = chr(92) + '/:*?"<>|'
+        safe_menu = ''.join('_' if ch in bad else ch for ch in a.menu)[:40]
+        menu_dir = Path(a.cache) / safe_menu
         cands = sorted(menu_dir.glob("*/leaves_text.txt"))
         if not cands:
             print(f"[红] 缓存无此菜单：{menu_dir}\\*\\leaves_text.txt（先采集，或用 --src 指定；在线正门=lanhu_reconcile）")
@@ -124,7 +128,7 @@ def main():
     src_bigrams = [bigrams(w) for w in src_windows]
     src_charset = set("".join(src_norm))
 
-    doc_blocks, garbage = load_doc_blocks(doc)
+    doc_blocks, doc_cells, garbage = load_doc_blocks(doc)
 
     # ① 文档块 → 源 溯源（改写/自撰/乱码替换检测）
     rewrites = []
@@ -142,8 +146,20 @@ def main():
             kept += 1
         else:
             rewrites.append((no, round(best, 2), b[:48]))
+    # G86：表格单元格=多个原子值按格拼成（如操作列"详情 提交 编辑 删除 修改记录"、同一格里的第4条/第5条），
+    # 整句比对必误判"自撰"——改为逐段溯源：按空白拆段，每段须是某条源行（文字件行/控件值）的子串
+    src_all = [x for x in src_norm if len(x) >= 2]
+    for no, c in doc_cells:
+        nb = norm(c)
+        if len(nb) < a.min_chars:
+            continue
+        segs = [norm(x) for x in c.split()]
+        if segs and all(len(sg) < 2 or any(sg in x for x in src_all) for sg in segs):
+            kept += 1
+        else:
+            rewrites.append((no, 0.0, c[:48]))
     # ② 源 → 文档 丢失抽查（黄；覆盖正门=lanhu_reconcile coverage=1.0）
-    docfull = "".join(norm(b) for _, b in doc_blocks)
+    docfull = "".join(norm(b) for _, b in doc_blocks + doc_cells)
     doc_block_norms = [norm(b) for _, b in doc_blocks if len(norm(b)) >= a.min_chars]
     doc_block_bgs = [bigrams(x) for x in doc_block_norms]
     lost = []
@@ -155,7 +171,7 @@ def main():
             lost.append((0, 0.0, s[:40]))
     # ④ 文档字 ∉ 源字集（同块低占比错字/乱码替换：増/説明/頃类异体字与源不同码位，①的行级相似度漏网）
     alien = []
-    for no, b in doc_blocks:
+    for no, b in doc_blocks + doc_cells:
         if len(norm(b)) < a.min_chars:
             continue
         bad = sorted({ch for ch in b if "\u4e00" <= ch <= "\u9fff" and ch not in src_charset})

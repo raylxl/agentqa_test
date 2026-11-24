@@ -34,7 +34,8 @@ Read 需求原文（`{paths.需求文档}\{naming.需求文档模式}`，用最�
 **适用范围四轴（2026-11-20 接总库·答疑必问）**：五面扫完，另按四轴确认本需求的适用范围，取值对齐总库主数据单一来源（绝对路径全文，禁缩写成相对路径）：
 
 ```bash
-cat /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/schemas/主数据.yaml
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；禁止把占位符或相对路径直接交给 shell
+python -X utf8 "{paths.Agent本体}/tools/case_library.py" metadata
 ```
 
 - **业务线**：取公司配置 `业务线.当前线`（如快运）；

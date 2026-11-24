@@ -9,14 +9,14 @@ description: 需求流水线总调度（跨段状态机）——读流水线台�
 
 读 workspace `公司包/agent-company.json` 解析公司值；`{paths.X}`/`{standards.X}`/`{环境.X}` 由该文件取值（台账路径/机检脚本/考古源均配置化）。**无该文件→降级通用模式**：台账=workspace`需求流水线台账.md`（无则建），考古源按目标系统可得资源裁剪；禁凭旧记忆硬写公司路径。
 
-**总用例库网关（2026-11-20 接入）**：绝对路径全文 = `/Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py`（来源 `paths.总用例库`，路径变更时须同步本行）。调用命令 = `python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py <子命令>`。**硬约束：必须用上面的绝对路径全文原样执行，禁止缩写成 `total-case-library/case_library.py` 等相对路径或目录名——2026-11-20 实测相对路径会被判"网关本机不存在"而误降级。** 网关不存在、或输出 `ok=false` → 跳过查库并记一句 BLOCKED 到台账，不影响原流程（等同降级通用模式）。
+**总用例库网关（2026-11-20 接入；2026-11-24 改为 agent 代理）**：统一入口 = `{paths.Agent本体}/tools/case_library.py`；代理会从 `paths.总用例库` 解析本机库根并转发命令。**硬约束：先把 `{paths.Agent本体}` 解析成 agent-company.json 里的绝对路径，再拼 `/tools/case_library.py` 执行；禁止把占位符原样交给 shell，也禁止缩写成 `total-case-library/case_library.py` 等库内相对路径——2026-11-20 实测相对路径会被判"网关本机不存在"而误降级。** 代理不存在、库根不存在、或输出 `ok=false` → 跳过查库并记一句 BLOCKED 到台账，不影响原流程（等同降级通用模式）。
 
 ## 0.5 历史用例预判（进入②生成段前必做·2026-11-20 接入）
 
 派发 generator 之前，先用总库判"这条需求是否已有历史用例"，避免重复造轮子：
 
 ```bash
-python3 /Users/kimfang/WorkBuddy/总用例库设计方案/total-case-library/case_library.py impact --title "<需求名>" --keyword "<核心词>"
+python -X utf8 "{paths.Agent本体}/tools/case_library.py" gateway impact --title "<需求名>" --keyword "<核心词>"
 ```
 
 - 读 JSON 输出的 `判定`（NEW / MODIFY / REVIEW）、`复用候选`、`受影响用例(IMPACTS)`；

@@ -8,13 +8,15 @@
  *  ③ headings 章节序：蓝湖章节标题序列 == 文档章节标题序列（顺序+文本）
  *  ④ tables   表格结构：文档表格与蓝湖表格按序匹配——表头单元格集合一致（合并单元格拆分比对）、数据行数差≤容差
  *  ⑤ images   图数量：文档画布图引用数 == 蓝湖画布大图数（含隐藏面板图；带截图/弹窗裁剪不计入）
+ *  ⑥ diagrams 图示截图（G85）：几何识别出的流程图/图示（节点矩形+连接线），文档必须有等量的 流程图_ 截图
+ *             ——文字层只保阅读序，无图=菱形/分支/连线结构丢失
  *
  * 用法：node lanhu_reconcile.js <端口> --doc "<md绝对路径>" --menu "<树内菜单名>" [--min-chars 6] [--row-tol 2]
  */
 const fs = require('fs');
 const {
   connectBrowser, getLanhuPages, enterPrototype, robustClickMenu,
-  scrollToBottom, findContentFrame, Logger,
+  scrollToBottom, findContentFrame, Logger, extractLanhuContent,
 } = require('./browser_utils');
 const { resolveLanhuUrl } = require('./config_loader');
 
@@ -49,8 +51,15 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   if (!frame) { console.error('NO_FRAME'); process.exit(2); }
   await scrollToBottom(frame, logger);
 
+  // G86（2026-11-24）：活页结构模型与采集器同源——表格/图示取 extractLanhuContent 的几何识别结果。
+  // 背景：对账器此前自带一套"文字坐标±25 聚行判表"，与采集器各猜各的版面：采集器把 31 行联系人表挤成 16 行，
+  // 对账器按同样规则也挤成 16 行，于是"两边一致"放行（税务信息维护实证）。同源后一错俱错、一对一才过。
+  const exg = await extractLanhuContent(frame, logger).catch(e => { logger.warn('extract 同源取数失败，退回自带模型: ' + e.message); return null; });
+
   // ── live 结构模型（文本/章节/表格/图） ──
-  const live = await frame.evaluate(() => {
+  const live = await frame.evaluate((args) => {
+    // G86：已入几何表/图示的文字不再参与"聚行判表"（流程图节点标签会被聚成假表）；① miss 仍查全量文字
+    const skip = new Set((args.consumed || []).map(c => c.t + '@' + c.y + '@' + c.x));
     const texts = [];
     document.querySelectorAll('[id$="_text"]').forEach(el => {
       const t = (el.innerText || '').trim(); if (!t) return;
@@ -61,6 +70,7 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     // 行分组（y±25）
     const rows = [];
     for (const t of texts) {
+      if (skip.has(t.t + '@' + t.y + '@' + t.x)) continue;
       const row = rows.find(r => Math.abs(r.y - t.y) <= 25);
       if (row) row.cells.push({ t: t.t, x: t.x });
       else rows.push({ y: t.y, cells: [{ t: t.t, x: t.x }] });
@@ -122,15 +132,24 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     // 位图区的表若真缺失会由 miss/图数量兜底暴露
     const coveredByImg = tables.filter(t => imgs.some(im => !im.hidden && t.top > im.y - 40 && t.top < im.y + im.h + 200)).length;
     return { texts: texts.map(t => t.t), tables, imgs, skippedByImg: coveredByImg };
-  });
+  }, { consumed: exg ? (exg.consumed || []) : [] });
+  // G86：表格以几何识别（单元格网格）为准；自带模型落在几何表范围内的判定作废，范围外的保留
+  let liveDiagrams = 0;
+  if (exg && exg.tables && exg.tables.length) {
+    const geoTabs = exg.tables.map(gt => ({ top: gt.top, bottom: gt.bottom, headerCells: gt.headerCells, firstDataRowCells: gt.firstDataRowCells, dataRows: gt.dataRows }));
+    const rest = live.tables.filter(lt => !geoTabs.some(gt => lt.top >= gt.top - 6 && lt.top <= gt.bottom + 6));
+    live.tables = geoTabs.concat(rest).sort((a, b) => a.top - b.top);
+  }
+  if (exg && exg.diagrams) liveDiagrams = exg.diagrams.length;
 
   if (opened) { try { await opened.close(); } catch (e) {} }
   await browser.close();
 
   // ── doc 模型 ──
-  const raw = fs.readFileSync(docPath, 'utf-8');
+  // G86：单元格内的 <br> 分行标记与 &#124; 转义竖线是呈现层记号——比对前还原（蓝湖侧一个多行文本件=文档侧 <br> 分行）
+  const raw = fs.readFileSync(docPath, 'utf-8').replace(/<br\s*\/?>/gi, '').replace(/&#124;/g, '|');
   const docLines = raw.split('\n');
-  const docHeadings = [], docTables = [], docCanvasImgs = [], docBandImgs = [];
+  const docHeadings = [], docTables = [], docCanvasImgs = [], docBandImgs = [], docDiagramImgs = [];
   let ti = null;
   for (const l of docLines) {
     const t = l.trim();
@@ -167,7 +186,8 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
       const f = m[1].split('/').pop();
       // G77：界面_（panel_state 面板截图）/查询条件_/表格全景_/弹窗裁剪/隐藏图 均非 live img 元素——不进画布图计数
       // G85（2026-11-24）：流程图_ 前缀=axure 矢量流程图区域截图（DOM 文本节点被拍扁后的视觉结构增补，非 live img）——同 G77 口径不计画布图对账
-      if (/^界面_|^查询条件_|^表格全景_|^流程图_/.test(f) || /弹窗|隐藏图/.test(f)) docBandImgs.push(f);
+      if (/^流程图_/.test(f)) { docDiagramImgs.push(f); docBandImgs.push(f); } // G85：图示截图另计数（见 ⑥）
+      else if (/^界面_|^查询条件_|^表格全景_/.test(f) || /弹窗|隐藏图/.test(f)) docBandImgs.push(f);
       else if (/弹窗/.test(f)) { /* 弹窗裁剪不计画布图 */ }
       else docCanvasImgs.push(f);
     }
@@ -307,6 +327,9 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
   const imgIssue = liveImgCount !== docCanvasImgs.length
     ? { liveImgs: liveImgCount, docCanvasImgs: docCanvasImgs.length, sample: docCanvasImgs.slice(0, 4) } : null;
 
+  // ── ⑥ 图示截图：几何识别出的流程图/图示，文档必须有等量截图（无图=结构丢失，v1 四道闸门全绿却拍扁的堵口） ──
+  const diagramIssue = liveDiagrams !== docDiagramImgs.length ? { liveDiagrams, docDiagrams: docDiagramImgs.length } : null;
+
   const result = {
     menu, doc: docPath,
     coverage: targets.length ? +(covered / targets.length).toFixed(4) : null,
@@ -316,8 +339,9 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     tables: { live: live.tables.length, doc: docTables.length, matched: matches.length, issueCount: tableIssues.length, issues: tableIssues.slice(0, 8), noteCount: tableNotes.length, notes: tableNotes.slice(0, 4) },
     images: imgIssue || { liveImgs: liveImgCount, docCanvasImgs: docCanvasImgs.length, ok: true },
     bands: docBandImgs.length,
+    diagrams: diagramIssue || { live: liveDiagrams, doc: docDiagramImgs.length, ok: true },
   };
-  const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue;
+  const red = missing.length > 0 || extras.length > 0 || headingIssue.length > 0 || tableIssues.length > 0 || !!imgIssue || !!diagramIssue;
   result.VERDICT = red ? 'RED' : 'GREEN';
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = red ? 1 : 0;
