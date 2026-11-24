@@ -166,7 +166,8 @@ const HEAD_RE = /^[一二三四五六七八九十]+[、）、]|^优化点[一二
     if (m) {
       const f = m[1].split('/').pop();
       // G77：界面_（panel_state 面板截图）/查询条件_/表格全景_/弹窗裁剪/隐藏图 均非 live img 元素——不进画布图计数
-      if (/^界面_|^查询条件_|^表格全景_/.test(f) || /弹窗|隐藏图/.test(f)) docBandImgs.push(f);
+      // G85（2026-11-24）：流程图_ 前缀=axure 矢量流程图区域截图（DOM 文本节点被拍扁后的视觉结构增补，非 live img）——同 G77 口径不计画布图对账
+      if (/^界面_|^查询条件_|^表格全景_|^流程图_/.test(f) || /弹窗|隐藏图/.test(f)) docBandImgs.push(f);
       else if (/弹窗/.test(f)) { /* 弹窗裁剪不计画布图 */ }
       else docCanvasImgs.push(f);
     }
