@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-standards_version_check_v1.py — 版本一致性机检（防"索引/文件/引用"版本漂移 + L4 双正本分叉）
+standards_version_check_v1.py — 版本一致性机检（防"索引/文件/引用"版本漂移）
 锚点 = 00_标准体系索引.md §一矩阵（体系唯一版本锚点）
 检查：
   [红] 标准文件文内修订记录最新版 ≠ 索引版本列内容修订版
-  [红] L4 域标准双正本分叉：活正本（需求文档库）与仓内副本（产品线/{线}/L4域标准/）内容不一致/单侧缺失
-       ——正本方向=活正本（qa-loop 抽域标准工序产出侧）；同步=活→仓单向镜像，修分叉用 cp 活正本 覆盖仓内副本
-  [黄] 仓内副本孤儿件（活正本侧无同名件；人工判：或为改名/下线）
   [黄] 技能 SKILL.md 中的"XX标准 vX.Y"引用 ≠ 索引现行版（人工判：可能是历史表述）
   [黄] 无法解析修订记录 / 引用未登记
 路径自定位（2026-11-19 双树根治+批次3拆分适配）：STD_DIR=本文件所在目录（发起机/克隆同构可跑）；
@@ -42,7 +39,6 @@ def _paths():
 
 
 SKILL_DIR, LIVE_DIR, CUR_LINE = _paths()
-L4_DIR = COMPANY_DIR / "产品线" / CUR_LINE / "L4域标准"
 
 
 def content_ver(ver_col: str):
@@ -55,14 +51,8 @@ def content_ver(ver_col: str):
 
 
 def resolve_std_file(name_raw: str):
-    """索引文件列 → 可读文件。兼容：裸文件名（标准体系内）/ 仓根相对路径（产品线等）/
-    L4 活正本复合行（取基名，读仓内副本）。"""
+    """索引文件列 → 可读文件。兼容：裸文件名（标准体系内）/ 仓根或绝对路径（产品线、需求文档库等）。"""
     s = name_raw.split("+")[0].strip().strip("`").strip()
-    m = re.search(r"活正本=`([^`]+)`", s)
-    if m:
-        s = pathlib.PurePath(m.group(1).replace("\\", "/")).name
-        cand = L4_DIR / s
-        return cand if cand.exists() else None
     for cand in (STD_DIR / pathlib.PurePath(s.replace("\\", "/")).name,
                  REPO_ROOT / s.replace("\\", "/")):
         if cand.exists():
@@ -108,25 +98,6 @@ def last_rev_in_file(fp: pathlib.Path):
     return last, None
 
 
-def check_l4_sync():
-    """L4 双正本对账（2026-11-19 立项）：活正本（需求文档库）↔ 仓内副本，内容不一致/单侧缺失=红。"""
-    reds, yellows = [], []
-    if not LIVE_DIR.is_dir():
-        return [f"L4 活正本目录不可达：{LIVE_DIR}（无工作区配置的纯克隆=预期，跳过本项）"], []
-    live = {p.name: p for p in LIVE_DIR.glob("*_用例编写标准_*.md")}
-    repo = {p.name: p for p in L4_DIR.glob("*.md")}
-    for n in sorted(set(live) & set(repo)):
-        a = live[n].read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
-        b = repo[n].read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
-        if a != b:
-            reds.append(f"[L4分叉] {n}：活正本≠仓内副本——正本=活正本，同步：cp 活正本 覆盖仓内副本后提交")
-    for n in sorted(set(live) - set(repo)):
-        reds.append(f"[L4缺镜像] {n}：活正本已建、仓内副本缺——cp 入 {L4_DIR} 后提交（qa-loop 抽域标准收尾步）")
-    for n in sorted(set(repo) - set(live)):
-        yellows.append(f"[L4孤儿] {n}：仓内副本有、活正本无（人工判：或为改名/下线/待建域）")
-    return reds, yellows
-
-
 def scan_skills(index_rows):
     """扫描技能中"XX标准/规范/细则/索引 vX.Y"引用 → 与索引比对。"""
     hits = []
@@ -153,9 +124,6 @@ def main():
             continue
         if idx_ver and file_ver and file_ver != idx_ver:
             reds.append(f"[{stem}] 文件修订记录最新 v{file_ver} ≠ 索引 v{idx_ver}")
-    r2, y2 = check_l4_sync()
-    reds += r2
-    yellows += y2
     for sk, ln, name, rv, iv in scan_skills(rows):
         if iv == "未登记":
             yellows.append(f"[{sk}:{ln}] 引用\"{name} v{rv}\"未登记（人工判）")
