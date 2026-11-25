@@ -11,6 +11,16 @@ description: 我方测试用例与 WB 等外部用例的对比四查+第五查�
 
 前提：我方成册已交付（`usecase-pipeline` 产物）。外部文件只读不动。
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase compare --round "<如：对比 WB vN>" --actor usecase-external-compare
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase compare --round "<同上>" --actor usecase-external-compare --artifact "<对比结果文件路径>" --evidence "映射计数：已包含/未包含/口径冲突 N 条"
+```
+
+- 第 1 步基线核对之前 begin → 第 4 步必停拍板呈报发出之前 end（吸收执行另起一段 `--round "吸收执行"`）；工具打印的 `⏱` 行**原样转述给用户**；耗时禁手填、禁事后补造，整段漏记只能 `miss … --phase compare --reason "…"` 如实申报。
+
 ## 1. 基线核对（第四查前置，决定冲突判据）
 
 先读外部用例的文件头/判断依据，确认它的**口径基线版本**：引用的理解说明是几项拍板的哪个时点、引用了哪些标准条款。若对方基线落后于现行（如引用了已被后续拍板修订的旧口径），**先列出"哪些旧口径已被哪条新拍板修订"**——这是后续冲突裁定的依据，也是最容易踩的坑：对方断言本身自洽，只是基线过期。

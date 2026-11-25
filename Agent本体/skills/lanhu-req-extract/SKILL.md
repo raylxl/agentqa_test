@@ -8,6 +8,16 @@ description: 蓝湖原型→Markdown 需求文档采集（当前 agent 版，Chr
 > 权威口径：《蓝湖需求采集标准_当前agent版_v1》（{paths.标准体系}，22 条红线继承自展示包方法 v4；**v1.1〔2026-11-24〕增展示原则与 R23 流程图还原；v1.2〔同日〕更正：流程图代码块必须可见；v1.3〔同日〕全量重采后各闸门补缺口、增 R14a 改判据必配反向用例、批量改用 batch_recollect.py**）。
 > 本技能只做编排调度；采集/校验由 {paths.蓝湖工具} 脚本执行。冲突时以标准为准。
 
+## ⓪ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝这次采集归属的需求名（没有需求名就用菜单名）
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase lanhu --round "<菜单名>" --actor lanhu-req-extract
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase lanhu --round "<菜单名>" --actor lanhu-req-extract --artifact "<需求文档路径>" --evidence "四道闸门全绿·coverage=1.0"
+```
+
+- 解析蓝湖地址之前 begin → 收尾第 3 步（台账登记）之前 end（批量采集每个菜单各一段）；工具打印的 `⏱` 行**原样转述给用户**；耗时取底账自动算，禁手填、禁事后补造，整段漏记只能 `miss … --phase lanhu --reason "…"` 如实申报。
+
 ## 一、环境与地址（前置）
 
 - **浏览器**：不自启。经 `browser_pool` 租实例：`bash {paths.公司包}/jt_exec/pool_run.sh <脚本> [参数]`（`POOL_START=9334` 防抢 9333 交互主实例；蓝湖场景无视 login 字段——自动登录的是鲸天，蓝湖用不着）。

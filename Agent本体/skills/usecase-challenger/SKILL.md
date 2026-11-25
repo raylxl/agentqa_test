@@ -18,6 +18,17 @@ description: 用例设计稿质疑门禁——按 L1 设计方法与覆盖正本
 
 正本：《{standards.L5_门禁}》§10 九项尺子/§20 执行就绪度＋《{standards.L1_通用}》§14 四源。证书模板＝`{paths.pipeline_assets}/assets/certificate.tpl.md`。
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入·复核用例每轮一段）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase challenge --round "质疑轮N" --actor usecase-challenger
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase challenge --round "质疑轮N" --actor usecase-challenger --artifact "<证书路径或违例清单路径>" --evidence "如：九项尺子全过／违例清单 K 条已回流"
+```
+
+- **每轮一段**：开始独立重推导等五类手段之前 begin → 本轮结论落定后 end（未收敛＝违例清单交出、等修复时 end，artifact 写违例清单；收敛＝证书签发后 end，artifact 写证书）；修复在分章源上做完、重组装后再开下一段；工具打印的 `⏱` 行**原样转述给用户**；
+- 耗时取底账自动算（不含用户等待；分路检查员子代理的运行时长工具自动计入），**禁手填、禁事后补造**；被打断／转人工停机同样先 end（`--note` 写原因）；整段漏记只能 `miss --id "<册名>" --phase challenge --reason "…"` 如实申报。
+
 ## 0.5 总库交叉核查（2026-11-20 接线·质疑的第六只眼）
 
 §0 之后、五类手段之前，调总库核对两件"五类手段看不到"的事——**库层面**的重复与关系完整性。五类手段"均不依赖外部数据"，本段是唯一依赖总库的一只眼，二者互补、不替换：

@@ -13,6 +13,16 @@ description: 执行反馈闭环——含执行收尾后的 SYS/DEF/IMP/CHG 四�
 
 **铁则：所有用例修改必须经用户拍板，禁自行按实现改预期（"系统就这样"不构成修改依据）。呈报一律对话内文字逐条展示，不用选择框。**
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase feedback --round "<如：R7 四源盘点／R7 回写>" --actor usecase-feedback-loop
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase feedback --round "<同上>" --actor usecase-feedback-loop --artifact "<报告附B或回写台账路径>" --evidence "如：四源盘点 N 项／回写锚点全绿·回归 N 条"
+```
+
+- 分段：四源盘点→五段式呈报为一段（呈报发出前 end）；用户拍板后的回写动作链＋影响面回归为另一段（拍板后 begin，writeback_check／qc 绿后 end）；工具打印的 `⏱` 行**原样转述给用户**；耗时取底账自动算（不含等拍板），禁手填、禁事后补造，整段漏记只能 `miss … --phase feedback --reason "…"` 如实申报。
+
 ## 六类触发源（统一走本闭环）
 
 执行观察／执行失败／待复验复验／转测校准回填／代码走查·端到端审查／外部用例对比发现。

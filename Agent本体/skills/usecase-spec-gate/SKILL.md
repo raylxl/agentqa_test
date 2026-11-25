@@ -9,6 +9,16 @@ description: 规格保真门（执行前置独立质疑）——机器规格（�
 
 读 workspace `公司包/agent-company.json` 解析 `{paths.X}`；无该文件→降级通用模式。输入两件：**机器规格 json**（执行器实际吃的 specs）+ **用例册 MD**（#### TC- 块竖排五行，L3 通用形态）。可选第三件：域枚举表（订单类型/费项码/事件映射等键值，喂给 lint 与子代理）。
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase specgate --round "<如：仓内-R7 开批前>" --actor usecase-spec-gate
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase specgate --round "<同上>" --actor usecase-spec-gate --artifact "<保真报告路径>" --evidence "如：机检 0 命中·子代理 N 条全绿／红清单已回流"
+```
+
+- 第 1 步组包之前 begin → 出口结论（绿／红）落定后 end；复跑本门至清零＝同一段不拆（红→修复→复跑都在段内，end 时 `--note` 写复跑次数）；工具打印的 `⏱` 行**原样转述给用户**；耗时取底账自动算，**禁手填、禁事后补造**，整段漏记只能 `miss … --phase specgate --reason "…"` 如实申报。
+
 ## 定位（为什么这道门值钱）
 
 血泪校准：2026-11-18 仓内计费 R2——296 条规格里 215 条失真（E1 最低/最高收费组序错绑、E2 多报价优先族压缩成单报价、E3 专造仓编码截断同码→EXEMPT 劫持、E4 物料编码填了名称、E5 双单只推 A/温层归一），**烧完执行轮才被判定复核翻案**。此门=把同类失真拦在开批前，省执行轮+省翻案轮。

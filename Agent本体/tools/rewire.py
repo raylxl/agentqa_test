@@ -10,7 +10,7 @@ ZCode 只认固定运行位（workspace\\.zcode\\skills、用户目录 skills、
   python rewire.py --rename 公司包 新名      改名（agentqa_test 下的子目录名）：迁目录→重建受影响联接
                                             →改 hook 配置路径→改公司配置路径值→登记路径迁移别名→旧名留兼容联接
   python rewire.py --rename 公司包 新名 --dry-run  只打印改名计划（摘/建联接＋改写配置），不落盘
-  python rewire.py --repair                 按接线表重建缺失/断开的联接（不动目录），并把 hooks 五件
+  python rewire.py --repair                 按接线表重建缺失/断开的联接（不动目录），并把 hooks 七件
                                             幂等写进 cli\config.json（新机器部署=解压后只跑这一条）
                                             （2026-11-14 随 pack_for_colleague.py 立，补"第二实例"缺口；
                                              后增 memory_guard 记忆索引守卫与 activity_trace 计时底账）
@@ -133,19 +133,23 @@ def hook_paths():
 
 
 def hook_templates(agent):
-    """hooks 五件接线表：(事件, matcher, 脚本名, 状态文案)；路径按当前本体解析，不写死。
+    """hooks 七件接线表：(事件, matcher, 脚本名, 状态文案)；路径按当前本体解析，不写死。
     memory_guard（2026-11-15 立）：MEMORY.md 写后自动体检，防多会话并发写坏记忆索引。
     activity_trace（2026-11-16 立，计时与时间线规范§十一第二批）：全部工具调用时刻落
-    workspace\\.zcode\\agent_activity.jsonl（净耗时底账）；只挂 PostToolUse 单边=每调用一次开销。"""
+    workspace\\.zcode\\agent_activity.jsonl（净耗时底账）；只挂 PostToolUse 单边=每调用一次开销。
+    turn_in_trace / turn_out_trace（2026-11-25 立，规范 v1.2"每个步骤都计时"）：回合开始/结束时刻落同一底账，
+    配对出"agent 正在操作的回合区间"，用户思考答复的时间不计；只记不输出不阻断，Stop 钩子严禁回内容。"""
     return [("PostToolUse", "Write|Edit", "reread_reminder.py", "正本改动检查"),
             ("PostToolUse", "Write|Edit|ApplyPatch", "paiban_ledger_reminder.py", "拍板对账提醒"),
             ("PreToolUse", "Edit|Write|ApplyPatch", "block_master_edit.py", "正本直改拦截检查"),
             ("PostToolUse", "Write|Edit|ApplyPatch", "memory_guard.py", "记忆索引守卫"),
-            ("PostToolUse", ".*", "activity_trace.py", "计时底账（工具时刻）")]
+            ("PostToolUse", ".*", "activity_trace.py", "计时底账（工具时刻）"),
+            ("UserPromptSubmit", ".*", "turn_in_trace.py", "计时底账（回合开始）"),
+            ("Stop", ".*", "turn_out_trace.py", "计时底账（回合结束）")]
 
 
 def ensure_hooks(agent):
-    """把 hooks 五件幂等写进 cli\\config.json：按脚本文件名识别，缺则补、路径旧则改；写前备份。
+    """把 hooks 七件幂等写进 cli\\config.json：按脚本文件名识别，缺则补、路径旧则改；写前备份。
     （新机器部署缺口：--repair 原先只管联接，同事的 config.json 里没有 hook 条目则五道机器闸全不生效）"""
     events = {}
     if CLI_CONFIG.exists():
@@ -194,7 +198,7 @@ CLAUDE_SETTINGS = CLAUDE_HOME / "settings.json"
 
 
 def ensure_claude_hooks(agent):
-    """Claude Code 档：把 hooks 五件按 Claude settings.json 格式幂等写入（备份先行）。
+    """Claude Code 档：把 hooks 七件按 Claude settings.json 格式幂等写入（备份先行）。
     格式已对齐官方（PreToolUse/PostToolUse + matcher 正则 + command）；脚本 stdin 协议与 ZCode 同构度高，
     但**运行时行为属真机首验项**（2026-11-16 立档，部署验证报告边界节）。"""
     if not CLAUDE_SETTINGS.parent.is_dir():
@@ -388,7 +392,7 @@ def main():
     ap.add_argument("--codex", action="store_true",
                     help="同时接入 Codex 宿主（.codex\\skills 联接技能；无工具级 hooks→软闸档）")
     ap.add_argument("--claude", action="store_true",
-                    help="同时接入 Claude Code 宿主（.claude\\skills 联接技能 + settings.json 注入五闸，运行时行为属真机首验项）")
+                    help="同时接入 Claude Code 宿主（.claude\\skills 联接技能 + settings.json 注入 hooks 七件，运行时行为属真机首验项）")
     ap.add_argument("--no-zcode", action="store_true",
                     help="不改 ZCode 运行位/hooks（非 ZCode 宿主选择时使用；仅接宿主参数指定的技能位）")
     ap.add_argument("--rename", nargs=2, metavar=("旧名", "新名"))

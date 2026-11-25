@@ -1,6 +1,6 @@
 # Agent本体 —— 运行本体（流程技能 + 机器闸 + 接线工具）
 
-> 2026-11-14 目录化重构立。本目录 = 测试 Agent 的运行本体：14 个实体技能 + 3 个环境技能联接 + 5 hooks + 改名工具。
+> 2026-11-14 目录化重构立。本目录 = 测试 Agent 的运行本体：14 个实体技能 + 3 个环境技能联接 + 7 hooks + 改名工具。
 > 与 `手艺包`（通用分发件）、`公司包`（公司家底）同级，同住 `agentqa_test\`；接线总说明见 `..\README.md`。
 
 ## 目录
@@ -9,8 +9,9 @@
 |---|---|
 | `skills\` | 14 个实体技能：usecase-orchestrator（总调度）/ requirement-qa-loop（①答疑）/ lanhu-req-extract（需求文档采集）/ usecase-generator＋usecase-pipeline（②生成）/ usecase-spec-gate（②规格保真门）/ usecase-challenger（③设计质疑）/ usecase-external-compare（外部对比）/ usecase-executor（⑤执行）/ usecase-execution-challenger（⑤判定质疑门）/ usecase-feedback-loop（⑥反馈闭环）/ usecase-defect-challenger（提单前质疑）/ usecase-qc（⑦独立质检）/ usecase-history-cleanup（归档）。全部参数化：公司值读 `..\公司包\agent-company.json`（按文件名逐级定位，目录改名免疫），无配置自动降级通用模式；**清单以 `skills\` 目录实况为准** |
 | `skills\{devops-login,zbase-login,zbase-log-query}` | 联接 → `..\公司包\skills\` 对应目录（环境技能物理正本在公司包，本体侧只留 junction） |
-| `hooks\` | 5 道机器闸：block_master_edit（正本直改拦截·PreToolUse）/ reread_reminder（正本改动重读提醒·PostToolUse）/ paiban_ledger_reminder（拍板对账提醒·PostToolUse）/ memory_guard（记忆索引守卫·PostToolUse）/ activity_trace（计时底账·PostToolUse）＋辅助模块 `_company_profile.py`；注册于 `<user-home>\.zcode\cli\config.json`（改它=⚠需重开会话生效）；**数量与清单以 `tools\rewire.py` 的 `hook_templates()` 为准** |
+| `hooks\` | 7 个钩子。5 道机器闸：block_master_edit（正本直改拦截·PreToolUse）/ reread_reminder（正本改动重读提醒·PostToolUse）/ paiban_ledger_reminder（拍板对账提醒·PostToolUse）/ memory_guard（记忆索引守卫·PostToolUse）/ activity_trace（计时底账·工具时刻·PostToolUse）；计时底账另两件（2026-11-25 立）turn_in_trace（回合开始·UserPromptSubmit）/ turn_out_trace（回合结束·Stop）——只记不输出不阻断，钩子在子代理内不触发；＋辅助模块 `_company_profile.py`；注册于 `<user-home>\.zcode\cli\config.json`（改它=⚠需重开会话生效）；**数量与清单以 `tools\rewire.py` 的 `hook_templates()` 为准** |
 | `tools\rewire.py` | 接线体检与改名工具：`--status` 体检 / `--repair` 修联接 / `--rename 旧名 新名`（迁目录+重建联接+改配置+登记别名+旧名留兼容联接） |
+| `tools\timeline_mark.py`／`timeline_check.py` | 阶段计时（《计时与时间线规范》v1.2）：打点工具 `begin/end/miss/status/report`（净耗时取三路底账自动算，禁手填）＋独立机检（只读、十三项、可对账本批次行）；每个流程技能开工第一步／收工最后一步各打一点 |
 
 ## 运行位与物理位
 
