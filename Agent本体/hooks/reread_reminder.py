@@ -35,6 +35,10 @@ def _path_rules(profile):
         add(paths.get(key), "std", label)
     # 台账=单文件：精确匹配本体；常见衍生（备份/临时）不提醒
     add(paths.get("需求流水线台账"), "std", "流水线台账", exact=True)
+    # 台账两层制（2026-11-25）：单需求流水册目录（配置 用例文件 下的 流水册）同法提醒
+    cases_dir = paths.get("用例文件")
+    if isinstance(cases_dir, str) and cases_dir:
+        add(str(Path(cases_dir) / "流水册"), "std", "流水线流水册")
     # 三包根兜底：Agent本体 物理位的上级=agentqa_test（含手艺包）
     agent_root = paths.get("Agent本体")
     if isinstance(agent_root, str) and agent_root:
