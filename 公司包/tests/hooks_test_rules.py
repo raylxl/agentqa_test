@@ -27,6 +27,8 @@ company = paths.get("公司包", "<公司包>")
 cases = [
     ("命中标准", str(Path(std) / "通用用例设计标准_v1.md"), True),
     ("命中台账", ledger, True),
+    ("命中流水册（台账两层制）", str(Path(paths.get("用例文件", "<用例文件>")) / "流水册" / "某需求_流水册.md"), True),
+    ("流水册目录之外不命中", str(Path(paths.get("用例文件", "<用例文件>")) / "某需求_测试用例_v1.md"), False),
     ("命中技能", str(Path(skills) / "usecase-orchestrator" / "SKILL.md"), True),
     ("命中公司包", str(Path(company) / "agent-company.json"), True),
     ("不命中", "<workspace>/random.md", False),

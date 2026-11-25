@@ -1,0 +1,2 @@
+# vendor/mermaid.min.js 须与 npm 原件逐字节一致（不做出入库换行转换）
+mermaid.min.js -text

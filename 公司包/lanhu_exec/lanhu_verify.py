@@ -8,6 +8,9 @@ lanhu_verify.py - 蓝湖需求文档重写后强制校验（标准方法 v1 / R6
   2. MD 表格逐表 `|` 计数一致；--fix 时按表头列数自动补齐尾部空单元格
   3. --keys 文件：关键内容必须命中（每行一个关键词）
   4. --olds 文件：旧错误/拍扁残留必须清零（每行一个，命中报 RESIDUAL）
+  5. G91/G93 流程图块：```mermaid 代码块（阅读器直接显示为流程图）；围栏须闭合、块内只允许流程图语法行；
+     流程图块数 == 流程图渲染_*.png 张数；@@…@@ 占位标记不得残留；结构文字被藏进 HTML 注释（<!-- 流程图结构 … -->）判红
+     ——注释里的流程图在用户阅读器里整块消失（G93，2026-11-24 v5 实证）；--no-render-ok 可放宽"块数==渲染图数"
 
 用法:
   python lanhu_verify.py <doc.md> <imgdir> [--keys 关键词.txt] [--olds 残留.txt] [--fix]
@@ -27,10 +30,62 @@ def main():
     ap.add_argument("--keys", default="")
     ap.add_argument("--olds", default="")
     ap.add_argument("--fix", action="store_true")
+    ap.add_argument("--no-render-ok", action="store_true", help="G91：允许流程图块没有渲染图（无渲染库的环境只出源码块时用）")
     a = ap.parse_args()
 
     doc = open(a.doc, encoding="utf-8").read()
     base = os.path.dirname(a.doc)
+
+    # 0. G91/G93：围栏代码块（```mermaid 流程图源码）结构校验
+    #    ① 围栏必须成对 ② 块内只允许流程图语法行（防残留清理/拼接把语法行删改坏）③ 流程图块数 == 渲染图数
+    #    ④ 流程图源码被藏进 HTML 注释 = 红（注释里的流程图用户看不到，等于流程图没了）
+    vlines = doc.splitlines()
+    fence_open, fence_lang, fence_bad = False, "", []
+    flow_bad, flow_blocks, hidden_flow = [], 0, 0
+    NODE = re.compile(r'^\s*n\d+(\["[^"]*"\]|\{"[^"]*"\}|\("[^"]*"\))\s*$')
+    EDGE = re.compile(r'^\s*n\d+ -->(\|"[^"]*"\|)? n\d+\s*$')
+    HEADLINE = re.compile(r'^flowchart (LR|RL|TD|BT)\s*$')
+    # kind=None 不在流程图块内；"fenced"=```mermaid 代码块（现行形态）；"hidden"=HTML 注释内的流程图源码（判红，只找结束符）
+    kind, blk_no, in_comment = None, 0, False
+    for ln in vlines:
+        st = ln.strip()
+        if kind is None and in_comment:          # 其他 HTML 注释：整段跳过
+            if "-->" in st:
+                in_comment = False
+            continue
+        if kind is None and st.startswith("<!--"):
+            if "流程图结构" in st:
+                hidden_flow += 1
+                kind, blk_no = "hidden", hidden_flow
+            else:
+                in_comment = True
+            continue
+        if kind is None and st.startswith("```"):
+            if not fence_open:
+                fence_open, fence_lang = True, st[3:].strip().lower()
+                if fence_lang == "mermaid":
+                    flow_blocks += 1
+                    kind, blk_no = "fenced", flow_blocks
+            else:
+                fence_open, fence_lang = False, ""
+            continue
+        if kind is not None:
+            if kind == "hidden" and "-->" in st:
+                kind = None
+                continue
+            if kind == "fenced" and st.startswith("```"):
+                kind, fence_open = None, False
+                continue
+            if st and not (HEADLINE.match(st) or NODE.match(st) or EDGE.match(st)):
+                flow_bad.append("块%d: %s" % (blk_no, st[:50]))
+            continue
+    if kind == "hidden":
+        fence_bad.append("流程图源码藏进了 HTML 注释且未闭合（<!-- 流程图结构 开了没关）")
+    if fence_open or kind == "fenced":
+        fence_bad.append("围栏未闭合（``` 开了没关）")
+    renders = sorted(f for f in (os.listdir(a.imgdir) if os.path.isdir(a.imgdir) else []) if f.startswith("流程图渲染_") and f.lower().endswith(".png"))
+    print("FLOW blocks", flow_blocks, "renders", len(renders), "hidden", hidden_flow, "fence_bad", fence_bad, "bad_lines", flow_bad[:4])
+    markers = [ln.strip()[:40] for ln in vlines if re.match(r'^@@[A-Z]+:\d+@@\s*$', ln.strip())]
 
     # 1. 图片引用 <-> 文件
     imgs = re.findall(r'!\[.*?\]\((.+?)\)', doc)
@@ -108,6 +163,17 @@ def main():
         hard.append("关键词未命中 %d 个: %s" % (len(key_fail), key_fail[:3]))
     if old_residual:
         hard.append("旧残留未清零 %d 处: %s" % (len(old_residual), old_residual[:3]))
+    # 6. G91/G93：流程图块结构硬闸门——块未闭合/语法行坏/块数与渲染图数不符/占位标记残留/源码被藏进注释，任一即红
+    if fence_bad:
+        hard.append("流程图块问题: %s" % fence_bad)
+    if flow_bad:
+        hard.append("流程图块内语法行异常 %d 处: %s" % (len(flow_bad), flow_bad[:3]))
+    if hidden_flow:
+        hard.append("流程图源码被藏进 HTML 注释 %d 处——注释里的流程图用户看不到，等于流程图没了；必须是可见的 ```mermaid 代码块（G93，2026-11-24 用户实证）" % hidden_flow)
+    if not a.no_render_ok and flow_blocks != len(renders):
+        hard.append("流程图块 %d 个 ≠ 渲染图 %d 张（每个流程图块须有对应的 流程图渲染_*.png；确无渲染库的环境可加 --no-render-ok）" % (flow_blocks, len(renders)))
+    if markers:
+        hard.append("占位标记残留 %d 处（采集器未替换成图片引用）: %s" % (len(markers), markers[:3]))
     if hard:
         print("VERIFY FAIL:")
         for h in hard:

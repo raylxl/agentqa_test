@@ -13,6 +13,16 @@ description: 执行判定独立质疑方（《执行质疑标准》v1 B案技能
 - **证据件目录**：逐条证据 json（报价/推单/计算流水/断言五层；缺证据=复核结论直接标"证据不足"）
 - **用例册 MD**：正本（#### TC- 块 + 前置条件/操作步骤/预期结果 竖排五行——分层标准 L3 通用形态）
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase exreview --round "<册短码-R轮次>" --actor usecase-execution-challenger
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase exreview --round "<同上>" --actor usecase-execution-challenger --artifact "<复核结果或报告路径>" --evidence "双账本：确认/无效/合法跳过计数"
+```
+
+- 第 1 步复核包生成之前 begin → 双账本聚合落定（改判经生产方确认落账）后 end；工具打印的 `⏱` 行**原样转述给用户**；分路质疑子代理的运行时长工具自动计入；耗时禁手填、禁事后补造，整段漏记只能 `miss … --phase exreview --reason "…"` 如实申报。
+
 ## 定位与独立性四铁律（标准 §二）
 
 1. **实例隔离**：质疑方=spawn 独立子代理，不继承生产方（执行器）会话结论——执行器自述"通过"对质疑方是零信息；

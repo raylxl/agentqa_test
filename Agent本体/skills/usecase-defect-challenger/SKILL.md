@@ -9,6 +9,16 @@ description: 提单前独立质疑方——"建议提单/呈报缺陷"落单前�
 
 读 workspace `公司包/agent-company.json`（integrations.defect_platform=平台适配器）；坑库正本路径取 `{paths.执行坑库}`。无公司包→降级通用模式（坑库位置由调用方给，缺则 D1 降为通用自问清单）。
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase feedback --round "提单前质疑·<TC编号>" --actor usecase-defect-challenger
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase feedback --round "提单前质疑·<TC编号>" --actor usecase-defect-challenger --artifact "<质疑记录路径或报告锚点>" --evidence "D1~D6 结论：放行／驳回"
+```
+
+- 六查清单开跑前 begin → 出口结论落定后 end（计入反馈段的提单前质疑；它开在反馈段之内时，工具自动从外层反馈段里扣除、不重复计）；工具打印的 `⏱` 行**原样转述给用户**；耗时禁手填、禁事后补造，整段漏记只能 `miss … --reason "…"` 如实申报。
+
 ## 定位与教训溯源
 
 血泪校准（三起差点报给开发的假缺陷 + 一族连坐）：

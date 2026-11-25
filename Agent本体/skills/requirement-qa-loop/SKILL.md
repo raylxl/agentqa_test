@@ -16,6 +16,19 @@ description: 任意行业需求的理解、答疑闭环与标准抽离——拿�
 **阶段⓪.6 开发知识库预扒（2026-11-17 接线，公司层 `integrations.knowledge_base`）**：通读需求后、发现疑问**前**，按本菜单名/功能词/接口名预扒开发知识库（`{paths.公司包}/tools/wk_kb.py search "<菜单名> <功能词>"`，QA/RB/IF/SC 四类卡）——产出两用：①**系统现状引证**进理解说明（引卡必带编号如 RB-004／IF-waybill-send-bill，可审计）；②**提问升级**——开放式疑问变“开发库卡显示系统按 X 处理，请确认按 X 还是有新口径”的确认式（部分问题从问用户降为带证据确认）。**红线：卡片＝系统现状侧证据，永不替代拍板**——“开发库说系统就这样”不构成预期口径；**卡未覆盖→直读源码**（`integrations.dev_git` 财务 29 仓，**按 dev_git 同步策略先绑定用户指定当前分支，再只读审计**：枚举全集读枚举类、入参校验读 Controller/DTO、状态流转读 Service——代码＝一手现状，引用带`仓:分支:类:行号`）；两源均不可用/无果→跳过记 BLOCKED，不阻塞答疑。
 
 
+**⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）——开工第一步／收工最后一步，本技能管 ⓪需求熟悉 与 ①答疑 两段：**
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase locate --actor requirement-qa-loop
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase locate --actor requirement-qa-loop --artifact "<理解说明路径>" --evidence "接收卡＋定位结论＋首批疑问清单"
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase qa --round "第N问" --actor requirement-qa-loop
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase qa --round "第N问" --actor requirement-qa-loop --artifact "<理解说明路径>" --evidence "闭环表第N项"
+```
+
+- **位置**：`locate`＝拿到需求、角色自检之前 begin → 接收卡／定位结论／首批疑问成形、发出第一问之前 end；`qa` 每问一段＝收到用户答复即 begin → 消化、回写理解说明、下一问成形之后、发出之前 end；§4.5 完备性质疑＝`--round "完备性质疑"`、§5 两层抽离＝`--round "标准抽离"`、终检与规划摘要＝`--round "终检·规划摘要"`，各一段；
+- 工具打印的 `⏱` 行**原样转述给用户**（开始一行随本轮首句，结束一行随提问／汇报）；耗时取底账自动算（不含用户答复等待），**禁手填、禁事后补造**；被打断／中途停机同样先 end（`--note` 写原因），续做重新 begin；整段漏记只能 `miss --id "<册名>" --phase <码> --reason "…"` 如实申报。
+
 目标：把需求原文变成**零待拍的《理解说明》**和**两层标准**（域标准 + 通用正本增量提案），为 `usecase-pipeline` 供料。纪律：疑问在设计用例前全部拍板闭环不留尾巴；标准内的助手自查自纠主动报，标准外/不合理的提请拍板。
 
 ## 1. 通读与疑问发现（五面 + 四源）

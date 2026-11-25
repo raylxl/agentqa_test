@@ -11,6 +11,17 @@ description: 用例生成（生成方）——理解说明闭环后，依 L1 经
 
 分工：本技能只管**生成到结构门禁**；内容质疑与证书＝`usecase-challenger`（独立质疑方）；全链编排（go＝生成→质疑→证书）＝`usecase-pipeline` 壳。资产沿用 pipeline 目录：`{paths.pipeline_assets}`（references/brief-and-prompts.md、assets/matrices.md、scripts/assemble.py）。
 
+## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入·开工第一步／收工最后一步）
+
+```bash
+# 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase generate --actor usecase-generator [--round "<如：v3 重生成>"]
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase generate --actor usecase-generator --artifact "<成册md绝对路径>" --evidence "assemble 结构门禁全绿·N 条"
+```
+
+- `begin` 先于 BRIEF 组装等一切读写；`end` 在组装正本落盘、结构门禁全绿之后、移交质疑方／汇报之前（分章子代理的运行时长工具自动计入）；工具打印的 `⏱` 行**原样转述给用户**；
+- 耗时取底账自动算（不含用户等待），**禁手填、禁事后补造**；被打断／中途停机同样先 end（`--note` 写原因），续做重新 begin；质疑后的修复重组装属 `challenge` 段，不在此计时；整段漏记只能 `miss --id "<册名>" --phase generate --reason "…"` 如实申报。
+
 ## 0. 开工前核验（缺一不开工）
 
 | 输入 | 位置约定 | 判据 |
