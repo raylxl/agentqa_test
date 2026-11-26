@@ -18,6 +18,20 @@ try:
     BASE = _cfg.get('paths', {}).get('用例文件') or _BASE_DEFAULT
 except Exception:
     BASE = _BASE_DEFAULT
+# 跨机路径适配（2026-11-26 复核保留）：公司配置存发起机 Windows 正本路径；Mac 工作区按脚本位置反推真实根。
+# 不修改 agent-company.json，避免本机路径污染正本（filter.agentpath=cat 恒等时尤其重要）。
+if os.name != 'nt' and (BASE.startswith('D:') or BASE.startswith('d:') or not os.path.isdir(BASE)):
+    _script_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))  # .../aiagentqa_test
+    _workspace_parent = os.path.dirname(_script_root)  # .../ai测试agent
+    _mac_candidates = [
+        os.path.join(_workspace_parent, '需求用例库', '用例文件'),
+        os.path.join(_script_root, '需求用例库', '用例文件'),
+    ]
+    for _candidate in _mac_candidates:
+        if os.path.isdir(_candidate):
+            BASE = _candidate
+            print(f'[i] 已将公司正本路径映射到本机：{BASE}')
+            break
 BASE = os.path.normpath(BASE) if BASE != _BASE_DEFAULT else BASE
 _BOOKS_DEFAULT = [
     '财务需求2026_云仓_云仓账单_11.30_测试报告_v2.md',

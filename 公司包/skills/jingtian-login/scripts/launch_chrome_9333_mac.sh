@@ -4,8 +4,8 @@
 # 输出：__RUNNING__（已在跑）/ __STARTED__ <版本>（启动成功）/ __FAILED__（失败，退出码 1）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 D="$SCRIPT_DIR"
-while [ "$D" != "/" ] && [ "$(basename "$D")" != "agentqa_test" ]; do D="$(dirname "$D")"; done
-if [ "$(basename "$D")" != "agentqa_test" ]; then echo "__FAILED__ 未定位到 agentqa_test"; exit 1; fi
+while [ "$D" != "/" ] && [ "$(basename "$D")" != "agentqa_test" ] && [ "$(basename "$D")" != "aiagentqa_test" ]; do D="$(dirname "$D")"; done
+if [ "$(basename "$D")" != "agentqa_test" ] && [ "$(basename "$D")" != "aiagentqa_test" ]; then echo "__FAILED__ 未定位到 agentqa_test/aiagentqa_test"; exit 1; fi
 ROOT="$(dirname "$D")"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 if [ ! -x "$CHROME" ]; then
