@@ -32,11 +32,11 @@ description: 用例 AI 执行——按执行操作细则和治理计划执行已
 
 **两条共同保留**：① 连续 3 条环境/通道/超时失败终止阀在全量模式同样保留（自动恢复重登/清场/reload×3 失败后才动作——环境挂了硬跑＝NOT_EXECUTED 假覆盖，不是"执行一版"）；② **"全量跑"禁突破治理计划集**（工序 1.6 对账）——意图超计划集先更治理 JSON 再开跑，禁自行扩大。
 
-## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入：执行准备＋每个执行轮各一段）
+## ⏱ 计时打点（《计时与时间线规范》·2026-11-25 接入：执行准备＋每个执行轮各一段）
 
 ```bash
 # 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名；<轮次名>＝人读轮次（如 仓内-R7）
-python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase prep --round "<轮次名>" --actor usecase-execuator                                # 阶段〇 第 0 步之前
+python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase prep --round "<轮次名>" --actor usecase-executor                                # 阶段〇 第 0 步之前
 python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase prep --round "<轮次名>" --actor usecase-executor --artifact "<dispatch清单或治理运行副本>" --evidence "证书闸·巡检·上轮收尾双校验绿"    # 1.92 之前
 python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" begin --id "<册名>" --phase run  --round "<轮次名>" --run-id "<同账本 run_start 的 run_id>" --actor usecase-executor    # 与 1.92 的 run_start 行同时
 python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>" --phase run  --round "<轮次名>" --run-id "<同上>" --actor usecase-executor --artifact "<账本路径>" --evidence "run_start/run_end 批次行"    # 与 6.6 的 run_end 行同时（复测轮结束后）
@@ -125,7 +125,7 @@ python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>
    ② **报告同步**——按 `execution_adapters.report_sync` 运行收尾校验，再更新总进度、轮次块、最后收尾声明和余项清单；本轮有失败条时同步更新**失败用例专项报告**（交付物§20.10，硬⑥校验对象）。**出口门唯一依据＝report_sync 主脚本；`report_sync_lite` 仅烟雾回归用，不作出口门依据**；
    ②b **回写完成性校验**——按 `execution_adapters.writeback_check` 对 pending、锚点、统计块和分章一致性做校验；本轮有回写义务时先登记再运行；
    ③ **memory 更新**（本轮关键拍板/新教训一句话）。
-   ④ **时间线机检（2026-11-25 立·《计时与时间线规范》v1.2）**：`python -X utf8 "{paths.Agent本体}/tools/timeline_check.py" "{paths.用例文件}/计时/<册名>_timeline.jsonl" --ledger <本轮账本>` 退出码 0——执行轮段与账本批次行一一对应、准备段与执行轮段无起而无终；非 0 先处置（漏记只能 `timeline_mark.py miss` 如实申报，禁补造）。
+   ④ **时间线机检（2026-11-25 立·《计时与时间线规范》）**：`python -X utf8 "{paths.Agent本体}/tools/timeline_check.py" "{paths.用例文件}/计时/<册名>_timeline.jsonl" --ledger <本轮账本>` 退出码 0——执行轮段与账本批次行一一对应、准备段与执行轮段无起而无终；非 0 先处置（漏记只能 `timeline_mark.py miss` 如实申报，禁补造）。
    **收尾完成的客观标识=重跑 report_sync.py 三重全绿（exit 0）**；汇报对话里固定附"本轮报告已更新：v2 §X＋最后收尾行"自证行。
    报告版本号跟随用例版本号（用例不升版报告禁自升版——11-13 配送 v3 违规改回 v2 教训）。
 6.95 **判定质疑门（收尾硬闸·2026-11-18 立·自动接线；2026-11-20 v2 三收紧）**：6.9 完成后、报告标"收官/放行"前，**必须过 `usecase-execution-challenger`**（复核包→分路独立子代理六核查→双账本：确认/无效待重跑/合法跳过）——执行方不自证；**质疑门输出直接进报告固定节（双账本表），报告判定口径以双账本为准，禁只报执行面原始过/败数**。执行机制：报告「最后收尾」声明行须附质疑门结论指针（双账本节锚点），**无指针=未收官**——report_sync **硬⑦+⑦v2 已生效**（⑦=节存在性；**⑦v2=轮次级覆盖**：生效时刻 2026-11-18 02:00 后收尾的每个轮次块须有块内质疑门标记、或「质疑门覆盖：」声明行覆盖、或附抽验的降级声明——防"出过一次双账本就永久绿"，对客 R21 后 R22~R34 漏门实证）。**2026-11-20 三收紧**：①降级口收紧——「质疑门降级」必须同块附「抽验」记录字样，且仅限纯复测单条增量轮；整轮降级（含技能未注册等理由）须用户拍板字样，否则红；②通道扩面——**凡向任何账本落判定的轮次（executor 批量轮/手写轮/DB 深挖轮/回写失效标注轮/探针复测轮）收尾同走 report_sync（含硬⑦v2）**，不走 executor 技能不豁免（两账册 YZ/CC 手写轮整机检未跑实证）；③补账纪律——漏门轮次由质疑门补账复核覆盖（质疑门覆盖声明行），补账产出双账本改判经生产方确认落复评行。**⑦v3 内容质量机检（同日补）**：report_sync 收尾自动跑 gate_quality——计数自洽（双账本分项和==合计==账本数）+逐条表对量（复核结果文件在案且 TC 行数≥分项和，抽查冒充全量=红）+改判对账（声明改判数==账本复评改判行数）；机器拦质量下限，上限仍靠 qc/独立复核抽位。
