@@ -17,7 +17,7 @@ const { ensureTenant, findJtPage } = require(path.join(__dirname, 'pw_tenant.js'
     page.on('response', async (res) => {
       try {
         const url = res.url();
-        if (/uas\/|merak\/|echo\/|\.js|\.css|\.png|\.svg|\.woff/.test(url)) return;
+        if (/uas\/|merak\/|echo\/|\.js$|\.css$|\.png$|\.svg$|\.woff|clarity\.ms|10\.7\.76\.161/.test(url)) return;
         const reqBody = res.request().postData() || '';
         const body = await res.text().catch(() => '');
         if (!body) return;
