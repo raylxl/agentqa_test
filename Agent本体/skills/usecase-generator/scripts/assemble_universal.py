@@ -112,6 +112,17 @@ def _mk_pollute(letters):
     # 边界不含下划线：TEST_P1_Q06 等"下划线连接的造数标识符"不算拍板编号污染
     return re.compile(r'(?:^|[^A-Za-z0-9_])[' + letters + r']\d{1,3}(?![0-9A-Za-z_])')
 
+def _find_gov_script():
+    """定位治理清单校验器 governance_manifest.py：先找本文件所在目录（含联接解析后的物理位），
+    找不到再找兄弟技能 usecase-pipeline/scripts（校验器实际住那里）。
+    2026-11-25 修：此前只找本目录，新需求（非豁免）一开治理前置门即报"结构校验失败"，存量册走豁免未暴露。"""
+    for base in (os.path.dirname(os.path.abspath(__file__)), os.path.dirname(os.path.realpath(__file__))):
+        for cand in (os.path.join(base, 'governance_manifest.py'),
+                     os.path.normpath(os.path.join(base, '..', '..', 'usecase-pipeline', 'scripts', 'governance_manifest.py'))):
+            if os.path.isfile(cand):
+                return cand
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'governance_manifest.py')
+
 def _read(path):
     return io.open(path, encoding='utf-8').read()
 
@@ -211,7 +222,7 @@ def run(cfg):
         manifest_path = cfg.GOVERNANCE_MANIFEST if os.path.isabs(cfg.GOVERNANCE_MANIFEST) else os.path.join(cfg.BASE, cfg.GOVERNANCE_MANIFEST)
         if not os.path.exists(manifest_path):
             print('!! 治理 JSON 不存在: %s（治理前置门硬失败）' % manifest_path); sys.exit(2)
-        gov_script = os.path.join(os.path.dirname(__file__), 'governance_manifest.py')
+        gov_script = _find_gov_script()
         # 初始校验只验证清单结构；候选成册组装后还会再做一次 risk→TC 对账
         cmd = [sys.executable, gov_script, '--manifest', manifest_path]
         if cfg.HISTORICAL_EXEMPT: cmd += ['--historical-exempt']
@@ -573,7 +584,7 @@ def run(cfg):
             if len(v) > 1: print(f"撞号: {k} -> {v[:4]}")
         sys.exit(1)
     if manifest_path:
-        gov_script = os.path.join(os.path.dirname(__file__), 'governance_manifest.py')
+        gov_script = _find_gov_script()
         fd, gov_tmp = tempfile.mkstemp(prefix='governance_candidate_', suffix='.md')
         os.close(fd)
         try:
