@@ -17,6 +17,8 @@ r"""memory_health_check.py — 记忆索引体检与守卫校验器（2026-11-15
   python memory_health_check.py --repair [--path …]  # 自动修复"重复拼接"损坏（其余红项只报告不动手）
   python memory_health_check.py --sync-state [--path…]  # 条目回退为蓄意删除时，确认当前态为新基线
   python memory_health_check.py --restore [--path …]   # 从最近一份 last-good 备份还原索引
+  python memory_health_check.py --diff-hooks <旧MEMORY.md> --path <当前索引>
+                                                     # 索引瘦身后的必跑核对：列出旧索引有、新索引同条里没有的钩子段（不改文件）
 
 退出码：0=绿/仅黄；1=有红。状态与备份落在 <memories 上级>\memory_guard_state.json 与 memory_guard_backups\，
 不进 Agent本体（保持机检零绝对路径）、不进框架解析的 projects 目录。
@@ -70,8 +72,45 @@ def load_state(sp):
         return {}
 
 
+HOOK_RX = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\) — (.*)$", re.M)
+
+
+def _alnum(s):
+    return "".join(ch for ch in s if ch.isalnum())
+
+
 def parse_entries(text):
     return [(m.group(1), m.group(2)) for m in ENTRY_RX.finditer(text)]
+
+
+def diff_hooks(old_md, new_md):
+    """索引瘦身后的必跑核对（2026-11-26 立）：旧索引每条钩子按“；”切段，列出新索引同条钩子里找不到的段。
+
+    只有 MEMORY.md 是每次会话必加载的，主题文件只在相关时才被召回——所以规则/资源类条目的可执行要点
+    （约束、例外条款、具体情境、账号/路径/技能名）必须留在索引，"主题文件里有"不能作为从索引删要点的理由；
+    只有已收官的状态细节才可压。输出须逐段人工判断，不能凭印象。"""
+    def load(p):
+        return {m.group(2): (m.group(1), m.group(3).rstrip("；; "))
+                for m in HOOK_RX.finditer(io.open(p, encoding="utf-8").read())}
+    old, new = load(old_md), load(new_md)
+    n = miss_n = lost = 0
+    for f, (title, hook) in old.items():
+        if f not in new:
+            lost += 1
+            print(f"  [缺条目] {title} ({f})")
+            continue
+        cur = _alnum(new[f][1])
+        miss = [s for s in re.split(r"[；;]", hook) if len(_alnum(s)) >= 4 and _alnum(s) not in cur]
+        if not miss:
+            continue
+        n += 1
+        miss_n += len(miss)
+        print(f"  [{title}] {f}")
+        print(f"      现：{new[f][1]}")
+        for s in miss:
+            print(f"      旧：{s.strip()}")
+    print(f"  结论：缺条目 {lost}；{n} 条有差异、共 {miss_n} 段——逐段判断：是规则/资源要点的加回索引；"
+          f"只是日期、出处、已收官状态的可不加。规则是否被遵守由助手自己保证，不交给用户发现。")
 
 
 def check(mem_md, full=False):
@@ -82,7 +121,8 @@ def check(mem_md, full=False):
     size = len(text.encode("utf-8"))
     entries = parse_entries(text)
     if size >= SIZE_RED:
-        reds.append(f"①超限红：{size}B ≥ {SIZE_RED}B（加载限 24.4KB 会截断尾部条目）——需瘦身：索引一行一钩子，细节移主题文件")
+        reds.append(f"①超限红：{size}B ≥ {SIZE_RED}B（加载限 24.4KB 会截断尾部条目）——需瘦身：只压已收官的状态/历史细节，"
+                    "规则类条目的可执行要点必须留在索引（只有索引每次会话必加载）；瘦身后跑 --diff-hooks 逐条核对")
     elif size >= SIZE_YELLOW:
         yellows.append(f"①接近限：{size}B（≥{SIZE_YELLOW}B），下次新增条目前先瘦身")
     else:
@@ -191,7 +231,16 @@ def main():
     ap.add_argument("--repair", action="store_true", help="自动修复重复拼接")
     ap.add_argument("--sync-state", action="store_true", help="条目回退=蓄意删除时确认新基线")
     ap.add_argument("--restore", action="store_true", help="从 last-good 还原")
+    ap.add_argument("--diff-hooks", metavar="旧MEMORY.md",
+                    help="索引瘦身后的必跑核对：列出旧索引有、新索引同条里没有的钩子段（不改文件；须同时给 --path）")
     a = ap.parse_args()
+    if a.diff_hooks:
+        if not a.path:
+            print("[红] --diff-hooks 须同时给 --path <当前 MEMORY.md>")
+            sys.exit(2)
+        print(f"── 钩子核对：{a.diff_hooks} → {a.path} ──")
+        diff_hooks(a.diff_hooks, a.path)
+        return
     if a.path:
         targets = [a.path]
     else:
