@@ -34,7 +34,7 @@ python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>
 
 ### 1. 复核包生成
 ```
-python <skill>/scripts/gen_review_packets.py --ledger <账本.jsonl> --specs <规格.json> --evid <证据目录> --md <册.md> --out <输出目录> [--group tab|prefix|batch]
+python <skill>/scripts/gen_review_packets.py --ledger <账本.jsonl> --specs <规格.json> --evid <证据目录> --md <册.md> --out <输出目录> [--group tab|prefix|flat]
 ```
 每包 jsonl 一行一例：tc/title/pre/step/exp（册原文）+ spec（实际规格）+ verdict/摘要（末次判定）+ evid_exists。**同 TC 多轮判定必须取末次**（复测/复评覆盖语义）。
 

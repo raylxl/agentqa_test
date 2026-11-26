@@ -28,6 +28,9 @@
     "客户特定结算",
     "通用计费规则",
     "财务需求{年}",
+    "pw_layered",
+    "dk_ui",
+    "ZCodetest",
     "_assemble.py"
   ],
   "domain_patterns": [

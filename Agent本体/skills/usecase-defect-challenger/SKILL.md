@@ -7,7 +7,7 @@ description: 提单前独立质疑方——"建议提单/呈报缺陷"落单前�
 
 ## 0. 公司适配层（开工第 0 步）
 
-读 workspace `公司包/agent-company.json`（integrations.defect_platform=平台适配器）；坑库正本路径取 `{paths.执行坑库}`。无公司包→降级通用模式（坑库位置由调用方给，缺则 D1 降为通用自问清单）。
+读 workspace `公司包/agent-company.json`（integrations.defect_platform=平台适配器）；坑库正本路径取 `{standards.执行坑库}`。无公司包→降级通用模式（坑库位置由调用方给，缺则 D1 降为通用自问清单）。
 
 ## ⏱ 计时打点（《计时与时间线规范》·2026-11-25 接入）
 
