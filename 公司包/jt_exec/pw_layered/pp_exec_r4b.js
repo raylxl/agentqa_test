@@ -149,17 +149,17 @@ async function uploadImport(filePath) {
 
     /* IMP-01 多行合法导入 */
     const before1 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP01' }));
-    const imp1 = await uploadImport('/tmp/pp_r4b_ok.xlsx');
+    const imp1 = await uploadImport('/tmp/pp_tpl_ok.xlsx');
     await sleep(12000);
     const after1 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 20, quoteName: 'PT09-IMP01' }));
     log('[IMP-01] 落库', after1, '上传', JSON.stringify(imp1.upResp), '提示', JSON.stringify(imp1.msgs));
-    if (after1 === 2) { record('TC-IMP-01', 'PASS', '导出文件改造导入成功：2 行新增（基于真实导出文件 542 条+2 测试行——用户拍板方案）上传后按前缀查恰 2 条（auditStatus 断言在 items 里）'); stats.PASS++; }
+    if (after1 === 2) { record('TC-IMP-01', 'PASS', '官方模板改造导入成功：2 行新增（用户拍板方案——导出链探明格式后改用官方 29 列模板）上传后按前缀查恰 2 条'); stats.PASS++; }
     else { record('TC-IMP-01', 'BLOCKED', '落库=' + after1 + '（上传=' + JSON.stringify(imp1.upResp).slice(0, 100) + '，提示=' + JSON.stringify(imp1.msgs).slice(0, 100) + '）——须核后端导入链'); stats.BLOCKED++; }
 
     /* IMP-03 文件内两行同键互撞 */
     if (after1 === 2) {
       const b3 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP03' }));
-      const imp3 = await uploadImport('/tmp/pp_r4b_imp03.xlsx');
+      const imp3 = await uploadImport('/tmp/pp_tpl_imp03.xlsx');
       await sleep(12000);
       const a3 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP03' }));
       log('[IMP-03] before', b3, 'after', a3);
@@ -169,7 +169,7 @@ async function uploadImport(filePath) {
 
     /* IMP-04 导入行与库内同键（真实导出第一条键） */
     if (after1 === 2) {
-      const imp4 = await uploadImport('/tmp/pp_r4b_imp04.xlsx');
+      const imp4 = await uploadImport('/tmp/pp_tpl_imp04.xlsx');
       await sleep(12000);
       const a4 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP04' }));
       log('[IMP-04] after', a4);
@@ -179,7 +179,7 @@ async function uploadImport(filePath) {
 
     /* IMP-08 单价超上界原子性 */
     if (after1 === 2) {
-      const imp8 = await uploadImport('/tmp/pp_r4b_imp08.xlsx');
+      const imp8 = await uploadImport('/tmp/pp_tpl_imp08.xlsx');
       await sleep(12000);
       const a8 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP08' }));
       log('[IMP-08] after', a8, '提示', JSON.stringify(imp8.msgs));
@@ -190,7 +190,7 @@ async function uploadImport(filePath) {
 
     /* IMP-09 负数最低收费原子性 */
     if (after1 === 2) {
-      const imp9 = await uploadImport('/tmp/pp_r4b_imp09.xlsx');
+      const imp9 = await uploadImport('/tmp/pp_tpl_imp09.xlsx');
       await sleep(12000);
       const a9 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP09' }));
       log('[IMP-09] after', a9, '提示', JSON.stringify(imp9.msgs));
@@ -201,7 +201,7 @@ async function uploadImport(filePath) {
 
     /* IMP-10 单价非数字原子性 */
     if (after1 === 2) {
-      const imp10 = await uploadImport('/tmp/pp_r4b_imp10.xlsx');
+      const imp10 = await uploadImport('/tmp/pp_tpl_imp10.xlsx');
       await sleep(12000);
       const a10 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP10' }));
       log('[IMP-10] after', a10, '提示', JSON.stringify(imp10.msgs));
@@ -211,7 +211,7 @@ async function uploadImport(filePath) {
 
     /* IMP-06 必填五项逐空 */
     if (after1 === 2) {
-      const imp6 = await uploadImport('/tmp/pp_r4b_imp06.xlsx');
+      const imp6 = await uploadImport('/tmp/pp_tpl_imp06.xlsx');
       await sleep(12000);
       const a6 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP06' }));
       log('[IMP-06] after', a6, '提示', JSON.stringify(imp6.msgs));
@@ -221,7 +221,7 @@ async function uploadImport(filePath) {
 
     /* IMP-11 业务仓编码不存在 */
     if (after1 === 2) {
-      const imp11 = await uploadImport('/tmp/pp_r4b_imp11.xlsx');
+      const imp11 = await uploadImport('/tmp/pp_tpl_imp11.xlsx');
       await sleep(12000);
       const a11 = totalOf(await apiPost('/phecda/api/cwbms/quotePlatformFee/getPageList', { page: 1, pageSize: 10, quoteName: 'PT09-IMP11' }));
       log('[IMP-11] after', a11, '提示', JSON.stringify(imp11.msgs));
