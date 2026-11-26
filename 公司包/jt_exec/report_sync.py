@@ -3,6 +3,7 @@
 用法: python report_sync.py <账本.json> <报告.md> [轮次名]
 自动生成/校验：1.2 四态数字、模块表、环比辅助（按账本 ts 日期分桶）；结构校验（三段式四关键节+轮次块12字段）。
 硬校验：①文件时间戳 ②收尾声明行 ④回写台账 ⑤批次行配对（细则§十五） ⑥失败用例专项报告存在性+逐条对账（交付物§20.10，2026-11-17 立）⑦质疑门节存在性（执行质疑标准 v1.3，2026-11-18 立：双账本节或降级声明，生效后新轮适用）。
+⑧PASS 即沉淀（分层执行模式·细则§十四，2026-11-09 拍板；2026-11-26 第三次违反后立机检）：账本每个终态 PASS 的 TC 须有 spec，或在报告「沉淀清单」的不沉淀表里逐条写明原因；生效后新轮适用。
 复测行（细则§十七）：同 TC id 末次覆盖=终态对账不双计；retest 标记条目额外披露 PASS(复测)/挂起待复验数。
 每轮测试收尾必跑本脚本（usecase-executor §6.9 收尾工序）；数字不一致或结构缺节均禁止收尾。
 """
@@ -19,7 +20,43 @@ ledger = sys.argv[1]
 report = sys.argv[2]
 round_name = sys.argv[3] if len(sys.argv) > 3 else '本轮'
 
-r = json.load(io.open(ledger, encoding='utf-8'))
+
+def _load_ledger(p):
+    """账本两种格式都认：JSON 数组（pw_runner/回归器产出）与 JSONL（一行一条；手写轮、AI 首跑轮常见）。
+    2026-11-26 实证：快运税务信息维护的账本是 JSONL，此前本脚本一跑即崩（Extra data），等于该需求收尾校验从未真正运行——
+    账本格式不应成为绕过收尾校验的理由。字段名也做归一：id/tc、status/verdict。"""
+    txt = io.open(p, encoding='utf-8-sig').read()
+    try:
+        r0 = json.loads(txt)
+        return r0 if isinstance(r0, list) else [r0]
+    except ValueError:
+        rows = []
+        for ln in txt.split('\n'):
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                o = json.loads(ln)
+            except ValueError:
+                continue   # 批次行（run_start/run_end）或坏行：不是用例行
+            if isinstance(o, dict):
+                rows.append(o)
+        if not rows:
+            raise ValueError('账本既不是 JSON 数组也解析不出 JSONL 用例行：' + os.path.basename(p))
+        return rows
+
+
+def _norm_row(x):
+    """字段名归一（不改原值）：tc→id、verdict→status（"PASS（放行）"这类带括注的取首词）"""
+    if 'id' not in x and 'tc' in x:
+        x['id'] = str(x['tc'])
+    if 'status' not in x and 'verdict' in x:
+        v = str(x['verdict'])
+        x['status'] = v.split('（')[0].split('(')[0].strip()
+    return x
+
+
+r = [_norm_row(x) for x in _load_ledger(ledger)]
 seen = {}
 for x in r: seen[x['id']] = x
 # R 后缀复验证据条归并：仅当 R 条与基条**双 PASS**（纯复验确认，无四态信息损失）才不计数
@@ -42,6 +79,12 @@ if _rt_pass or _rt_pend:
 
 # 账本最新落账日期（用于收尾声明校验）
 max_ts = max((x.get('ts') or '') for x in seen.values()) if seen else ''
+# 账本行不带时间戳时不能默认“生效前”（空串比任何生效时刻都小＝⑥⑦⑧全部被豁免，静默放行）——
+# 2026-11-26 实证：快运税务信息维护账本行无 ts 字段。改用账本文件修改时间兜底（北京时间），并如实标明依据。
+_TS_SRC = '账本行 ts'
+if not max_ts:
+    max_ts = datetime.datetime.fromtimestamp(os.path.getmtime(ledger)).strftime('%Y-%m-%dT%H:%M:%S')
+    _TS_SRC = '账本文件修改时间（账本行无 ts 字段）'
 max_day = max_ts[:10]
 
 print(f'=== 账本汇总（{ledger} · {round_name}）===')
@@ -201,7 +244,42 @@ else:
 # 生效时刻之后的历史轮豁免（此前无批次行=合规，报告标"未计时"即可，禁编造）。
 print('\n=== 批次行配对校验（硬⑤ · 细则§十五 v1.11）===')
 batch_ok = True
-_runner_ledger = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pw_layered', 'ledger.jsonl')
+
+
+def _runner_root():
+    """回归器（pw_layered）运行位：优先公司配置 paths.接口执行根，其次 paths.执行工具 下的 pw_layered，
+    最后才退回「本脚本旁边的 pw_layered」。2026-11-26 实证：公司包/jt_exec/pw_layered 是 11-16 搬迁留下的旧副本
+    （无 ledger、无 specs），按「旁边」找会让硬⑤在本机永远走「未找到，软跳过」——检查形同虚设。"""
+    cands = []
+    try:
+        cfg = None
+        env = os.environ.get('AGENT_COMPANY_JSON')
+        if env and os.path.isfile(env):
+            cfg = io.open(env, encoding='utf-8').read()
+        if cfg is None:
+            here = os.path.dirname(os.path.abspath(__file__))            # …/公司包/jt_exec
+            for p in (os.path.join(here, 'agent-company.json'),           # …/公司包/jt_exec/
+                      os.path.join(os.path.dirname(here), 'agent-company.json')):   # …/公司包/
+                if os.path.isfile(p):
+                    cfg = io.open(p, encoding='utf-8').read()
+                    break
+        if cfg:
+            paths = (json.loads(cfg).get('paths') or {})
+            if paths.get('接口执行根'):
+                cands.append(paths['接口执行根'])
+            if paths.get('执行工具'):
+                cands.append(os.path.join(paths['执行工具'], 'pw_layered'))
+    except Exception:
+        pass
+    cands.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pw_layered'))
+    for c in cands:
+        if c and os.path.isfile(os.path.join(c, 'ledger.jsonl')):
+            return c
+    return cands[-1]
+
+
+_RUNNER_ROOT = _runner_root()
+_runner_ledger = os.path.join(_RUNNER_ROOT, 'ledger.jsonl')
 RULE_TS = '2026-11-16 12:00'   # 批次行纪律生效时刻（本节落地时点，北京时间）
 if not os.path.exists(_runner_ledger):
     print(f'  ⚠ 未找到 {_runner_ledger}（非正本运行位？软跳过）')
@@ -255,7 +333,7 @@ _norm_max = (max_ts or '')[:16].replace('T', ' ')
 if not tot['FAIL']:
     print('  ✓ 本轮无终态 FAIL——失败用例报告不适用（无失败条不出，§20.10 第2条）')
 elif _norm_max < RULE6_TS:
-    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE6_TS}）→ 豁免不追溯（历史不补录）')
+    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE6_TS}；依据＝{_TS_SRC}）→ 豁免不追溯（历史不补录）')
 elif '_测试报告_' not in os.path.basename(report):
     print('  ⚠ 报告命名不含「_测试报告_」中缀，失败报告路径不可派生 → 软跳过（人工核对§20.10）')
     fr_ok = True
@@ -287,7 +365,7 @@ print('\n=== 质疑门节校验（硬⑦ · 执行质疑标准 v1.3）===')
 gate_ok = True
 RULE7_TS = '2026-11-18 02:00'   # 硬⑦生效时刻（本节落码时点，北京时间）
 if _norm_max < RULE7_TS:
-    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE7_TS}）→ 豁免不追溯（历史不补录）')
+    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE7_TS}；依据＝{_TS_SRC}）→ 豁免不追溯（历史不补录）')
 elif re.search(r'双账本|质疑门', md):
     _ptr = '质疑门' in (m3.group(0) if m3 else '') or '双账本' in (m3.group(0) if m3 else '')
     print(f'  ✓ 报告含质疑门/双账本结论节（判定口径以双账本为准，禁只报执行面原始过/败数）' + ('' if _ptr else '；建议「最后收尾」声明行附节指针'))
@@ -341,14 +419,79 @@ if _norm_max >= RULE7_TS and re.search(r'双账本|质疑门', md):
             gate_ok = False
             print('  ✗ ⑦v3 gate_quality 红——质疑门内容质量不达下限（详见上方 gate_quality 输出）')
 
+# ===== 硬⑧：PASS 即沉淀（分层执行模式 · 执行操作细则§十四，2026-11-09 用户拍板；2026-11-26 第三次违反后立机检）=====
+# 规则原文：「PASS 即沉淀……AI 跑通的新条目收尾时同步沉淀 spec」。此前只有技能文案、无机器检查——
+# 2026-11-11（仓内 B/C/D 轮）、2026-11-26（快运税务信息维护 45 条）均靠用户发现。本查：账本每个终态 PASS 的 TC，
+# 须满足其一：a) 脚本池有以它为 id 的 spec；b) 报告「沉淀清单」的不沉淀表里列了它并写了原因（禁入清单/人工步骤/不可稳定复现等）。
+# 生效时刻后收尾的轮次适用；生效前历史轮不追溯。找不到脚本池（非本机运行位）＝黄提示不拦。
+print('\n=== 沉淀校验（硬⑧ · 分层执行模式 PASS 即沉淀）===')
+dep_ok = True
+RULE8_TS = '2026-11-27 00:00'   # 硬⑧生效时刻（本节落码时点，北京时间）
+if _norm_max < RULE8_TS:
+    print(f'  ⚠ 生效前历史轮（账本最新落账 {_norm_max} < {RULE8_TS}；依据＝{_TS_SRC}）→ 豁免不追溯')
+else:
+    _spec_dir = os.path.join(_RUNNER_ROOT, 'specs')
+    _api_dir = os.path.join(_RUNNER_ROOT, 'api_specs')
+    _have = set()
+    _scanned = False
+    if os.path.isdir(_spec_dir):
+        _scanned = True
+        _probe = "const fs=require('fs');const d=process.argv[1];const out=[];for(const f of fs.readdirSync(d)){if(!/^spec_.*\\.js$/.test(f))continue;try{const s=require(require('path').join(d,f));if(s&&s.id)out.push(String(s.id))}catch(_){}}console.log(JSON.stringify(out))"
+        try:
+            import subprocess as _sp2
+            _ro = _sp2.run(['node', '-e', _probe, _spec_dir], capture_output=True, timeout=120)
+            _have.update(json.loads(_ro.stdout.decode('utf-8', 'replace').strip() or '[]'))
+        except Exception as _e:
+            print(f'  ⚠ 脚本池扫描失败（{_e.__class__.__name__}）→ 按未沉淀处理')
+    if os.path.isdir(_api_dir):
+        _scanned = True
+        for _root, _dirs, _files in os.walk(_api_dir):
+            for _f in _files:
+                if _f.endswith('.api.spec.js'):
+                    _m = re.match(r'^(TC-[A-Za-z0-9\-_]+?)(?:\.api\.spec)?\.api\.spec\.js$', _f)
+                    if _m:
+                        _have.add(_m.group(1))
+                    else:
+                        try:
+                            _txt = io.open(os.path.join(_root, _f), encoding='utf-8').read()
+                            _m2 = re.search(r"id\s*:\s*['\"](TC-[A-Za-z0-9\-_]+)['\"]", _txt)
+                            if _m2:
+                                _have.add(_m2.group(1))
+                        except Exception:
+                            pass
+    if not _scanned:
+        print('  ⚠ 未找到脚本池（pw_layered/specs、api_specs）——非本机运行位，软跳过（人工核对沉淀清单）')
+    else:
+        # 报告里的不沉淀表：交付物规范 A3 沉淀清单。行格式「| TC-X | 不沉淀 | 原因 |」，或含「不沉淀」的表格行里带 TC 编号
+        _nd_txt = '\n'.join(l for l in md.split('\n') if '不沉淀' in l and l.strip().startswith('|'))
+        _nd = {}
+        for _l in _nd_txt.split('\n'):
+            for _t in re.findall(r'TC-[A-Za-z0-9\-_]+', _l):
+                _cells = [c.strip() for c in _l.strip().strip('|').split('|')]
+                _why = next((c for c in _cells if c and not c.startswith('TC-') and c not in ('不沉淀', '---', ':---', '不沉淀（AI 通道）')), '')
+                _nd[_t] = _why
+        _passed = sorted(str(x['id']) for x in seen.values() if x['status'] == 'PASS')
+        _no_spec = [t for t in _passed if t not in _have]
+        _undoc = [t for t in _no_spec if not _nd.get(t)]
+        _doc_bad = [t for t in _no_spec if t in _nd and not _nd[t]]
+        if _doc_bad:
+            dep_ok = False
+            print(f'  ✗ {len(_doc_bad)} 条列入了不沉淀表但没写原因：{", ".join(_doc_bad[:8])}')
+        if _undoc:
+            dep_ok = False
+            shown = ', '.join(_undoc[:8]) + ('…' if len(_undoc) > 8 else '')
+            print(f'  ✗ {len(_undoc)}/{len(_passed)} 条 PASS 未沉淀、也不在不沉淀表：{shown}——禁收尾（细则§十四：PASS 即沉淀；不沉淀须在 A3 沉淀清单逐条写明原因）')
+        if dep_ok:
+            print(f'  ✓ PASS {len(_passed)} 条：已沉淀 {len(_passed) - len(_no_spec)} 条、不沉淀并写明原因 {len(_no_spec)} 条')
+
 print(f'''
 === 判定 ===
-数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"} ／ 失败报告 {"✓ 对上/不适用" if fr_ok else "✗ 缺失/缺卡片，禁收尾"} ／ 质疑门 {"✓ 在案/豁免" if gate_ok else "✗ 缺结论节，禁收尾"}
+数字 {"✓ 一致" if ok_all else "✗ 不一致，禁收尾"} ／ 结构 {"✓ 合规" if struct_ok else "✗ 缺节/缺字段，禁收尾"} ／ 收尾状态 {"✓ 已同步" if close_ok else "✗ 报告落后，禁开新轮"} ／ 回写台账 {"✓ 清零" if not wb_pending_n else "✗ 残留，禁收尾"} ／ 批次行 {"✓ 配对齐" if batch_ok else "✗ 漏配对/漏记，禁收尾"} ／ 失败报告 {"✓ 对上/不适用" if fr_ok else "✗ 缺失/缺卡片，禁收尾"} ／ 质疑门 {"✓ 在案/豁免" if gate_ok else "✗ 缺结论节，禁收尾"} ／ 沉淀 {"✓ 齐/豁免" if dep_ok else "✗ PASS 未沉淀，禁收尾"}
 
 === 收尾三件事检查（usecase-executor §6.9；开工第 0 步=先跑本脚本验上轮）===
 1. 账本落定 ✓（{N} 条）
-2. 报告三段式更新 → 1.1~1.4 总进度（每轮必更）＋新增轮次块 12 字段（只增）＋头部「最后收尾」声明行＋附A 余项清单（每轮必更）＋失败用例专项报告（有 FAIL 时，§20.10）＋质疑门/双账本结论节（生效后新轮，硬⑦）→ 更新后重跑本脚本须全绿
+2. 报告三段式更新 → 1.1~1.4 总进度（每轮必更）＋新增轮次块 12 字段（只增）＋头部「最后收尾」声明行＋附A 余项清单（每轮必更）＋失败用例专项报告（有 FAIL 时，§20.10）＋质疑门/双账本结论节（生效后新轮，硬⑦）＋A3 沉淀清单（不沉淀的逐条写原因，硬⑧）→ 更新后重跑本脚本须全绿
 3. memory 更新（关键拍板/新教训）
 ''')
-if not (ok_all and struct_ok and close_ok and batch_ok and fr_ok and gate_ok): sys.exit(1)
+if not (ok_all and struct_ok and close_ok and batch_ok and fr_ok and gate_ok and dep_ok): sys.exit(1)
 if wb_pending_n: sys.exit(1)
