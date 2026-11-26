@@ -514,7 +514,7 @@ def build_md(rid, data, now):
     per = summarize(data)
     sh = lambda ts: ts[:19]                                   # 表内只列到秒；时区恒为北京时间
     L = [f"# {rid} 时间线（各步骤耗时）", "",
-         f"> 数据源：{rid}{SUF}.jsonl（只追加；本文件由 timeline_mark.py 派生，勿手改）· 口径正本：《计时与时间线规范》v1.2 · 生成 {fmt_dt(now)}",
+         f"> 数据源：{rid}{SUF}.jsonl（只追加；本文件由 timeline_mark.py 派生，勿手改）· 口径正本：《计时与时间线规范》现行版（公司包\标准体系） · 生成 {fmt_dt(now)}",
          "> 净耗时（net）＝只计 agent 操作时间（主会话回合＋子代理运行），不含您思考、答复、等待的时间；"
          "执行轮（wall）＝从开始测试到本轮收尾的起止时间。", "",
          "## 一、分阶段汇总", "",
