@@ -1,0 +1,1 @@
+{"timeline_id": "财务需求2026_云仓_平台价格 11.30 Agent重建", "phase": "prep", "label": "执行准备", "ts": "2026-11-26 13:58:12+08:00", "actor": "usecase-executor", "sid": "8304e2f8-3f3d-41", "session": "8304e2f8-3f3d-412c-8461-20e23a0886ad", "event": "prep_start", "duration_kind": "net", "round": "全量-R1", "run_id": "", "artifact": "", "note": ""}
