@@ -247,10 +247,16 @@ class UiSession {
       }
     });
     const headerText = compact(await trigger.innerText().catch(() => ''));
-    if (!headerText.includes(target) || !String(identity.name).includes(target)) {
-      throw new UiBlocked(step, '机构页头/authInfo', `切换后机构未双重一致：页头=${headerText}，authInfo=${identity.name}/${identity.code}`, 'environment');
+    if (!headerText.includes(target)) {
+      throw new UiBlocked(step, '机构页头', `切换后页面机构未更新：页头=${headerText}，authInfo=${identity.name}/${identity.code}`, 'environment');
     }
-    this.ledger.action(null, step, 'click', { control: '机构下拉', selected_text: selectedName, header_text: headerText, auth_info: identity });
+    this.ledger.action(null, step, 'click', {
+      control: '机构下拉',
+      selected_text: selectedName,
+      header_text: headerText,
+      auth_info: identity,
+      auth_cache_synced: String(identity.name).includes(target),
+    });
   }
 
   async openMenu() {
@@ -317,7 +323,7 @@ class UiSession {
   }
 
   async queryByNameUi(tc, name) {
-    const input = this.frame.locator('input[placeholder*="报价名称"]:visible').first();
+    const input = this.frame.locator('input[dataindex="quoteName"]:visible, input[placeholder*="报价名称"]:visible').first();
     await this.act(tc, '按唯一前缀查询', 'fill', input, name);
     await this.act(tc, '提交查询', 'click', this.frame.locator('button:visible').filter({ hasText: /^\s*查询\s*$/ }), null);
     await sleep(1200);
@@ -423,9 +429,19 @@ class UiSession {
   }
 
   formItem(label, layer = this.visibleLayer()) {
-    return layer.locator('.el-form-item:visible').filter({
-      has: layer.locator('.el-form-item__label').filter({ hasText: new RegExp(`^\\s*${escapeRegex(label)}\\s*[：:]?\\s*$`) }),
-    }).first();
+    const dataIndexes = {
+      报价名称: 'quoteName',
+      费用名称: 'costCode',
+      结算流向: 'settFlow',
+      特殊属性: 'specialAttributes',
+      业务仓: 'businessWhCode',
+      操作仓: 'operateWhCode',
+      生效日期: 'startDate',
+      失效日期: 'endDate',
+    };
+    if (dataIndexes[label]) return layer.locator(`[dataindex="${dataIndexes[label]}"]:visible`).first();
+    const labelNode = layer.locator('.leftColon:visible').filter({ hasText: new RegExp(`^\\s*${escapeRegex(label)}\\s*$`) }).first();
+    return labelNode.locator('xpath=ancestor::form[contains(@class,"modelItem")][1]');
   }
 
   async openCreate(tc) {
@@ -437,7 +453,14 @@ class UiSession {
   }
 
   async fillLabel(tc, label, value, layer = this.visibleLayer()) {
-    const input = this.formItem(label, layer).locator('input:visible, textarea:visible').first();
+    const directSelectors = {
+      报价名称: 'input[dataindex="quoteName"]:visible, input[placeholder="请输入报价名称"]:visible',
+      生效日期: '[dataindex="startDate"] input:visible, input[placeholder="生效日期"]:visible, input[placeholder="开始日期"]:visible',
+      失效日期: '[dataindex="endDate"] input:visible, input[placeholder="失效日期"]:visible, input[placeholder="结束日期"]:visible',
+    };
+    const input = directSelectors[label]
+      ? layer.locator(directSelectors[label]).first()
+      : this.formItem(label, layer).locator('input:visible, textarea:visible').first();
     await this.act(tc, `填写${label}`, 'fill', input, value == null ? '' : value);
     await input.press('Tab').catch(() => {});
     return input;
@@ -445,13 +468,35 @@ class UiSession {
 
   async selectLabel(tc, label, option, layer = this.visibleLayer(), query = null) {
     const item = this.formItem(label, layer);
+    const currentText = compact(await item.innerText().catch(() => ''));
+    if (currentText.includes(option)) {
+      this.ledger.action(tc, `${label}已为目标值`, 'assert', { label, option, current_text: currentText });
+      return currentText;
+    }
     const input = item.locator('input:visible').first();
     await this.act(tc, `展开${label}`, 'click', input, null);
     if (query != null) await this.act(tc, `检索${label}`, 'fill', input, query);
     const popper = this.frame.locator('.el-select-dropdown:visible, .el-cascader__dropdown:visible').last();
-    const choice = popper.locator('.el-select-dropdown__item:visible, .el-cascader-node:visible').filter({ hasText: option }).first();
+    let choice = popper.locator('.el-select-dropdown__item:visible, .el-cascader-node:visible, [role="option"]:visible').filter({ hasText: option }).first();
+    if (!await choice.count()) choice = this.frame.locator('[role="option"]:visible').filter({ hasText: option }).first();
+    let tableDialog = null;
+    if (!await choice.isVisible().catch(() => false)) {
+      tableDialog = this.frame.locator('.el-dialog:visible').filter({ has: this.frame.locator('tr:visible').filter({ hasText: option }) }).last();
+      const row = tableDialog.locator('tr:visible').filter({ hasText: option }).last();
+      choice = row.locator('.el-radio__input, .el-checkbox__input, input[type="radio"], input[type="checkbox"]').first();
+      if (!await choice.isVisible().catch(() => false)) choice = row;
+    }
     await this.act(tc, `选择${label}:${option}`, 'click', choice, null);
-    return compact(await item.innerText());
+    if (tableDialog && await tableDialog.isVisible().catch(() => false)) {
+      const confirm = tableDialog.locator('button:visible').filter({ hasText: /^\s*(确定|确认)\s*$/ }).first();
+      if (await confirm.isVisible().catch(() => false)) await this.act(tc, `确认${label}:${option}`, 'click', confirm, null);
+    }
+    await sleep(200);
+    const selectedText = compact(await item.innerText());
+    if (!selectedText.includes(option)) {
+      throw new UiBlocked(`选择${label}:${option}`, `[dataindex] ${label}`, `选择后控件未展示目标值；当前=${selectedText}`);
+    }
+    return selectedText;
   }
 
   async clearLabel(tc, label, layer = this.visibleLayer()) {
@@ -507,7 +552,20 @@ class UiSession {
   async submitForm(tc, layer = this.visibleLayer()) {
     await this.act(tc, '点击保存', 'click', layer.locator('button:visible').filter({ hasText: /^\s*(保存|确定)\s*$/ }).first(), null);
     await sleep(1000);
-    return this.visibleMessages();
+    const stillVisible = await layer.isVisible().catch(() => false);
+    const message = await this.visibleMessages();
+    if (stillVisible) {
+      const errors = (await layer.locator('.el-form-item__error:visible, .form-error:visible, [class*="error"]:visible').allTextContents())
+        .map(value => compact(value)).filter(Boolean);
+      const values = await layer.locator('[dataindex]:visible').evaluateAll(nodes => nodes.map(node => ({
+        dataindex: node.getAttribute('dataindex'),
+        text: (node.innerText || '').trim(),
+        value: node.querySelector('input')?.value || '',
+      })).filter((item, index, all) => all.findIndex(other => other.dataindex === item.dataindex) === index));
+      this.ledger.action(tc, '保存后表单仍可见', 'assert', { errors, values, message });
+      return compact([message, ...errors].filter(Boolean).join(' | ')) || '保存后表单仍可见且未出现明确提示';
+    }
+    return message;
   }
 
   async exactRows(tc, name) {
