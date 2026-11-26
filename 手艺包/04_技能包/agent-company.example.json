@@ -41,6 +41,16 @@
     "租户体系": "单租户或多租户说明+切换方式",
     "登录技能": "你的登录技能名（若有）"
   },
+  "integrations": {
+    "_说明": "（选填）公司层适配器声明：接哪个平台写哪个、随时可换；enabled=false 即未接入——缺陷平台未接入时落单走降级路径（呈报附完整模板内容、人工落单后回填单号）",
+    "defect_platform": {
+      "enabled": false,
+      "provider": "你的缺陷平台适配器名（未接入可留空）",
+      "adapter_dir": "你的workspace/.zcode/adapters",
+      "contract": "缺陷单模板与提单接入 §二（create/update/query/字段映射表四能力，装不下的字段拼描述区禁丢弃）",
+      "required": false
+    }
+  },
   "域词": {
     "业务域": "你的行业与业务域一句话",
     "造数前缀": { "业务对象A": "OBJA{章码}", "业务对象B": "OBJB{章码}" },
