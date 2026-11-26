@@ -20,11 +20,25 @@ const log = (...a) => console.log(...a);
 fs.mkdirSync(path.dirname(LEDGER), { recursive: true });
 const day = '20261126';
 let EXEC_NO = 100; // UI 批从 PP-*-100 起（与 api 批 001~050 区分）
-function append(rec) { if (!NO_LEDGER) fs.appendFileSync(LEDGER, JSON.stringify(rec) + '\n'); else log('（dry）', rec.event || rec.tc, (rec.reason||'').slice(0,60)); }
+function append(rec) { if (!NO_LEDGER) fs.appendFileSync(LEDGER, JSON.stringify(rec) + '\n'); else log('（dry）', rec.event || rec.tc, String(rec.reason||'').slice(0,300).replace(/\n/g, ' ⏎ ')); }
 function record(tc, status, reason, extra = {}) { append({ ts: bjTs(), event: 'case', tc, status, reason: (reason||'').slice(0,500), exec_id: 'PP-' + day + '-' + String(EXEC_NO++).padStart(3, '0'), run_id: RUN_ID, round: ROUND, channel: 'ui', ...extra }); }
 function batch(kind, extra = {}) { append({ ts: bjTs(), event: kind, run_id: RUN_ID, round: ROUND, channel: 'ui', book: '财务需求2026_云仓_平台价格_11.30', operator: 'AI(无头+iframe)', ...extra }); }
 
 let page, frame;
+const SESSION_API = {
+  async queryByName(name) {
+    const r = await page.evaluate(async (n) => {
+      const token = localStorage.getItem('MICRO_APP_MAIN_TOKEN_KEY');
+      const resp = await fetch('http://gateway-ll.test.ztoeco.com/phecda/api/cwbms/quotePlatformFee/getPageList', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: token, authtoken: token, PlatformCode: 'ZTOCC_PLATFORM_001', 'client-Type': 'pc' },
+        body: JSON.stringify({ page: 1, pageSize: 10, quoteName: n }),
+      });
+      const j = await resp.json().catch(() => null);
+      return { total: j && j.data ? j.data.total : -1, items: (j && j.data && j.data.items) || [] };
+    }, name);
+    return r;
+  },
+};
 async function setup() {
   // luxiaolei99 全新会话（2026-11-26 11:34 用户提供总部账户；房耀华旧会话有弹窗态残留——新实例新会话已验证新增弹窗可开）
   process.env.JT_ACCOUNT = 'luxiaolei99';
@@ -80,6 +94,91 @@ async function setup() {
   return browser;
 }
 
+
+/* ── 网络监听（addOrUpdate 请求/响应——判重证据与落库判定） ── */
+let __saveNet = { req: null, resp: null };
+function watchSave(page) {
+  page.on('request', (req) => { if (/quotePlatformFee\/addOrUpdate/.test(req.url())) __saveNet.req = (req.postData() || '').slice(0, 800); });
+  page.on('response', async (res) => { if (/quotePlatformFee\/addOrUpdate/.test(res.url())) __saveNet.resp = { s: res.status(), b: (await res.text().catch(() => '')).slice(0, 300) }; });
+}
+/* ── 弹窗填表 helper（结构实测：placeholder 定位+独立日期框+明细表格） ── */
+async function fillAddDialog(dlg, { name, cost, flow, effStart, effEnd, price, specialAttr, customer }) {
+  const nameIn = dlg.locator('input[placeholder*="报价名称"]');
+  await nameIn.click({ timeout: 8000 });
+  await nameIn.type(name, { delay: 20 });
+  await sleep(500);
+  // 费用名称：先看已显示值——已是目标值（Vue 缓存直用）则跳过；否则点开（当前值 wrapper 或 兜底）选目标
+  const costAlready = await dlg.locator('.el-select__wrapper').filter({ hasText: cost.pick }).first().count().catch(() => 0);
+  if (!costAlready) {
+    let costWrap = dlg.locator('.el-select__wrapper').filter({ hasText: cost.current || '流量管理费' }).first();
+    if (!(await costWrap.count())) costWrap = dlg.locator('.el-select__wrapper').filter({ hasText: /费用名称|请选择/ }).first();
+    if (await costWrap.count()) {
+      await costWrap.click({ timeout: 8000 });
+      await sleep(900);
+      const costOpt = frame.locator('.el-select-dropdown__item:visible').filter({ hasText: cost.pick }).first();
+      for (let w = 0; w < 10; w++) { if (await costOpt.count()) break; await sleep(800); }
+      if (await costOpt.count()) await costOpt.click({ timeout: 8000 });
+      await sleep(700);
+    }
+  }
+  // 结算流向：已显示目标值（Vue 缓存直用）则跳过
+  const flowAlready = await dlg.locator('.el-select__wrapper').filter({ hasText: flow }).first().count().catch(() => 0);
+  if (!flowAlready) {
+    const flowWrap = dlg.locator('.el-select__wrapper').filter({ hasText: /结算流向|请选择/ }).first();
+    if (await flowWrap.count()) {
+      await flowWrap.click({ timeout: 8000 });
+      await sleep(900);
+      const flowOpt = frame.locator('.el-select-dropdown__item:visible').filter({ hasText: flow }).first();
+      for (let w = 0; w < 10; w++) { if (await flowOpt.count()) break; await sleep(800); }
+      if (await flowOpt.count()) await flowOpt.click({ timeout: 8000 });
+      await sleep(700);
+    }
+  }
+  // 特殊属性（可选：填贴单即发错开库内全空维占位条 PTF091050）
+  if (specialAttr) {
+    const saAlready = await dlg.locator('.el-select__wrapper').filter({ hasText: specialAttr }).first().count().catch(() => 0);
+    if (!saAlready) {
+      const saWrap = dlg.locator('.el-select__wrapper').filter({ hasText: /特殊属性/ }).first();
+      if (await saWrap.count()) {
+        await saWrap.click({ timeout: 8000 });
+        await sleep(900);
+        const saOpt = frame.locator('.el-select-dropdown__item:visible').filter({ hasText: specialAttr }).first();
+        for (let w = 0; w < 10; w++) { if (await saOpt.count()) break; await sleep(800); }
+        if (await saOpt.count()) await saOpt.click({ timeout: 8000 });
+        await sleep(700);
+      }
+    }
+  }
+  // 客户（可选：填客户维错开库内全空维占位条）
+  if (customer) {
+    await dlg.locator('.el-select__wrapper').filter({ hasText: /^请选择$/ }).first().click({ timeout: 8000 });
+    await sleep(1200);
+    const cOpt = frame.locator('.el-select-dropdown__item:visible').first();
+    if (await cOpt.count()) { await cOpt.click({ timeout: 8000 }); await sleep(800); }
+  }
+  // 日期 fill 后必须 blur（点标题）触发 Vue change——纯 fill/Enter 不触发 v-model（diag41 实证：不 blur 则不发请求）
+  const effIn = dlg.locator('input[placeholder*="生效日期"]');
+  await effIn.click({ timeout: 5000 }).catch(() => {});
+  await effIn.fill(effStart, { timeout: 8000 }).catch(() => {});
+  await dlg.locator('.el-dialog__title').click().catch(() => {});
+  await sleep(800);
+  const expIn = dlg.locator('input[placeholder*="失效日期"]');
+  await expIn.fill(effEnd, { timeout: 8000 }).catch(() => {});
+  await dlg.locator('.el-dialog__title').click().catch(() => {});
+  await sleep(800);
+  // 明细（diag15/41 实证）：重量结束值=.el-input-number input（click+fill）；单价=普通 input nth(1)
+  const numInput = dlg.locator('.el-table .el-input-number input').first();
+  await numInput.click({ timeout: 5000 }).catch(() => {});
+  await numInput.fill('999999.99', { timeout: 8000 }).catch(() => {});
+  await sleep(400);
+  const detailInputs = dlg.locator('.el-table input');
+  if (await detailInputs.count() >= 2) {
+    await detailInputs.nth(1).click({ timeout: 5000 }).catch(() => {});
+    await detailInputs.nth(1).fill(price, { timeout: 8000 }).catch(() => {});
+  }
+  await sleep(400);
+}
+
 /* helpers（探针已验的控件结构） */
 const findCol = async (label) => frame.locator('.el-col.modelFormClass').filter({ hasText: new RegExp('^\\s*' + label) }).first();
 async function pickSelect(colLabel, optText) {
@@ -103,131 +202,115 @@ async function tcAdd11() {
   await sleep(2500);
   const dlg = frame.locator('.el-dialog:visible').first();
   if (!(await dlg.count())) return { status: 'NOT_EXECUTED', reason: '新增弹窗未打开' };
-  // 报价名称
-  await dlg.locator('.el-col, .el-form-item').filter({ hasText: /报价名称/ }).first().locator('input').first().fill(NAME, { timeout: 8000 });
-  await sleep(300);
-  // 费用名称（弹窗内 select）
-  const costCol = dlg.locator('.el-col, .el-form-item').filter({ hasText: /费用名称/ }).first();
-  await costCol.click({ timeout: 8000 }); await sleep(900);
-  await frame.locator('.el-select-dropdown__item:visible').filter({ hasText: '业务管理费' }).first().click({ timeout: 8000 });
-  await sleep(700);
-  // 结算流向（费用选业务管理费后流向选项=总部收业务仓）
-  const flowCol = dlg.locator('.el-col, .el-form-item').filter({ hasText: /结算流向/ }).first();
-  await flowCol.click({ timeout: 8000 }); await sleep(900);
-  await frame.locator('.el-select-dropdown__item:visible').filter({ hasText: '总部收业务仓' }).first().click({ timeout: 8000 });
-  await sleep(700);
-  // 生效日期/失效日期（日期控件分格）
-  const effCol = dlg.locator('.el-col, .el-form-item').filter({ hasText: /生效日期/ }).first();
-  const effInputs = effCol.locator('input');
-  await effInputs.first().fill('2027-01-01', { timeout: 8000 }).catch(() => {});
-  await effInputs.nth(1).fill('2027-02-28', { timeout: 8000 }).catch(() => {});
-  await page.keyboard.press('Enter'); await sleep(800);
-  // 价格明细第 1 段（0 起始默认带入；单价）
-  const detailTable = dlg.locator('.el-table').first();
-  const firstRow = detailTable.locator('.el-table__body-wrapper tr').first();
-  // 单价列（第 3 输入格——适用重量开始/结束默认带入 0/999999.99）
-  const inputs = firstRow.locator('input');
-  const n = await inputs.count();
-  // 找单价输入格（placeholder 或位置——明细行 5 输入：开始/结束/单价/最低/最高）
-  if (n >= 5) {
-    await inputs.nth(2).fill('1.5000', { timeout: 8000 }).catch(() => {});
-  }
-  await sleep(500);
-  // 确定
+  await fillAddDialog(dlg, { name: NAME, cost: { current: '流量管理费', pick: '流量管理费' }, flow: '总部收操作仓', effStart: '2027-04-01', effEnd: '2027-04-30', price: '1.5000', specialAttr: '贴单即发' });
   await dlg.locator('button:has-text("确定")').first().click({ timeout: 8000 });
-  await sleep(4000);
-  // 查询验证
-  await fillInput('报价名称', NAME);
-  await frame.locator('button:has-text("查询")').first().click({ timeout: 8000 });
-  await sleep(3000);
-  const rows = await frame.locator('.el-table__body-wrapper tr').count();
-  const totalText = await frame.locator('.el-pagination').innerText().catch(() => '');
-  const total = (totalText.match(/共\s*(\d+)\s*条/) || [])[1];
-  const pass = String(total) === '1' && rows >= 1;
-  return pass
-    ? { status: 'PASS', reason: '新增保存成功：名称=' + NAME + ' 查询恰 1 条（列表新增行+审核状态=未审核由行内容核——详见截图）', detail: 'name=' + NAME + ' total=' + total }
-    : { status: 'FAIL', reason: '新增后查询 total=' + total + ' rows=' + rows + '（预期恰 1）', detail: 'name=' + NAME };
+  await sleep(7000);
+  // 判据三链：①addOrUpdate 响应 ②弹窗关闭 ③接口直查落库
+  const resp = __saveNet.resp;
+  const dlgStill = await frame.locator('.el-dialog:visible').count().catch(() => 0);
+  const query = await SESSION_API.queryByName(NAME);
+  if (dlgStill) await frame.locator('.el-dialog:visible button:has-text("取消")').first().click({ timeout: 5000 }).catch(() => {});
+  if (resp && /重复|DEF001/.test(resp.b)) {
+    return { status: 'FAIL', reason: '新增被后端判重拦截（非预期——日期窗应已错峰）：' + resp.b.slice(0, 120), detail: 'name=' + NAME + ' resp=' + resp.b.slice(0, 100) };
+  }
+  if (query.total === 1) {
+    const it = query.items[0];
+    return { status: 'PASS', reason: '新增保存成功：' + NAME + ' 落库恰 1 条（auditStatus=' + it.auditStatus + ' quoteCode=' + it.quoteCode + ' createBy=' + it.createBy + '）', detail: 'name=' + NAME };
+  }
+  return { status: 'FAIL', reason: '新增后接口直查 total=' + query.total + '（预期 1）；resp=' + JSON.stringify(resp).slice(0, 120), detail: 'name=' + NAME };
 }
 
-/* ── TC-ADD-12 判重拦截（P0）：同键同区间第二条拦截 ── */
 async function tcAdd12() {
   const NAME1 = 'PT01-E2E-判重A-' + Date.now() % 100000;
-  const NAME2 = 'PT01-E2E-判重B-' + Date.now() % 100000;
-  // 第一条
+  const NAME2 = 'PT01-E2E-判重B-' + (Date.now() % 100000 + 1);
+  let msgVisible = 0, total2 = '-1', dlgStill = 0, errs2 = [];
   for (const name of [NAME1, NAME2]) {
-    await frame.locator('button:has-text("新增")').first().click({ timeout: 8000 });
-    await sleep(2000);
+    // 循环内重载（弹窗保存成功后页面态劣化——ADD-11 实证）
+    await page.goto(MENU_URL, { timeout: 30000, waitUntil: 'domcontentloaded' });
+    for (let w = 0; w < 40; w++) {
+      await sleep(2000);
+      frame = page.frames().find(f => f.url().includes('warehouse-menu/quote/platformPrice'));
+      if (frame) { const n = await frame.locator('.el-table__header-wrapper th').count().catch(() => 0); if (n > 3) break; }
+    }
+    if (!frame) return { status: 'NOT_EXECUTED', reason: '重载后业务 frame 未就绪（' + name + '）' };
+    // 等新增按钮真正可交互（iframe 内层渲染完——直接点会被半渲染态挡住）
+    const addBtn = frame.locator('button:has-text("新增")').first();
+    for (let w = 0; w < 15; w++) {
+      const vis = await addBtn.isVisible().catch(() => false);
+      const en = await addBtn.isEnabled().catch(() => false);
+      if (vis && en) break;
+      await sleep(1000);
+    }
+    await addBtn.click({ timeout: 15000, force: true });
+    await sleep(2500);
     const dlg = frame.locator('.el-dialog:visible').first();
     if (!(await dlg.count())) return { status: 'NOT_EXECUTED', reason: '新增弹窗未打开（' + name + '）' };
-    await dlg.locator('.el-col, .el-form-item').filter({ hasText: /报价名称/ }).first().locator('input').first().fill(name, { timeout: 8000 });
-    const costCol = dlg.locator('.el-col, .el-form-item').filter({ hasText: /费用名称/ }).first();
-    await costCol.click({ timeout: 8000 }); await sleep(900);
-    await frame.locator('.el-select-dropdown__item:visible').filter({ hasText: '业务管理费' }).first().click({ timeout: 8000 }); await sleep(700);
-    const flowCol = dlg.locator('.el-col, .el-form-item').filter({ hasText: /结算流向/ }).first();
-    await flowCol.click({ timeout: 8000 }); await sleep(900);
-    await frame.locator('.el-select-dropdown__item:visible').filter({ hasText: '总部收业务仓' }).first().click({ timeout: 8000 }); await sleep(700);
-    const effCol = dlg.locator('.el-col, .el-form-item').filter({ hasText: /生效日期/ }).first();
-    const effInputs = effCol.locator('input');
-    await effInputs.first().fill('2027-03-01', { timeout: 8000 }).catch(() => {});
-    await effInputs.nth(1).fill('2027-03-31', { timeout: 8000 }).catch(() => {});
-    await page.keyboard.press('Enter'); await sleep(700);
-    const detailTable = dlg.locator('.el-table').first();
-    const firstRow = detailTable.locator('.el-table__body-wrapper tr').first();
-    const inputs = firstRow.locator('input');
-    if (await inputs.count() >= 5) await inputs.nth(2).fill('2.0000', { timeout: 8000 }).catch(() => {});
-    await sleep(400);
+    await fillAddDialog(dlg, { name, cost: { current: '流量管理费', pick: '业务管理费' }, flow: '总部收业务仓', effStart: '2027-06-01', effEnd: '2027-06-30', price: '2.0000' });
     await dlg.locator('button:has-text("确定")').first().click({ timeout: 8000 });
-    await sleep(3500);
-    // 第二条保存后应有拦截提示（判重）；弹窗保持打开=数据未落地
+    await sleep(7000);
     if (name === NAME2) {
-      // 断言：提示出现+列表无新增（查 NAME2 无行）
-      const msgVisible = await frame.locator('.el-message:visible, .el-message-box:visible, [class*=message]:visible').count().catch(() => 0);
-      await fillInput('报价名称', NAME2);
-      await frame.locator('button:has-text("查询")').first().click({ timeout: 8000 });
-      await sleep(3000);
-      const totalText = await frame.locator('.el-pagination').innerText().catch(() => '');
-      const total2 = (totalText.match(/共\s*(\d+)\s*条/) || [])[1];
-      // 关闭残留弹窗
-      await frame.locator('.el-dialog:visible button:has-text("取消"), .el-dialog:visible button:has-text("关闭")').first().click({ timeout: 5000 }).catch(() => {});
-      const pass = String(total2) === '0' && msgVisible > 0;
+      // 判重证据链：addOrUpdate 响应含「存在重复」+NAME2 未落库
+      const resp2 = __saveNet.resp;
+      msgVisible = await frame.locator('.el-message:visible').count().catch(() => 0);
+      dlgStill = await frame.locator('.el-dialog:visible').count().catch(() => 0);
+      if (dlgStill) await frame.locator('.el-dialog:visible button:has-text("取消"), .el-dialog:visible button:has-text("关闭")').first().click({ timeout: 5000 }).catch(() => {});
+      const q2 = await SESSION_API.queryByName(NAME2);
+      total2 = String(q2.total);
+      const dupResp = resp2 && /存在重复|DEF001/.test(resp2.b);
+      const pass = total2 === '0' && !!dupResp;
       return pass
-        ? { status: 'PASS', reason: '判重拦截：第二条（同键同区间，仅名称不同）保存被拦（提示出现=' + (msgVisible > 0) + '），查询 NAME2 total=0（未落地）', detail: 'msg=' + msgVisible + ' total2=' + total2 }
-        : { status: 'FAIL', reason: '判重未拦或未提示：msg=' + msgVisible + ' total2=' + total2, detail: 'names=' + NAME1 + '/' + NAME2 };
+        ? { status: 'PASS', reason: '判重拦截：第二条同键同区间（仅名称不同）被后端拦——响应「' + (resp2 ? resp2.b.slice(0, 80) : 'n/a') + '」，NAME2 接口直查 total=0（未落地）', detail: 'resp=' + (resp2 ? resp2.b.slice(0, 150) : 'n/a') }
+        : { status: 'FAIL', reason: '判重未拦或证据不足：dupResp=' + !!dupResp + ' total2=' + total2 + ' resp=' + JSON.stringify(resp2).slice(0, 100), detail: 'names=' + NAME1 + '/' + NAME2 };
     }
   }
 }
 
-/* ── 造数自清（纪律）：删本批 PT01-E2E 前缀数据 ── */
+
+/* ── 造数自清（纪律）：接口删 PT01-E2E 前缀数据（deleteIds 实测格式） ── */
 async function cleanup() {
   try {
-    await fillInput('报价名称', 'PT01-E2E');
-    await frame.locator('button:has-text("查询")').first().click({ timeout: 8000 });
-    await sleep(3000);
-    let guard = 0;
-    while (guard++ < 20) {
-      const row = frame.locator('.el-table__body-wrapper tr').first();
-      if (!(await row.count())) break;
-      const cb = row.locator('.el-checkbox, input[type=checkbox]').first();
-      await cb.click({ timeout: 5000 }).catch(() => {});
-      await frame.locator('button:has-text("删除")').first().click({ timeout: 5000 });
-      await sleep(1500);
-      // 确认弹窗
-      const confirm = frame.locator('.el-message-box:visible button:has-text("确定"), .el-dialog:visible button:has-text("确定")').last();
-      await confirm.click({ timeout: 5000 }).catch(() => {});
-      await sleep(2500);
-    }
-    log('[cleanup] done, guard=', guard);
-  } catch (e) { log('[cleanup] skip:', e.message.slice(0, 80)); }
+    const r = await page.evaluate(async () => {
+      const token = localStorage.getItem('MICRO_APP_MAIN_TOKEN_KEY');
+      const H = { 'Content-Type': 'application/json', Authorization: token, authtoken: token, PlatformCode: 'ZTOCC_PLATFORM_001', 'client-Type': 'pc' };
+      const GW = 'http://gateway-ll.test.ztoeco.com';
+      const q = await fetch(GW + '/phecda/api/cwbms/quotePlatformFee/getPageList', { method: 'POST', headers: H, body: JSON.stringify({ page: 1, pageSize: 50, quoteName: 'PT01-E2E' }) });
+      const qj = await q.json();
+      const items = (qj.data && qj.data.items) || [];
+      if (!items.length) return { cleaned: 0 };
+      const d = await fetch(GW + '/phecda/api/cwbms/quotePlatformFee/delete', { method: 'POST', headers: H, body: JSON.stringify({ deleteIds: items.map(i => i.id) }) });
+      await d.json().catch(() => {});
+      const q2 = await fetch(GW + '/phecda/api/cwbms/quotePlatformFee/getPageList', { method: 'POST', headers: H, body: JSON.stringify({ page: 1, pageSize: 50, quoteName: 'PT01-E2E' }) });
+      const q2j = await q2.json();
+      return { cleaned: items.length, remain: (q2j.data && q2j.data.total) || 0 };
+    });
+    log('[cleanup]', JSON.stringify(r));
+  } catch (e) { log('[cleanup] fail:', e.message.slice(0, 100)); }
 }
 
 (async () => {
   const browser = await setup();
-  batch('run_start', { planned: 2, dispatch: 2, channel_note: 'ui-write P0 链' });
+  watchSave(page);
+  batch('run_start', { planned: 2, dispatch: 2, channel_note: 'ui-write P0 链（fill+blur 触发法·diag41/47 实证）' });
   const stats = { PASS: 0, FAIL: 0, BLOCKED: 0, NOT_EXECUTED: 0 };
   const cases = [['TC-ADD-11', tcAdd11], ['TC-ADD-12', tcAdd12]];
   let shotIdx = 0;
   for (const [tc, fn] of cases) {
     try {
+      __saveNet = { req: null, resp: null };
+      // 用例间重载（iframe 微应用状态劣化隔离——diag44/46 实证多次操作后弹窗失能）
+      await page.goto(MENU_URL, { timeout: 30000, waitUntil: 'domcontentloaded' });
+      for (let w = 0; w < 40; w++) {
+        await sleep(2000);
+        frame = page.frames().find(f => f.url().includes('warehouse-menu/quote/platformPrice'));
+        if (frame) { const n = await frame.locator('.el-table__header-wrapper th').count().catch(() => 0); if (n > 3) break; }
+      }
+      if (!frame) throw new Error('重载后业务 frame 未就绪');
+      const _addBtn = frame.locator('button:has-text("新增")').first();
+      for (let w = 0; w < 15; w++) {
+        const vis = await _addBtn.isVisible().catch(() => false);
+        if (vis) break;
+        await sleep(1000);
+      }
       const r = await fn();
       // 截图留证
       const shot = path.join(J, 'shots', `pp_exec_${tc}_${Date.now()}.png`);
@@ -235,11 +318,12 @@ async function cleanup() {
       record(tc, r.status, r.reason, r.detail ? { detail: String(r.detail).slice(0, 300), shot } : { shot });
       stats[r.status]++;
     } catch (e) {
-      record(tc, 'NOT_EXECUTED', '执行异常: ' + e.message.slice(0, 200));
+      const pwlog = Array.isArray(e.log) ? e.log.join(' | ') : (Array.isArray(e.logs) ? e.logs.join(' | ') : '');
+      record(tc, 'NOT_EXECUTED', '执行异常: ' + e.message.split('\n')[0].slice(0, 80) + ' @ ' + pwlog.slice(0, 250));
       stats.NOT_EXECUTED++;
     }
   }
-  if (!DRY) await cleanup();
+  await cleanup();
   batch('run_end', { n: 2, stats, endKind: 'normal' });
   log('[summary]', JSON.stringify(stats));
   await browser.close().catch(() => {});
