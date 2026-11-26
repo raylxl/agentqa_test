@@ -11,7 +11,7 @@ description: 用例生成（生成方）——理解说明闭环后，依 L1 经
 
 分工：本技能只管**生成到结构门禁**；内容质疑与证书＝`usecase-challenger`（独立质疑方）；全链编排（go＝生成→质疑→证书）＝`usecase-pipeline` 壳。资产沿用 pipeline 目录：`{paths.pipeline_assets}`（references/brief-and-prompts.md、assets/matrices.md、scripts/assemble.py）。
 
-## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入·开工第一步／收工最后一步）
+## ⏱ 计时打点（《计时与时间线规范》·2026-11-25 接入·开工第一步／收工最后一步）
 
 ```bash
 # 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
@@ -58,7 +58,7 @@ python ../usecase-pipeline/scripts/assemble.py --dir "<分章目录>" --out "<�
   --intro-file 导语.md --pre-file PRE.md --footer-file 修改记录.md
 ```
 
-结构门禁＝重号/断号/表结构/判断依据/计数自洽等，全零才全绿；编号字母集、历史豁免和组装入口从公司 profile 解析。**承载条铁则**：TC-SYS/TC-DEF/TC-IMP/TC-CHG 块判断依据必须挂`老用例编号：`或`原用例无对应：…`（assemble.py 机器拦；**初版册的系统守护条同样适用**，标『原用例无对应：初版系统守护条』）；正本=《{standards.L6_闭环}》§二-2（2026-11-19 真机：规则原只在闭环标准的修订场景述，generator 侧未述，门禁红了"不明所以"）。**治理正本＝治理 JSON**（风险—TC/执行集/P0123/阶段 readiness 由校验器硬门；策略卡是派生视图；设计/验证阶段允许 awaiting_environment，执行阶段必须 ready）。
+结构门禁＝重号/断号/表结构/判断依据/计数自洽等，全零才全绿；编号字母集、历史豁免和组装入口从公司 profile 解析。**承载条铁则**：TC-SYS/TC-DEF/TC-IMP/TC-CHG 块判断依据必须挂`老用例编号：`或`原用例无对应：…`（assemble.py 机器拦；**初版册的系统守护条同样适用**，标『原用例无对应：初版系统守护条』）；正本=《{standards.L6_闭环}》§13.3 第 2 条（2026-11-19 真机：规则原只在闭环标准的修订场景述，generator 侧未述，门禁红了"不明所以"）。**治理正本＝治理 JSON**（风险—TC/执行集/P0123/阶段 readiness 由校验器硬门；策略卡是派生视图；设计/验证阶段允许 awaiting_environment，执行阶段必须 ready）。
 
 **双源同步纪律（铁则）**：①**分章＝唯一源**——任何直改成册的改动下一次重组装即被冲掉，改用例必改分章；②**重组装后必须核对总条数**，与预期不符立即停并比对；③组装违例写 `.draft` 不覆盖正本（正本＝上版全绿的免费备份）。
 

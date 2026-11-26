@@ -34,7 +34,8 @@ PACK_ROOT = Path(__file__).resolve().parent.parent
 
 # ---- 内置通用规则（与任何具体公司无关） ----
 PATH_RULES = [
-    ("本机绝对路径", re.compile(r'\b[A-Za-z]:[/\\][^\s"\'，。；）)]{4,}')),
+    # 盘符前只排除 ASCII 字母/数字/下划线，不要求词边界：汉字紧贴盘符的本机路径形态曾因词边界不成立而漏检（2026-11-26）
+    ("本机绝对路径", re.compile(r'(?<![A-Za-z0-9_])[A-Za-z]:[/\\][^\s"\'，。；）)]{4,}')),
 ]
 NET_RULES = [
     ("内网IP 10.x", re.compile(r'\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')),
@@ -162,6 +163,8 @@ def main():
             "注入行4：域名 a.example-corp.com 与主机 gw-demo-1",
             "注入行5：口令 " + "password" + "=" + demo_secret,
             "注入行6：联系 dev@corp-demo" + ".cn（example 保留域应放行：safe@example.com 不命中）",
+            # 2026-11-26 补：盘符紧贴汉字（无词边界）的本机路径形态，规则改动后不得回退
+            "注入行7：紧贴汉字的盘符 工具链" + ":".join(("D", "/ws/xmd")) + "/07_工具链",
         ))
         try:
             with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
@@ -185,10 +188,13 @@ def main():
         need = {"专属名词(配置)", "本机绝对路径", "内网IP 10.x", "内网域名(配置)", "内网主机名(配置)",
                 "明文口令password=", "邮箱地址"}
         ok = need.issubset(kinds)
+        path_n = sum(1 for h in hits if h[0] == "本机绝对路径")   # 行2 独立盘符＋行7 紧贴汉字盘符，两形态都须命中
+        path_ok = path_n >= 2
         git_ok = any(h[0].startswith("git元数据邮箱") for h in git_hits)
-        print(f"[SELFTEST] {'PASS' if ok else 'FAIL'} —— 注入7类污染命中{len(kinds & need)}/7类；"
+        print(f"[SELFTEST] {'PASS' if ok and path_ok else 'FAIL'} —— 注入7类污染命中{len(kinds & need)}/7类；"
+              f"本机路径两形态 {'命中 ✓' if path_ok else '漏检 ✗'}（{path_n}/2）；"
               f"git元数据邮箱 {'命中 ✓' if git_ok else '漏检 ✗'}（{len(git_hits)} 处）")
-        sys.exit(0 if (ok and git_ok) else 1)
+        sys.exit(0 if (ok and path_ok and git_ok) else 1)
 
     if not args.config:
         print("[WARN] 未提供 --config 词表：专属名词/内网域名两类不检查（仅通用规则）")

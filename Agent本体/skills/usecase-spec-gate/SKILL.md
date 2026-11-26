@@ -7,9 +7,9 @@ description: 规格保真门（执行前置独立质疑）——机器规格（�
 
 ## 0. 公司适配层（开工第 0 步）
 
-读 workspace `公司包/agent-company.json` 解析 `{paths.X}`；无该文件→降级通用模式。输入两件：**机器规格 json**（执行器实际吃的 specs）+ **用例册 MD**（#### TC- 块竖排五行，L3 通用形态）。可选第三件：域枚举表（订单类型/费项码/事件映射等键值，喂给 lint 与子代理）。
+读 workspace `公司包/agent-company.json` 解析 `{paths.X}`；无该文件→降级通用模式。输入两件：**机器规格 json**（执行器实际吃的 specs）+ **用例册 MD**（#### TC- 块竖排五行，L3 通用形态）。可选第三件：域枚举表（订单类型/费项码/事件映射等键值；脚本当前不接收枚举，`--enums` 注入为预留扩展——需要时把枚举表路径写进子代理 prompt 当背景口径）。
 
-## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+## ⏱ 计时打点（《计时与时间线规范》·2026-11-25 接入）
 
 ```bash
 # 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
@@ -29,7 +29,7 @@ python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>
 
 ### 1. 组包+机检（一条命令）
 ```
-python <skill>/scripts/spec_gate.py --specs <规格.json> --md <册.md> --out <输出目录> [--group tab|prefix|flat] [--enums 枚举.json]
+python <skill>/scripts/spec_gate.py --specs <规格.json> --md <册.md> --out <输出目录> [--group tab|prefix|flat]
 ```
 每例复核包：册原文（pre/step/exp）+ 实际规格 + **lint 命中清单**。通用七检：
 | 规则 | 检什么 | 溯源 |
@@ -63,4 +63,4 @@ python <skill>/scripts/spec_gate.py --specs <规格.json> --md <册.md> --out <�
 - 规格量小（<30 条）可人机同堂一次过；量大必须分路并行；
 - 子代理汇报"全部绿"必须附完整逐条表，无表不可信；
 - 本门质疑**翻译保真**，不质疑用例设计本身（challenger 管）也不质疑判定（execution-challenger 管）——三权分立；
-- lint 规则按域可扩（--enums 注入域枚举后可加映射类检查），新增规则先拿历史失真案例反测（能抓住 E1~E5 才准入库）。
+- lint 规则按域可扩（`--enums` 注入域枚举后可加映射类检查——预留扩展，脚本当前未实现），新增规则先拿历史失真案例反测（能抓住 E1~E5 才准入库）。

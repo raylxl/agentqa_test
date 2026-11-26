@@ -18,7 +18,7 @@ description: 用例设计稿质疑门禁——按 L1 设计方法与覆盖正本
 
 正本：《{standards.L5_门禁}》§10 九项尺子/§20 执行就绪度＋《{standards.L1_通用}》§14 四源。证书模板＝`{paths.pipeline_assets}/assets/certificate.tpl.md`。
 
-## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入·复核用例每轮一段）
+## ⏱ 计时打点（《计时与时间线规范》·2026-11-25 接入·复核用例每轮一段）
 
 ```bash
 # 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名

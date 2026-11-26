@@ -581,7 +581,7 @@ def run(cfg):
         print(f"结构问题: {len(report['structure'])} 处")
         for x in (report['structure'] or [])[:6]: print('  -', str(x)[:110])
         for k, v in collide.items():
-            if len(v) > 1: print(f"撞号: {k} -> {v[:4]}")
+            if len(v) > 1: print(f"撞号: {k} -> {sorted(v)[:4]}")   # v 是集合：直接切片会抛 TypeError，致撞号明细打不出来
         sys.exit(1)
     if manifest_path:
         gov_script = _find_gov_script()

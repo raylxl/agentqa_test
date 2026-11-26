@@ -489,7 +489,7 @@ def pack_company(cfg, company_dir, dry):
 
     plan = [
         (agent / "Agent本体", "agentqa_test/Agent本体", None, "公司版技能+hooks+tools（rewire/pack/migrate）"),
-        (craft, "agentqa_test/" + craft.name, None, "公开层方法论（标准/模板/机检/十技能通用副本）"),
+        (craft, "agentqa_test/" + craft.name, None, "公开层方法论（标准/模板/机检/十三技能通用副本）"),
         (company_dir / "skills", "agentqa_test/公司包/skills", None, "鲸天环境技能 5 件（全产品线共用）"),
         (company_dir / "jt_exec", "agentqa_test/公司包/jt_exec", None, "执行框架（登录/开菜单/切租户/pw_layered/校验器/Mock骨架）"),
         (company_dir / "执行环境适配细则.md", "agentqa_test/公司包/执行环境适配细则.md", None, "公司运行细则"),

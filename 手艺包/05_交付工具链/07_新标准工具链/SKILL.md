@@ -12,12 +12,12 @@ agent_created: true
 
 ## 工具位置
 
-`05_交付工具链D:/ZCodetest\MD转XMind生成工具集\07_新标准工具链7_新标准工具链（本包内）\`（**现行唯一标准**，取代 01_核心工具链；方法正本=同目录《MD转XMind生成方法_v1.md》，生成前必读）
+`05_交付工具链/07_新标准工具链/`（包内相对路径，自包根起；**现行唯一标准**，取代 01_核心工具链；方法正本=同目录《MD转XMind生成方法_v1.md》，生成前必读）
 
 ## 执行流程（三步纪律，禁止跳步）
 
 ```bash
-cd "05_交付工具链D:/ZCodetest\MD转XMind生成工具集\07_新标准工具链7_新标准工具链（本包内）"
+cd "05_交付工具链/07_新标准工具链"   # 包内相对路径（自包根起）
 python -X utf8 xmind_unified_generator_v2.py <md> [<out.xmind>]   # 生成
 python -X utf8 xmind_format_validator_v2.py <out.xmind> <md>      # 结构验证：须 0 错 0 警
 python -X utf8 compare_md_xmind_v2.py <md> <out.xmind>            # 数据终验：差异=0 才交付

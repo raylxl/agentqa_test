@@ -133,19 +133,22 @@ def hook_paths():
 
 
 def hook_templates(agent):
-    """hooks 七件接线表：(事件, matcher, 脚本名, 状态文案)；路径按当前本体解析，不写死。
+    """hooks 八件接线表：(事件, matcher, 脚本名, 状态文案)；路径按当前本体解析，不写死。
     memory_guard（2026-11-15 立）：MEMORY.md 写后自动体检，防多会话并发写坏记忆索引。
     activity_trace（2026-11-16 立，计时与时间线规范§十一第二批）：全部工具调用时刻落
     workspace\\.zcode\\agent_activity.jsonl（净耗时底账）；只挂 PostToolUse 单边=每调用一次开销。
     turn_in_trace / turn_out_trace（2026-11-25 立，规范 v1.2"每个步骤都计时"）：回合开始/结束时刻落同一底账，
-    配对出"agent 正在操作的回合区间"，用户思考答复的时间不计；只记不输出不阻断，Stop 钩子严禁回内容。"""
+    配对出"agent 正在操作的回合区间"，用户思考答复的时间不计；只记不输出不阻断，Stop 钩子严禁回内容。
+    session_memory_context（2026-11-26 立）：会话启动/恢复/清空/上下文压缩后，提示记忆总索引之外的分册索引要先读；
+    总索引超过客户端上限（200 行／25000 字符）时把不会加载的尾部补注入（兜底）。用户给的规则靠这条通道保证在上下文里。"""
     return [("PostToolUse", "Write|Edit", "reread_reminder.py", "正本改动检查"),
             ("PostToolUse", "Write|Edit|ApplyPatch", "paiban_ledger_reminder.py", "拍板对账提醒"),
             ("PreToolUse", "Edit|Write|ApplyPatch", "block_master_edit.py", "正本直改拦截检查"),
             ("PostToolUse", "Write|Edit|ApplyPatch", "memory_guard.py", "记忆索引守卫"),
             ("PostToolUse", ".*", "activity_trace.py", "计时底账（工具时刻）"),
             ("UserPromptSubmit", ".*", "turn_in_trace.py", "计时底账（回合开始）"),
-            ("Stop", ".*", "turn_out_trace.py", "计时底账（回合结束）")]
+            ("Stop", ".*", "turn_out_trace.py", "计时底账（回合结束）"),
+            ("SessionStart", ".*", "session_memory_context.py", "记忆分册提示与截断兜底")]
 
 
 def ensure_hooks(agent):

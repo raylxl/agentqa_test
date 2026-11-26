@@ -1,9 +1,9 @@
 ---
 name: usecase-execution-challenger
-description: 执行判定独立质疑方（《执行质疑标准》v1 B案技能化）——执行方不自证：对一轮执行的全部判定（通过+失败逐条、BLOCKED 核跳过原因与原文相符性）做对抗性复核（册原文独立重推/规格忠实性/证据支持性/维度一致性/已知差异族对照），产出双账本（确认/无效待重跑/合法跳过）与改判清单，两道出口分离（维持/改判）。触发：每轮执行收尾后（进反馈闭环前）、用户说"执行判定复核/复核判定/质疑判定/判定复核/执行质疑/复核这轮结果/过败都查"时使用。
+description: 执行判定独立质疑方（《执行质疑标准》B案技能化）——执行方不自证：对一轮执行的全部判定（通过+失败逐条、BLOCKED 核跳过原因与原文相符性）做对抗性复核（册原文独立重推/规格忠实性/证据支持性/维度一致性/已知差异族对照），产出双账本（确认/无效待重跑/合法跳过）与改判清单，两道出口分离（维持/改判）。触发：每轮执行收尾后（进反馈闭环前）、用户说"执行判定复核/复核判定/质疑判定/判定复核/执行质疑/复核这轮结果/过败都查"时使用。
 ---
 
-# usecase-execution-challenger 执行判定质疑方（2026-11-18 立·执行质疑标准 v1 B案落地）
+# usecase-execution-challenger 执行判定质疑方（2026-11-18 立·执行质疑标准 B案落地）
 
 ## 0. 公司适配层（开工第 0 步）
 
@@ -13,7 +13,7 @@ description: 执行判定独立质疑方（《执行质疑标准》v1 B案技能
 - **证据件目录**：逐条证据 json（报价/推单/计算流水/断言五层；缺证据=复核结论直接标"证据不足"）
 - **用例册 MD**：正本（#### TC- 块 + 前置条件/操作步骤/预期结果 竖排五行——分层标准 L3 通用形态）
 
-## ⏱ 计时打点（《计时与时间线规范》v1.2·2026-11-25 接入）
+## ⏱ 计时打点（《计时与时间线规范》·2026-11-25 接入）
 
 ```bash
 # 先把 {paths.Agent本体} 解析成 agent-company.json 里的绝对路径，再执行；<册名>＝流水线台账里的需求名，同一需求各阶段沿用同名
@@ -34,7 +34,7 @@ python -X utf8 "{paths.Agent本体}/tools/timeline_mark.py" end   --id "<册名>
 
 ### 1. 复核包生成
 ```
-python <skill>/scripts/gen_review_packets.py --ledger <账本.jsonl> --specs <规格.json> --evid <证据目录> --md <册.md> --out <输出目录> [--group tab|prefix|batch]
+python <skill>/scripts/gen_review_packets.py --ledger <账本.jsonl> --specs <规格.json> --evid <证据目录> --md <册.md> --out <输出目录> [--group tab|prefix|flat]
 ```
 每包 jsonl 一行一例：tc/title/pre/step/exp（册原文）+ spec（实际规格）+ verdict/摘要（末次判定）+ evid_exists。**同 TC 多轮判定必须取末次**（复测/复评覆盖语义）。
 
