@@ -23,7 +23,7 @@
    - `usecase-history-cleanup`（用例文件历史版本归档）
    - `usecase-execution-challenger`（执行判定独立质疑：复核包→分路六核查→双账本与改判清单）
    - `usecase-executor`（用例 AI 执行：纪律/四阶段流程/接口通道，公司件引用走 execution_adapters 占位）
-   - `usecase-qc`（执行交付独立质检：八查+红黄绿判定）
+   - `usecase-qc`（执行交付独立质检：九查+红黄绿判定）
    - `usecase-orchestrator`（需求流水线总调度：验门/推进/停机卡）
    - `usecase-spec-gate`（规格保真门：开批前对机器规格做机检七检＋子代理六保真维度复核）
 2. 复制本目录 `agent-company.example.json` 到 `<你的workspace>/.zcode/agent-company.json`，按注释填你的公司值（**不填也能跑**：技能自动降级通用模式并提示你补配置；凭证一律不入此文件）。
@@ -43,5 +43,5 @@
 | v1.1 | 2026-11-13 | 技能包层首版：四技能通用副本 + 公司配置模板 + 本说明 |
 | v1.2 | 2026-11-16 | 新增 usecase-generator / usecase-pipeline / usecase-history-cleanup 通用副本（SKILL.md＋references/assets/scripts 附属件，小节结构与公司版一字不差） |
 | v2.0 | 2026-11-16 | 十技能齐：新增 usecase-executor / usecase-qc / usecase-orchestrator 通用副本（执行硬闸/六查/调度停机卡全保留，公司件全走占位）；01_标准 增 9 份发布视图（publish_standards.py 自动生成）；机检增强（邮箱/git 元数据/中文域词可选） |
-| v2.1 | 2026-11-26 | 十技能通用副本同步到本体现行内容（11-17~11-26 新增的通用方法全部补入：计时打点、独立完备性质疑、指令语义表、质检八查、执行前预估与测完对账、测试后耗时分析者、首测页面形态探针、收尾自查断言逐条落地、白名单三段嵌套取值等；公司内部库接线继续不投影）；示例配置补 paths.Agent本体／paths.执行工具／standards.L6_缺陷模板／standards.L6_执行期参考／业务线 段 |
+| v2.1 | 2026-11-26 | 十技能通用副本同步到本体现行内容（11-17~11-26 新增的通用方法全部补入：计时打点、独立完备性质疑、指令语义表、质检九查、执行前预估与测完对账、测试后耗时分析者、首测页面形态探针、收尾自查断言逐条落地、白名单三段嵌套取值等；公司内部库接线继续不投影）；示例配置补 paths.Agent本体／paths.执行工具／standards.L6_缺陷模板／standards.L6_执行期参考／业务线 段 |
 | v2.2 | 2026-11-26 | 十技能→十三技能：新增 usecase-defect-challenger／usecase-execution-challenger／usecase-spec-gate 通用副本（提单前质疑六查／执行判定复核包＋双账本／规格保真机检七检；调度与执行副本此前已引用这三个技能名）；示例配置补 integrations.defect_platform |
