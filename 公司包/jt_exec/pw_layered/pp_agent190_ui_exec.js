@@ -23,6 +23,7 @@ const CHAPTER_COUNTS = { NEW: 71, STA: 42, IO: 27, QRY: 26, SEC: 24 };
 const EXECUTE = process.argv.includes('--execute');
 const ACK = process.argv.includes('--ack-user-approval');
 const ONLY_TC = argValue('--tc');
+const AFTER_TC = argValue('--after');
 const ONLY_CHAPTER = (argValue('--chapter') || '').toUpperCase();
 const CASE_TIMEOUT_MS = 300000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -305,21 +306,34 @@ class UiSession {
   }
 
   async resetResidue(tc) {
-    await this.page.keyboard.press('Escape').catch(() => {});
-    const dialogs = this.frame.locator('.el-dialog:visible, .el-message-box:visible');
-    for (let guard = 0; guard < 5 && await dialogs.count().catch(() => 0); guard += 1) {
-      const close = dialogs.first().locator('button').filter({ hasText: /取消|关闭/ }).first();
-      if (await close.isVisible().catch(() => false)) await close.click().catch(() => {});
-      else await this.page.keyboard.press('Escape').catch(() => {});
-      await sleep(200);
+    const visibleLayers = () => this.page.locator('.el-dialog:visible, .el-drawer:visible, .el-message-box:visible, [role="dialog"]:visible');
+    // Close child confirmation boxes and forms left open by validation failures.
+    for (let guard = 0; guard < 8; guard += 1) {
+      const layers = visibleLayers();
+      const count = await layers.count().catch(() => 0);
+      if (!count) break;
+      const layer = layers.last();
+      let close = layer.locator('button:visible').filter({ hasText: /取消|关闭|返回/ }).last();
+      if (!await close.isVisible().catch(() => false)) {
+        close = layer.locator('.el-dialog__headerbtn:visible, .el-drawer__close-btn:visible, [aria-label*="关闭"]:visible').last();
+      }
+      if (await close.isVisible().catch(() => false)) {
+        await close.click({ force: true }).catch(() => {});
+        await layer.waitFor({ state: 'hidden', timeout: 1500 }).catch(() => {});
+      } else {
+        await this.page.keyboard.press('Escape').catch(() => {});
+      }
+      await sleep(250);
     }
-    for (const input of await this.frame.locator('.el-form:not(.el-dialog *) input:visible').all()) {
-      await input.fill('').catch(() => {});
-    }
+    const remaining = await visibleLayers().count().catch(() => 0);
+    if (remaining) throw new UiBlocked('用例隔离清理', '[role="dialog"]/.el-drawer', `仍有 ${remaining} 个可见弹窗，停止本条以免污染后续用例`, 'environment');
+    const mask = this.page.locator('.v-modal:visible, .el-overlay:visible').first();
+    if (await mask.isVisible().catch(() => false)) throw new UiBlocked('用例隔离清理', '.v-modal/.el-overlay', '残留可见遮罩，停止本条以免点击穿透', 'environment');
+    for (const input of await this.frame.locator('.el-form input:visible').all()) await input.fill('').catch(() => {});
     const reset = this.frame.locator('button:visible').filter({ hasText: /重置/ }).first();
     if (await reset.isVisible().catch(() => false)) await reset.click().catch(() => {});
     await this.page.keyboard.press('Escape').catch(() => {});
-    this.ledger.action(tc, '用例隔离清理', 'reset', { cleared: ['日期输入', '下拉浮层', '对话框', '查询条件'] });
+    this.ledger.action(tc, '用例隔离清理', 'reset', { cleared: ['日期输入', '下拉浮层', '抽屉', '对话框', '查询条件', '遮罩'] });
   }
 
   async queryByNameUi(tc, name) {
@@ -469,22 +483,48 @@ class UiSession {
   async selectLabel(tc, label, option, layer = this.visibleLayer(), query = null) {
     const item = this.formItem(label, layer);
     const currentText = compact(await item.innerText().catch(() => ''));
-    if (currentText.includes(option)) {
+    const selectedNode = item.locator('.el-select__selected-item:not(.el-select__placeholder):visible').filter({ hasText: option }).first();
+    const selectedValue = await selectedNode.isVisible().catch(() => false);
+    if (selectedValue) {
       this.ledger.action(tc, `${label}已为目标值`, 'assert', { label, option, current_text: currentText });
       return currentText;
     }
     const input = item.locator('input:visible').first();
-    await this.act(tc, `展开${label}`, 'click', input, null);
+    const wrapper = item.locator('.el-select__wrapper:visible, .el-input:visible').first();
+    const trigger = await wrapper.isVisible().catch(() => false) ? wrapper : input;
+    await this.act(tc, `展开${label}`, 'click', trigger, null);
     if (query != null) await this.act(tc, `检索${label}`, 'fill', input, query);
-    const popper = this.frame.locator('.el-select-dropdown:visible, .el-cascader__dropdown:visible').last();
-    let choice = popper.locator('.el-select-dropdown__item:visible, .el-cascader-node:visible, [role="option"]:visible').filter({ hasText: option }).first();
-    if (!await choice.count()) choice = this.frame.locator('[role="option"]:visible').filter({ hasText: option }).first();
+    await sleep(900);
+    const roots = [this.frame, this.page];
+    let choice = null;
+    for (const root of roots) {
+      const poppers = root.locator('.el-select-dropdown:visible, .el-cascader__dropdown:visible, .el-popper:visible');
+      const popper = poppers.last();
+      await popper.waitFor({ state: 'visible', timeout: 1500 }).catch(() => {});
+      const candidate = popper.locator('.el-select-dropdown__item:visible, .el-cascader-node:visible, [role="option"]:visible, li:visible').filter({ hasText: option }).first();
+      if (await candidate.isVisible().catch(() => false)) { choice = candidate; break; }
+      const fallback = root.locator('.el-select-dropdown__item:visible, .el-cascader-node:visible, [role="option"]:visible, .el-popper:visible li:visible').filter({ hasText: option }).first();
+      if (await fallback.isVisible().catch(() => false)) { choice = fallback; break; }
+    }
+    // Ordinary enum/select controls must resolve through the visible dropdown only.
+    // Do not fall through to a table dialog: that branch is reserved for explicit
+    // customer/warehouse pickers and was the source of false "row not visible" blocks.
+    if (!choice) {
+      const visibleText = this.page.locator('.el-popper:visible, .el-select-dropdown:visible, .el-cascader__dropdown:visible')
+        .filter({ hasText: option }).first();
+      if (await visibleText.isVisible().catch(() => false)) choice = visibleText;
+    }
+    const isTablePicker = /客户|业务仓|操作仓/.test(label);
     let tableDialog = null;
-    if (!await choice.isVisible().catch(() => false)) {
-      tableDialog = this.frame.locator('.el-dialog:visible').filter({ has: this.frame.locator('tr:visible').filter({ hasText: option }) }).last();
+    if (!choice && isTablePicker) {
+      tableDialog = this.frame.locator('.el-dialog:visible, .el-drawer:visible')
+        .filter({ has: this.frame.locator('tr:visible').filter({ hasText: option }) }).last();
       const row = tableDialog.locator('tr:visible').filter({ hasText: option }).last();
       choice = row.locator('.el-radio__input, .el-checkbox__input, input[type="radio"], input[type="checkbox"]').first();
       if (!await choice.isVisible().catch(() => false)) choice = row;
+    }
+    if (!choice || !await choice.isVisible().catch(() => false)) {
+      throw new UiBlocked(`选择${label}:${option}`, '可见下拉选项/选择器', `未找到可见目标；禁止退化为不可见表格行` , 'ui-control');
     }
     await this.act(tc, `选择${label}:${option}`, 'click', choice, null);
     if (tableDialog && await tableDialog.isVisible().catch(() => false)) {
@@ -526,14 +566,40 @@ class UiSession {
   }
 
   async fillDetail(tc, index, values, layer = this.visibleLayer()) {
-    if (!await this.detailRows(layer).nth(index).isVisible().catch(() => false)) {
-      await this.act(tc, `新增第${index + 1}段`, 'click', layer.locator('button:visible').filter({ hasText: /新增.*段|添加.*段|新增明细/ }).first(), null);
+    const rows = this.detailRows(layer);
+    let row = rows.nth(index);
+    if (!await row.isVisible().catch(() => false)) {
+      const before = await rows.count().catch(() => 0);
+      const heading = layer.locator('.title:visible').filter({ hasText: /^\s*价格明细\s*$/ }).first();
+      const section = heading.locator('xpath=ancestor::*[.//table or .//tbody][1]');
+      const plusIcon = section.locator('svg.range-action-icon:visible').first();
+      if (!await plusIcon.isVisible().catch(() => false)) {
+        const sectionHtml = await section.evaluate(node => node.outerHTML.slice(0, 2500)).catch(() => '价格明细区块不可读');
+        throw new UiBlocked(`新增第${index + 1}段`, 'svg.range-action-icon', `价格明细区块未发现加号图标；区块=${compact(sectionHtml, 1000)}`, 'ui-control');
+      }
+      await this.act(tc, `新增第${index + 1}段`, 'click', plusIcon, null);
+      await rows.nth(index).waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+      const after = await rows.count().catch(() => 0);
+      if (after <= before || !await rows.nth(index).isVisible().catch(() => false)) {
+        throw new UiBlocked(`新增第${index + 1}段`, '价格明细表行', `点击价格明细加号后行数未增加：${before}->${after}`, 'ui-control');
+      }
+      row = rows.nth(index);
     }
-    const inputs = this.detailRows(layer).nth(index).locator('input:visible');
-    const ordered = [values.start, values.end, values.unit, values.min, values.max];
+    const startLabel = compact(await row.locator('.range-editor:visible').innerText().catch(() => ''));
+    if (values.start != null) {
+      this.ledger.action(tc, `记录第${index + 1}段只读起点`, 'assert', { expected_start: String(values.start), visible_text: startLabel });
+    }
+    const inputs = row.locator('input:visible');
+    // The start weight is a read-only label inherited from the previous segment.
+    // The four editable columns are end weight, unit price, minimum and maximum.
+    const ordered = [values.end, values.unit, values.min, values.max];
     for (let i = 0; i < ordered.length; i += 1) {
       if (ordered[i] === undefined) continue;
-      await this.act(tc, `填写第${index + 1}段第${i + 1}列`, 'fill', inputs.nth(i), ordered[i] == null ? '' : ordered[i]);
+      const input = inputs.nth(i);
+      await this.act(tc, `填写第${index + 1}段第${i + 1}列`, 'fill', input, ordered[i] == null ? '' : ordered[i]);
+      // The page commits the range endpoint on blur before the plus icon can add
+      // the next segment. Use a real Tab event rather than a DOM-side mutation.
+      await input.press('Tab').catch(() => {});
     }
   }
 
@@ -563,7 +629,15 @@ class UiSession {
         value: node.querySelector('input')?.value || '',
       })).filter((item, index, all) => all.findIndex(other => other.dataindex === item.dataindex) === index));
       this.ledger.action(tc, '保存后表单仍可见', 'assert', { errors, values, message });
-      return compact([message, ...errors].filter(Boolean).join(' | ')) || '保存后表单仍可见且未出现明确提示';
+      const outcome = compact([message, ...errors].filter(Boolean).join(' | ')) || '保存后表单仍可见且未出现明确提示';
+      let close = layer.locator('button:visible').filter({ hasText: /取消|关闭|返回/ }).last();
+      if (!await close.isVisible().catch(() => false)) close = layer.locator('.el-dialog__headerbtn:visible, .el-drawer__close-btn:visible, [aria-label*="关闭"]:visible').last();
+      if (await close.isVisible().catch(() => false)) {
+        await close.click({ force: true }).catch(() => {});
+        await layer.waitFor({ state: 'hidden', timeout: 2000 }).catch(() => {});
+      }
+      if (await layer.isVisible().catch(() => false)) throw new UiBlocked('保存后关闭表单', '[role="dialog"]/.el-drawer', '保存后表单仍可见且无法关闭，禁止遮挡后续回查', 'environment');
+      return outcome;
     }
     return message;
   }
@@ -927,6 +1001,11 @@ async function main() {
   const byId = new Map(specs.map(spec => [spec.tc, spec]));
   let selected = dispatch.dispatched_tc_ids.map(tc => byId.get(tc));
   if (ONLY_TC) selected = selected.filter(spec => spec.tc === ONLY_TC);
+  if (AFTER_TC) {
+    const index = selected.findIndex(spec => spec.tc === AFTER_TC);
+    if (index < 0) throw new Error(`--after 未找到TC: ${AFTER_TC}`);
+    selected = selected.slice(index + 1);
+  }
   if (ONLY_CHAPTER) selected = selected.filter(spec => chapterOf(spec.tc) === ONLY_CHAPTER);
   if (!selected.length) throw new Error('筛选后无TC');
 
