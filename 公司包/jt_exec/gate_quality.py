@@ -18,10 +18,16 @@ ledger_p, report_p = sys.argv[1], sys.argv[2]
 def load_ledger(p):
     ids = {}
     txt = io.open(p, encoding='utf-8').read()
+    def _norm_row(d):
+        # 2026-11-27 修洞四（与 report_sync 修洞一同型）：JSONL 账本用 tc/verdict 字段名且 verdict 带括注
+        # （如 "PASS（放行）"）——不归一 status 会把判定面算成 0，Q1 必误红（快运税务信息维护账本实证）
+        if isinstance(d, dict) and d.get('verdict') and not d.get('status'):
+            d['status'] = str(d['verdict']).split('（')[0].split('(')[0].strip()
+        return d
     if p.endswith('.jsonl'):
         for line in txt.splitlines():
             if not line.strip(): continue
-            d = json.loads(line)
+            d = _norm_row(json.loads(line))
             if d.get('tc') or d.get('id'):
                 k = d.get('tc') or d.get('id')
                 ids[k] = d
@@ -29,7 +35,7 @@ def load_ledger(p):
         d = json.loads(txt)
         rows = d.values() if isinstance(d, dict) else d
         for r in rows:
-            ids[r.get('id') or r.get('tc')] = r
+            ids[r.get('id') or r.get('tc')] = _norm_row(r)
     return ids
 
 
